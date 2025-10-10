@@ -1,5 +1,18 @@
 # Unbrowse MCP - Quick Start Guide
 
+## 🎯 Key Feature: Automatic Tool Registration
+
+**Every ability in `wrapper-storage/` is automatically registered as a separate MCP tool on startup!**
+
+This means:
+- ✅ Each API endpoint becomes its own named tool (e.g., `get_hedgemony_stats_simple`)
+- ✅ Claude can call them directly by name
+- ✅ Full type safety with proper input schemas
+- ✅ No generic `execute_ability` wrapper needed
+- ✅ Better autocomplete and discoverability
+
+**17 tools are registered automatically** from your wrapper-storage files!
+
 ## How to Use This MCP
 
 ### Option 1: Deploy to Smithery (Easiest)
@@ -118,21 +131,22 @@ store credentials for hedgemony-fund:
 
 ### 4. Execute an Ability
 
-Once you have credentials (or for public endpoints):
+**Each ability is automatically registered as its own tool!** Just call it by name:
 
 ```
-execute ability "get-hedgemony-stats-simple" with payload:
-{
-  "tier": "plus"
-}
+get_hedgemony_stats_simple with tier: "plus"
 ```
+
+Or in Claude, just ask naturally:
+> "Get the hedgemony stats for the plus tier"
 
 **What happens:**
-1. Loads wrapper code from storage
-2. Decrypts your credentials
-3. Creates fetch override to inject headers
-4. Makes REAL API call
-5. Returns actual response
+1. Tool is already registered on MCP startup
+2. Loads wrapper code from storage
+3. Decrypts your credentials
+4. Creates fetch override to inject headers
+5. Makes REAL API call
+6. Returns actual response
 
 **If you get a 401 error:**
 - Credentials are automatically marked as expired
@@ -182,8 +196,8 @@ Claude: I have access to 17 abilities across 2 services:
 ```
 You: Get Binance klines for BTCUSDT
 
-Claude: I'll execute the binance-klines ability...
-[Calls execute_ability with proper parameters]
+Claude: I'll use the get_binance_klines tool...
+[Calls get_binance_klines tool directly]
 
 Claude: Here's the candlestick data for BTCUSDT:
 [Shows real API response]
@@ -199,10 +213,10 @@ Claude: That requires authentication. Do you have credentials?
 You: Yes, here's my cookie: [paste cookie]
 
 Claude: I'll store that securely...
-[Calls store_credentials]
+[Calls store_credentials tool]
 
 Claude: Great! Now getting your stats...
-[Calls execute_ability]
+[Calls get_hedgemony_stats_simple tool directly]
 
 Claude: Your trading statistics:
 - Total PnL: $46.71

@@ -32,7 +32,7 @@ export const configSchema = z.object({
     .describe("Secret key for encrypting/decrypting credentials"),
 });
 
-export default function createServer({
+export default async function createServer({
   config,
 }: {
   config: z.infer<typeof configSchema>; // Define your config in smithery.yaml
@@ -41,6 +41,169 @@ export default function createServer({
     name: "Unbrowse MCP",
     version: "1.0.0",
   });
+
+  // Load and register all abilities from wrapper-storage as individual tools on startup
+  if (config.debug) {
+    console.log("[DEBUG] Loading abilities from wrapper-storage...");
+  }
+
+  try {
+    const abilities = await listAbilities([], false);
+
+    if (config.debug) {
+      console.log(
+        `[DEBUG] Found ${abilities.length} abilities, registering as tools...`,
+      );
+    }
+
+    // Register each ability as a separate MCP tool
+    for (const ability of abilities) {
+      const toolName = ability.abilityName;
+      const toolDescription = formatAbilityDescription(ability);
+
+      // Convert JSON Schema to Zod schema for inputSchema
+      const inputSchemaProps: Record<string, any> = {};
+
+      if (ability.inputSchema?.properties) {
+        for (const [key, prop] of Object.entries(
+          ability.inputSchema.properties as Record<string, any>,
+        )) {
+          // Simple mapping of JSON Schema types to Zod
+          let zodType: any;
+          switch (prop.type) {
+            case "string":
+              zodType = z.string();
+              break;
+            case "number":
+              zodType = z.number();
+              break;
+            case "integer":
+              zodType = z.number().int();
+              break;
+            case "boolean":
+              zodType = z.boolean();
+              break;
+            case "array":
+              zodType = z.array(z.any());
+              break;
+            case "object":
+              zodType = z.record(z.any());
+              break;
+            default:
+              zodType = z.any();
+          }
+
+          // Make optional if not in required array
+          if (!ability.inputSchema.required?.includes(key)) {
+            zodType = zodType.optional();
+          }
+
+          // Add description if available
+          if (prop.description) {
+            zodType = zodType.describe(prop.description);
+          }
+
+          inputSchemaProps[key] = zodType;
+        }
+      }
+
+      server.registerTool(
+        toolName,
+        {
+          title: ability.abilityName
+            .replace(/_/g, " ")
+            .replace(/\b\w/g, (l) => l.toUpperCase()),
+          description: toolDescription,
+          inputSchema:
+            Object.keys(inputSchemaProps).length > 0
+              ? inputSchemaProps
+              : {
+                  _placeholder: z
+                    .any()
+                    .optional()
+                    .describe("No parameters required"),
+                },
+        },
+        async (params) => {
+          try {
+            if (config.debug) {
+              console.log(
+                `[DEBUG] Executing ability: ${ability.abilityId} with params:`,
+                params,
+              );
+            }
+
+            // Remove placeholder param if it exists
+            const payload = { ...params };
+            delete payload._placeholder;
+
+            const result = await executeWrapper(
+              ability.abilityId,
+              payload,
+              config.secret,
+              {},
+            );
+
+            if (config.debug) {
+              console.log(
+                `[DEBUG] Execution result: ${result.success ? "SUCCESS" : "FAILED"} (${result.statusCode || "N/A"})`,
+              );
+              if (result.credentialsExpired) {
+                console.log(
+                  `[DEBUG] Credentials expired. Login abilities: ${result.loginAbilities?.map((a) => a.id).join(", ")}`,
+                );
+              }
+            }
+
+            return {
+              content: [
+                {
+                  type: "text",
+                  text: JSON.stringify(
+                    {
+                      success: result.success,
+                      statusCode: result.statusCode,
+                      responseBody: result.responseBody,
+                      responseHeaders: result.responseHeaders,
+                      error: result.error,
+                      credentialsExpired: result.credentialsExpired,
+                      loginAbilities: result.loginAbilities,
+                      executedAt: result.executedAt,
+                    },
+                    null,
+                    2,
+                  ),
+                },
+              ],
+            };
+          } catch (error: any) {
+            return {
+              content: [
+                {
+                  type: "text",
+                  text: JSON.stringify(
+                    {
+                      success: false,
+                      error: error.message || String(error),
+                      executedAt: new Date().toISOString(),
+                    },
+                    null,
+                    2,
+                  ),
+                },
+              ],
+            };
+          }
+        },
+      );
+    }
+
+    if (config.debug) {
+      console.log(`[DEBUG] Registered ${abilities.length} ability tools`);
+    }
+  } catch (error) {
+    console.error("[ERROR] Failed to load abilities:", error);
+  }
 
   // Tool: List Indexed Abilities (Private Registry)
   // Corresponds to /list endpoint serving abilities from wrapper-storage
