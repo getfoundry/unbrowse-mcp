@@ -17,7 +17,19 @@ import {
 import vm from "vm";
 
 // Get wrapper storage path - works in both ESM and CommonJS
-const WRAPPER_STORAGE_PATH = join(process.cwd(), "src", "wrapper-storage");
+// Try multiple possible paths for wrapper-storage
+function getWrapperStoragePath(): string {
+  const possiblePaths = [
+    join(process.cwd(), "src", "wrapper-storage"),
+    join(process.cwd(), "wrapper-storage"),
+    join(process.cwd(), "dist", "wrapper-storage"),
+  ];
+
+  // Return first path (will be validated when actually used)
+  return possiblePaths[0];
+}
+
+const WRAPPER_STORAGE_PATH = getWrapperStoragePath();
 
 /**
  * Interface for wrapper execution result
@@ -61,34 +73,20 @@ interface WrapperData {
 }
 
 /**
- * Creates a fetch override function that injects headers from cookiejar
+ * Creates a fetch override function that injects headers from provided credentials
  */
 function createFetchOverride(
   serviceName: string,
   staticHeaders: Array<{ key: string; value_code: string }>,
   dynamicHeaderKeys: string[],
-  secret: string,
+  injectedCredentials: Record<string, string>,
 ) {
   return async function overriddenFetch(
     url: string | URL | Request,
     init?: RequestInit,
   ): Promise<Response> {
-    // Get dynamic headers from cookiejar
-    let dynamicHeaders: Record<string, string> = {};
-
-    if (dynamicHeaderKeys.length > 0) {
-      try {
-        const credentials = await getCookieJar(serviceName, secret);
-        if (credentials) {
-          dynamicHeaders = credentials;
-        }
-      } catch (error) {
-        console.warn(
-          `[WARN] Failed to get credentials for ${serviceName}:`,
-          error,
-        );
-      }
-    }
+    // Use injected credentials directly (already filtered by endpoint)
+    const dynamicHeaders: Record<string, string> = injectedCredentials;
 
     // Evaluate static headers
     const evaluatedStaticHeaders: Record<string, string> = {};
@@ -142,6 +140,7 @@ export async function executeWrapper(
   payload: Record<string, any>,
   secret: string,
   options: Record<string, any> = {},
+  injectedCredentials: Record<string, string> = {},
 ): Promise<WrapperExecutionResult> {
   const executedAt = new Date().toISOString();
 
@@ -187,12 +186,12 @@ export async function executeWrapper(
       };
     }
 
-    // Create fetch override with header injection
+    // Create fetch override with header injection using provided credentials
     const fetchOverride = createFetchOverride(
       service_name,
       static_headers,
       dynamic_header_keys,
-      secret,
+      injectedCredentials,
     );
 
     // Create sandbox context
