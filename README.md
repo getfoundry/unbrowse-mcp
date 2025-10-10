@@ -1,5 +1,7 @@
 # Unbrowse MCP Server
 
+[![smithery badge](https://smithery.ai/badge/@lekt9/unbrowse-mcp)](https://smithery.ai/server/@lekt9/unbrowse-mcp)
+
 A Model Context Protocol (MCP) server that provides access to indexed web abilities from wrapper-storage with secure credential management and automatic header injection.
 
 ## Overview
@@ -67,6 +69,14 @@ pnpm install
 
 ```bash
 export SECRET="your-secret-key-here"
+```
+
+### Installing via Smithery
+
+To install Unbrowse automatically via [Smithery](https://smithery.ai/server/@lekt9/unbrowse-mcp):
+
+```bash
+npx -y @smithery/cli install @lekt9/unbrowse-mcp
 ```
 
 ### Development
