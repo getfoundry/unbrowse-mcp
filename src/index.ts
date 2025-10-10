@@ -1,10 +1,23 @@
 /**
  * Unbrowse MCP Server
  *
- * Provides access to indexed abilities from wrapper-storage and secure credential management.
- * Implements the private registry capabilities described in master.md:
- * - /list endpoint: Lists indexed tools/abilities filtered by user credentials
- * - /cookiejar endpoint: Manages encrypted credentials with SECRET-based decryption
+ * Provides access to indexed abilities from wrapper-storage and secure credential retrieval.
+ * Implements dual registry system:
+ *
+ * Tool Registration (Private Registry):
+ * - Only abilities user has credentials for are registered as MCP tools
+ * - User can only execute what they have credentials for (not public abilities)
+ * - Filtered by subdomain matching from credentials
+ *
+ * Search/Find (Searchable Registry):
+ * - Public abilities: Always searchable (no credential requirement)
+ * - Private abilities: Searchable if user has credentials + subdomain match (default)
+ * - Optional: Can disable domain filtering to search broader
+ * - Credentials are fetched separately via get_credentials (never included in list responses)
+ *
+ * Credential Management:
+ * - Credentials are retrieved (decrypted) from wrapper-storage using SECRET key
+ * - Credential storage is handled by external encrypted API (not via MCP)
  */
 
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
@@ -12,7 +25,6 @@ import { z } from "zod";
 import {
   listAbilities,
   getCookieJar,
-  setCookieJar,
   formatAbilityDescription,
   getAvailableDomains,
   findLoginAbilities,
@@ -54,6 +66,8 @@ export default async function createServer({
 
   // Load and register abilities from private registry endpoint on startup
   // This filters based on user credentials and domain matching
+  console.log("[INFO] Initializing Unbrowse MCP Server...");
+
   if (config.debug) {
     console.log("[DEBUG] Loading abilities from private registry...");
   }
@@ -74,11 +88,15 @@ export default async function createServer({
       console.log(`[DEBUG] Filter by domains: ${config.filterByDomains}`);
     }
 
-    // Call private registry endpoint with credential filtering
+    // Call private registry endpoint to get abilities user has credentials for
+    // Only register tools for abilities the user can actually execute (has credentials)
     const abilities = await listAbilities(
       userCredsList,
       config.filterByDomains,
+      true, // forToolRegistration=true: Only abilities with credentials (not public)
     );
+
+    console.log(`[INFO] Loaded ${abilities.length} abilities from registry`);
 
     if (config.debug) {
       console.log(
@@ -231,9 +249,17 @@ export default async function createServer({
     if (config.debug) {
       console.log(`[DEBUG] Registered ${abilities.length} ability tools`);
     }
-  } catch (error) {
-    console.error("[ERROR] Failed to load abilities:", error);
+  } catch (error: any) {
+    console.error("[ERROR] Failed to load abilities:", error?.message || error);
+    console.error(
+      "[ERROR] Server will continue but dynamic abilities will not be available",
+    );
+    console.error(
+      "[ERROR] Check that wrapper-storage directory is included in the deployment",
+    );
   }
+
+  console.log("[INFO] Server initialization complete");
 
   // Tool: List Indexed Abilities (Private Registry)
   // Corresponds to /list endpoint serving abilities from wrapper-storage
@@ -242,7 +268,7 @@ export default async function createServer({
     {
       title: "List Indexed Abilities",
       description:
-        "Lists all indexed tools/abilities from the private registry. Filters based on user credentials and optionally by cookie domains. Each ability includes dependency order showing which abilities must be called first in sequence.",
+        "Lists abilities from the searchable registry. Public abilities are always included. Private abilities are included only if you have credentials and match subdomain filtering (default enabled). Credentials are fetched separately and never included in this response. Each ability includes dependency order showing which abilities must be called first in sequence.",
       inputSchema: {
         userCredentials: z
           .array(z.string())
@@ -260,9 +286,11 @@ export default async function createServer({
       },
     },
     async ({ userCredentials, filterByDomains }) => {
+      // For list/search: public always + private with credentials (searchable registry)
       const abilities = await listAbilities(
         userCredentials || [],
-        filterByDomains || false,
+        filterByDomains !== false, // Default true for domain filtering
+        false, // forToolRegistration=false for searchable registry
       );
       const availableDomains = getAvailableDomains();
 
@@ -290,7 +318,7 @@ export default async function createServer({
                   service: a.serviceName,
                   description: formatAbilityDescription(a),
                   requiresCreds: a.requiresDynamicHeaders,
-                  neededCreds: a.dynamicHeaderKeys,
+                  neededCreds: a.dynamicHeaderKeys, // Shows what credentials are needed, but not the actual values
                   dependencyOrder: a.dependencyOrder,
                   missingDependencies:
                     a.dependencies?.missing?.map((d) => d.abilityId) || [],
@@ -358,84 +386,6 @@ export default async function createServer({
                   success: true,
                   serviceName,
                   credentials,
-                },
-                null,
-                2,
-              ),
-            },
-          ],
-        };
-      } catch (error: any) {
-        return {
-          content: [
-            {
-              type: "text",
-              text: JSON.stringify(
-                {
-                  success: false,
-                  error: error.message,
-                },
-                null,
-                2,
-              ),
-            },
-          ],
-        };
-      }
-    },
-  );
-
-  // Tool: Store Credentials in Cookie Jar
-  // Corresponds to /cookiejar POST endpoint with SECRET-based encryption
-  server.registerTool(
-    "store_credentials",
-    {
-      title: "Store Credentials in Cookie Jar",
-      description:
-        "Stores encrypted credentials for a service using the SECRET environment variable. Use this to save cookies, tokens, or other auth credentials needed for API execution. Note: After storing credentials, restart the MCP server to register new tools that require these credentials.",
-      inputSchema: {
-        serviceName: z
-          .string()
-          .describe("Name of the service (e.g., 'hedgemony-fund', 'wom-fun')"),
-        credentialKey: z
-          .string()
-          .describe(
-            "Credential key (e.g., 'www.hedgemony.fund::cookie', 'authorization')",
-          ),
-        credentialValue: z
-          .string()
-          .describe("Credential value to encrypt and store"),
-      },
-    },
-    async ({ serviceName, credentialKey, credentialValue }) => {
-      try {
-        await setCookieJar(
-          serviceName,
-          credentialKey,
-          credentialValue,
-          config.secret,
-        );
-
-        if (config.debug) {
-          console.log(
-            `[DEBUG] Stored credential ${credentialKey} for ${serviceName}`,
-          );
-        }
-
-        return {
-          content: [
-            {
-              type: "text",
-              text: JSON.stringify(
-                {
-                  success: true,
-                  message: `Credential ${credentialKey} stored for ${serviceName}. Note: Restart the MCP server or update userCredentials config to register tools that require this credential.`,
-                  credentialKey,
-                  nextSteps: [
-                    "Add this credential to userCredentials config",
-                    "Or restart MCP server to re-register tools",
-                    "New abilities requiring this credential will then be available as tools",
-                  ],
                 },
                 null,
                 2,
