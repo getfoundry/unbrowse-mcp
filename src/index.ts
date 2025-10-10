@@ -1,39 +1,25 @@
 /**
  * Unbrowse MCP Server
  *
- * Provides access to indexed abilities from wrapper-storage and secure credential retrieval.
- * Implements dual registry system:
- *
- * Tool Registration (Private Registry):
- * - Only abilities user has credentials for are registered as MCP tools
- * - User can only execute what they have credentials for (not public abilities)
- * - Filtered by subdomain matching from credentials
- *
- * Search/Find (Searchable Registry):
- * - Public abilities: Always searchable (no credential requirement)
- * - Private abilities: Searchable if user has credentials + subdomain match (default)
- * - Optional: Can disable domain filtering to search broader
- * - Credentials are fetched separately via get_credentials (never included in list responses)
- *
- * Credential Management:
- * - Credentials are retrieved (decrypted) from wrapper-storage using SECRET key
- * - Credential storage is handled by external encrypted API (not via MCP)
+ * Provides access to indexed abilities from wrapper-storage and secure credential management.
+ * Implements the private registry capabilities described in master.md:
+ * - /list endpoint: Lists indexed tools/abilities filtered by user credentials
+ * - /cookiejar endpoint: Manages encrypted credentials with SECRET-based decryption
  */
 
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import {
-  listAbilities,
+  listAllAbilities,
   getCookieJar,
+  getCookieJarSync,
   formatAbilityDescription,
-  getAvailableDomains,
-  findLoginAbilities,
-  markCredentialsExpired,
+  searchAbilities,
 } from "./mock-endpoints-enhanced.js";
+import type { IndexedAbility } from "./mock-endpoints-enhanced.js";
 import {
   executeWrapper,
   getWrapperMetadata,
-  listAvailableWrappers,
 } from "./wrapper-executor-enhanced.js";
 
 // User-level config from smithery.yaml
@@ -42,264 +28,390 @@ export const configSchema = z.object({
   secret: z
     .string()
     .describe("Secret key for encrypting/decrypting credentials"),
-  userCredentials: z
-    .string()
-    .default("")
-    .describe(
-      "Comma-separated list of credential keys for private registry filtering",
-    ),
-  filterByDomains: z
-    .boolean()
-    .default(true)
-    .describe("Only register tools for domains matching user credentials"),
 });
 
-export default async function createServer({
+export default function createServer({
   config,
 }: {
   config: z.infer<typeof configSchema>; // Define your config in smithery.yaml
 }) {
+  console.log("[INFO] createServer called - starting initialization");
+
   const server = new McpServer({
     name: "Unbrowse MCP",
     version: "1.0.0",
   });
 
-  // Load and register abilities from private registry endpoint on startup
-  // This filters based on user credentials and domain matching
-  console.log("[INFO] Initializing Unbrowse MCP Server...");
+  console.log("[INFO] McpServer instance created");
 
-  if (config.debug) {
-    console.log("[DEBUG] Loading abilities from private registry...");
-  }
+  const registeredAbilityIds = new Set<string>();
+  const accessibleAbilities: IndexedAbility[] = [];
+  const availableCredentialKeys = new Set<string>();
+  const credentialCache = new Map<string, Record<string, string> | null>();
 
-  try {
-    // Parse user credentials from config
-    const userCredsList = config.userCredentials
-      ? config.userCredentials
-          .split(",")
-          .map((s) => s.trim())
-          .filter(Boolean)
-      : [];
+  const candidateAbilities = listAllAbilities();
+  console.log(
+    `[INFO] Loaded ${candidateAbilities.length} abilities from wrapper storage for registration`,
+  );
 
-    if (config.debug) {
-      console.log(
-        `[DEBUG] User credentials: ${userCredsList.length > 0 ? userCredsList.join(", ") : "none (public only)"}`,
-      );
-      console.log(`[DEBUG] Filter by domains: ${config.filterByDomains}`);
-    }
+  const candidateVariantsFromDomain = (domain: string): string[] => {
+    const trimmed = domain.trim();
+    if (!trimmed) return [];
+    const hyphenated = trimmed.replace(/\./g, "-");
+    const underscored = trimmed.replace(/\./g, "_");
+    return [trimmed, hyphenated, underscored];
+  };
 
-    // Call private registry endpoint to get abilities user has credentials for
-    // Only register tools for abilities the user can actually execute (has credentials)
-    const abilities = await listAbilities(
-      userCredsList,
-      config.filterByDomains,
-      true, // forToolRegistration=true: Only abilities with credentials (not public)
+  const deriveCandidatesForKey = (
+    ability: IndexedAbility,
+    key: string,
+  ): string[] => {
+    const domain = key.split("::")[0];
+    const variants = new Set<string>([ability.serviceName]);
+    candidateVariantsFromDomain(domain).forEach((candidate) =>
+      variants.add(candidate),
     );
+    return Array.from(variants).filter(Boolean);
+  };
 
-    console.log(`[INFO] Loaded ${abilities.length} abilities from registry`);
-
-    if (config.debug) {
-      console.log(
-        `[DEBUG] Private registry returned ${abilities.length} abilities accessible to user`,
+  const deriveAllCandidates = (ability: IndexedAbility): string[] => {
+    const variants = new Set<string>([ability.serviceName]);
+    ability.dynamicHeaderKeys.forEach((key) => {
+      const domain = key.split("::")[0];
+      candidateVariantsFromDomain(domain).forEach((candidate) =>
+        variants.add(candidate),
       );
+    });
+    return Array.from(variants).filter(Boolean);
+  };
+
+  const fetchCredentialsForCandidate = (
+    candidate: string,
+  ): Record<string, string> | null => {
+    if (credentialCache.has(candidate)) {
+      return credentialCache.get(candidate) || null;
     }
 
-    // Register each ability as a separate MCP tool
-    for (const ability of abilities) {
-      const toolName = ability.abilityName;
-      const toolDescription = formatAbilityDescription(ability);
+    try {
+      const credentials = getCookieJarSync(candidate, config.secret);
+      credentialCache.set(candidate, credentials);
+      if (config.debug) {
+        console.log(
+          `[DEBUG] Credential lookup for ${candidate}: ${credentials ? "FOUND" : "missing"}`,
+        );
+      }
+      return credentials;
+    } catch (error: any) {
+      if (config.debug) {
+        console.warn(
+          `[DEBUG] Failed to read credentials for ${candidate}: ${error.message || error}`,
+        );
+      }
+      credentialCache.set(candidate, null);
+      return null;
+    }
+  };
 
-      // Convert JSON Schema to Zod schema for inputSchema
-      const inputSchemaProps: Record<string, any> = {};
+  const abilityHasCredentialCoverage = (ability: IndexedAbility): boolean => {
+    if (!ability.requiresDynamicHeaders) {
+      return true;
+    }
 
-      if (ability.inputSchema?.properties) {
-        for (const [key, prop] of Object.entries(
-          ability.inputSchema.properties as Record<string, any>,
-        )) {
-          // Simple mapping of JSON Schema types to Zod
-          let zodType: any;
-          switch (prop.type) {
-            case "string":
-              zodType = z.string();
-              break;
-            case "number":
-              zodType = z.number();
-              break;
-            case "integer":
-              zodType = z.number().int();
-              break;
-            case "boolean":
-              zodType = z.boolean();
-              break;
-            case "array":
-              zodType = z.array(z.any());
-              break;
-            case "object":
-              zodType = z.record(z.any());
-              break;
-            default:
-              zodType = z.any();
-          }
-
-          // Make optional if not in required array
-          if (!ability.inputSchema.required?.includes(key)) {
-            zodType = zodType.optional();
-          }
-
-          // Add description if available
-          if (prop.description) {
-            zodType = zodType.describe(prop.description);
-          }
-
-          inputSchemaProps[key] = zodType;
+    for (const key of ability.dynamicHeaderKeys) {
+      let keySatisfied = false;
+      for (const candidate of deriveCandidatesForKey(ability, key)) {
+        if (!candidate) continue;
+        const credentials = fetchCredentialsForCandidate(candidate);
+        if (credentials && credentials[key] !== undefined) {
+          keySatisfied = true;
+          break;
         }
       }
 
-      server.registerTool(
-        toolName,
-        {
-          title: ability.abilityName
-            .replace(/_/g, " ")
-            .replace(/\b\w/g, (l) => l.toUpperCase()),
-          description: toolDescription,
-          inputSchema:
-            Object.keys(inputSchemaProps).length > 0
-              ? inputSchemaProps
-              : {
-                  _placeholder: z
-                    .any()
-                    .optional()
-                    .describe("No parameters required"),
-                },
-        },
-        async (params) => {
-          try {
-            if (config.debug) {
-              console.log(
-                `[DEBUG] Executing ability: ${ability.abilityId} with params:`,
-                params,
-              );
-            }
+      if (!keySatisfied) {
+        if (config.debug) {
+          console.log(
+            `[DEBUG] Skipping ability ${ability.abilityId}: missing credential for ${key}`,
+          );
+        }
+        return false;
+      }
+    }
 
-            // Remove placeholder param if it exists
-            const payload = { ...params };
-            delete payload._placeholder;
+    ability.dynamicHeaderKeys.forEach((key) => availableCredentialKeys.add(key));
+    return true;
+  };
 
-            const result = await executeWrapper(
-              ability.abilityId,
-              payload,
-              config.secret,
-              {},
+  const registerAbilityTool = (ability: IndexedAbility): boolean => {
+    if (registeredAbilityIds.has(ability.abilityId)) {
+      return false;
+    }
+
+    const toolName = ability.abilityName;
+    const toolDescription = formatAbilityDescription(ability);
+
+    const inputSchemaProps: Record<string, any> = {};
+
+    if (ability.inputSchema?.properties) {
+      for (const [key, prop] of Object.entries(
+        ability.inputSchema.properties as Record<string, any>,
+      )) {
+        let zodType: any;
+        switch (prop.type) {
+          case "string":
+            zodType = z.string();
+            break;
+          case "number":
+            zodType = z.number();
+            break;
+          case "integer":
+            zodType = z.number().int();
+            break;
+          case "boolean":
+            zodType = z.boolean();
+            break;
+          case "array":
+            zodType = z.array(z.any());
+            break;
+          case "object":
+            zodType = z.record(z.any());
+            break;
+          default:
+            zodType = z.any();
+        }
+
+        if (!ability.inputSchema.required?.includes(key)) {
+          zodType = zodType.optional();
+        }
+
+        if ((prop as any).description) {
+          zodType = zodType.describe((prop as any).description);
+        }
+
+        inputSchemaProps[key] = zodType;
+      }
+    }
+
+    server.registerTool(
+      toolName,
+      {
+        title: ability.abilityName
+          .replace(/_/g, " ")
+          .replace(/\b\w/g, (l) => l.toUpperCase()),
+        description: toolDescription,
+        inputSchema:
+          Object.keys(inputSchemaProps).length > 0
+            ? inputSchemaProps
+            : {
+                _placeholder: z
+                  .any()
+                  .optional()
+                  .describe("No parameters required"),
+              },
+      },
+      async (params) => {
+        try {
+          if (config.debug) {
+            console.log(
+              `[DEBUG] Executing ability: ${ability.abilityId} with params:`,
+              params,
             );
+          }
 
-            if (config.debug) {
-              console.log(
-                `[DEBUG] Execution result: ${result.success ? "SUCCESS" : "FAILED"} (${result.statusCode || "N/A"})`,
-              );
-              if (result.credentialsExpired) {
-                console.log(
-                  `[DEBUG] Credentials expired. Login abilities: ${result.loginAbilities?.map((a) => a.id).join(", ")}`,
+          const payload = { ...params };
+          delete (payload as Record<string, unknown>)._placeholder;
+
+          let resolvedCredentials: Record<string, string> | null = null;
+
+          if (ability.requiresDynamicHeaders) {
+            for (const candidate of deriveAllCandidates(ability)) {
+              if (!candidate) continue;
+
+              try {
+                const creds = await getCookieJar(candidate, config.secret);
+                if (!creds) continue;
+
+                const hasAllHeaders = ability.dynamicHeaderKeys.every(
+                  (key) => creds[key] !== undefined,
                 );
+
+                if (hasAllHeaders) {
+                  resolvedCredentials = creds;
+                  if (config.debug && candidate !== ability.serviceName) {
+                    console.log(
+                      `[DEBUG] Using credential candidate ${candidate} for ability ${ability.abilityId}`,
+                    );
+                  }
+                  break;
+                }
+              } catch (error: any) {
+                if (config.debug) {
+                  console.warn(
+                    `[DEBUG] Credential fetch failed for ${candidate}: ${error.message || error}`,
+                  );
+                }
               }
             }
 
-            return {
-              content: [
-                {
-                  type: "text",
-                  text: JSON.stringify(
-                    {
-                      success: result.success,
-                      statusCode: result.statusCode,
-                      responseBody: result.responseBody,
-                      responseHeaders: result.responseHeaders,
-                      error: result.error,
-                      credentialsExpired: result.credentialsExpired,
-                      loginAbilities: result.loginAbilities,
-                      executedAt: result.executedAt,
-                    },
-                    null,
-                    2,
-                  ),
-                },
-              ],
-            };
-          } catch (error: any) {
-            return {
-              content: [
-                {
-                  type: "text",
-                  text: JSON.stringify(
-                    {
-                      success: false,
-                      error: error.message || String(error),
-                      executedAt: new Date().toISOString(),
-                    },
-                    null,
-                    2,
-                  ),
-                },
-              ],
-            };
+            if (!resolvedCredentials) {
+              throw new Error(
+                `Credentials not available for ability ${ability.abilityId}. Store the required headers and retry.`,
+              );
+            }
           }
-        },
-      );
+
+          const result = await executeWrapper(
+            ability.abilityId,
+            payload,
+            config.secret,
+            {},
+            resolvedCredentials || {},
+          );
+
+          if (config.debug) {
+            console.log(
+              `[DEBUG] Execution result: ${result.success ? "SUCCESS" : "FAILED"}`,
+            );
+          }
+
+          return {
+            content: [
+              {
+                type: "text",
+                text: JSON.stringify(
+                  {
+                    success: result.success,
+                    statusCode: result.statusCode,
+                    responseBody: result.responseBody,
+                    responseHeaders: result.responseHeaders,
+                    error: result.error,
+                    credentialsExpired: result.credentialsExpired,
+                    loginAbilities: result.loginAbilities,
+                    executedAt: result.executedAt,
+                  },
+                  null,
+                  2,
+                ),
+              },
+            ],
+          };
+        } catch (error: any) {
+          return {
+            content: [
+              {
+                type: "text",
+                text: JSON.stringify(
+                  {
+                    success: false,
+                    error: error.message || String(error),
+                    executedAt: new Date().toISOString(),
+                  },
+                  null,
+                  2,
+                ),
+              },
+            ],
+          };
+        }
+      },
+    );
+
+    registeredAbilityIds.add(ability.abilityId);
+    return true;
+  };
+
+  for (const ability of candidateAbilities) {
+    if (!abilityHasCredentialCoverage(ability)) {
+      continue;
     }
 
-    if (config.debug) {
-      console.log(`[DEBUG] Registered ${abilities.length} ability tools`);
+    if (registerAbilityTool(ability)) {
+      accessibleAbilities.push(ability);
     }
-  } catch (error: any) {
-    console.error("[ERROR] Failed to load abilities:", error?.message || error);
-    console.error(
-      "[ERROR] Server will continue but dynamic abilities will not be available",
-    );
-    console.error(
-      "[ERROR] Check that wrapper-storage directory is included in the deployment",
-    );
   }
 
-  console.log("[INFO] Server initialization complete");
+  if (accessibleAbilities.length === 0) {
+    console.warn(
+      "[WARN] No abilities were registered. Ensure credentials are stored in the cookie jar and wrappers are available.",
+    );
+  } else {
+    console.log(
+      `[INFO] Registered ${accessibleAbilities.length} abilities with credential coverage`,
+    );
+    if (availableCredentialKeys.size > 0) {
+      console.log(
+        `[INFO] Detected ${availableCredentialKeys.size} credential key(s) from decrypted cookie jar entries`,
+      );
+    }
+  }
 
-  // Tool: List Indexed Abilities (Private Registry)
-  // Corresponds to /list endpoint serving abilities from wrapper-storage
+  // Tool: Search Abilities (Credential-aware)
   server.registerTool(
-    "list_abilities",
+    "search_abilities",
     {
-      title: "List Indexed Abilities",
+      title: "Search Abilities",
       description:
-        "Lists abilities from the searchable registry. Public abilities are always included. Private abilities are included only if you have credentials and match subdomain filtering (default enabled). Credentials are fetched separately and never included in this response. Each ability includes dependency order showing which abilities must be called first in sequence.",
+        "Searches indexed abilities that the user can execute based on provided credentials. Results are ranked by relevance to the query and include dependency details.",
       inputSchema: {
+        query: z
+          .string()
+          .min(1)
+          .describe(
+            "Describe what you want to do (e.g., 'create trade', 'fetch token prices').",
+          ),
         userCredentials: z
           .array(z.string())
           .optional()
           .describe(
-            "Array of credential keys the user has access to (e.g., ['www.hedgemony.fund::cookie'])",
+            "Credential keys available to the user (e.g., ['www.hedgemony.fund::cookie']).",
           ),
         filterByDomains: z
           .boolean()
           .optional()
-          .default(false)
+          .default(true)
           .describe(
-            "Filter abilities to only those matching domains from available credentials",
+            "Restrict private abilities to those that match credential domains.",
           ),
+        limit: z
+          .number()
+          .int()
+          .min(1)
+          .max(50)
+          .optional()
+          .describe("Maximum number of results to return (default 20)."),
       },
     },
-    async ({ userCredentials, filterByDomains }) => {
-      // For list/search: public always + private with credentials (searchable registry)
-      const abilities = await listAbilities(
-        userCredentials || [],
-        filterByDomains !== false, // Default true for domain filtering
-        false, // forToolRegistration=false for searchable registry
+    async ({ query, userCredentials, filterByDomains, limit }) => {
+      const credentialScope =
+        userCredentials && userCredentials.length > 0
+          ? [...userCredentials]
+          : Array.from(availableCredentialKeys);
+      const domainFilter =
+        typeof filterByDomains === "boolean" ? filterByDomains : true;
+      const resultLimit =
+        typeof limit === "number" ? Math.min(Math.max(limit, 1), 50) : 20;
+
+      const matches = await searchAbilities(
+        query,
+        credentialScope,
+        domainFilter,
+        resultLimit,
+        true,
+        accessibleAbilities,
       );
-      const availableDomains = getAvailableDomains();
+      const domainCandidates = new Set<string>(
+        Array.from(availableCredentialKeys).map((key) => key.split("::")[0]),
+      );
+      if (domainCandidates.size === 0) {
+        accessibleAbilities.forEach((ability) =>
+          domainCandidates.add(ability.serviceName),
+        );
+      }
+      const availableDomains = Array.from(domainCandidates);
 
       if (config.debug) {
         console.log(
-          `[DEBUG] Listed ${abilities.length} abilities for user with ${(userCredentials || []).length} credentials`,
-        );
-        console.log(
-          `[DEBUG] Available domains: ${availableDomains.join(", ")}`,
+          `[DEBUG] Search "${query}" returned ${matches.length} abilities (limit ${resultLimit}) with ${credentialScope.length} credential hints`,
         );
       }
 
@@ -310,15 +422,16 @@ export default async function createServer({
             text: JSON.stringify(
               {
                 success: true,
-                count: abilities.length,
+                query,
+                count: matches.length,
                 availableDomains,
-                abilities: abilities.map((a) => ({
+                abilities: matches.map((a) => ({
                   id: a.abilityId,
                   name: a.abilityName,
                   service: a.serviceName,
                   description: formatAbilityDescription(a),
                   requiresCreds: a.requiresDynamicHeaders,
-                  neededCreds: a.dynamicHeaderKeys, // Shows what credentials are needed, but not the actual values
+                  neededCreds: a.dynamicHeaderKeys,
                   dependencyOrder: a.dependencyOrder,
                   missingDependencies:
                     a.dependencies?.missing?.map((d) => d.abilityId) || [],
@@ -335,83 +448,7 @@ export default async function createServer({
     },
   );
 
-  // Tool: Get Credentials from Cookie Jar
-  // Corresponds to /cookiejar GET endpoint with SECRET-based decryption
-  server.registerTool(
-    "get_credentials",
-    {
-      title: "Get Credentials from Cookie Jar",
-      description:
-        "Retrieves encrypted credentials for a service, decrypted using the SECRET environment variable. Returns credential key-value pairs needed for API execution.",
-      inputSchema: {
-        serviceName: z
-          .string()
-          .describe(
-            "Name of the service to get credentials for (e.g., 'hedgemony-fund', 'wom-fun')",
-          ),
-      },
-    },
-    async ({ serviceName }) => {
-      try {
-        const credentials = await getCookieJar(serviceName, config.secret);
 
-        if (config.debug) {
-          console.log(`[DEBUG] Retrieved credentials for ${serviceName}`);
-        }
-
-        if (!credentials) {
-          return {
-            content: [
-              {
-                type: "text",
-                text: JSON.stringify(
-                  {
-                    success: false,
-                    error: `No credentials found for service: ${serviceName}`,
-                  },
-                  null,
-                  2,
-                ),
-              },
-            ],
-          };
-        }
-
-        return {
-          content: [
-            {
-              type: "text",
-              text: JSON.stringify(
-                {
-                  success: true,
-                  serviceName,
-                  credentials,
-                },
-                null,
-                2,
-              ),
-            },
-          ],
-        };
-      } catch (error: any) {
-        return {
-          content: [
-            {
-              type: "text",
-              text: JSON.stringify(
-                {
-                  success: false,
-                  error: error.message,
-                },
-                null,
-                2,
-              ),
-            },
-          ],
-        };
-      }
-    },
-  );
 
   // Resource: Ability Index
   // Provides detailed information about indexed abilities
@@ -424,114 +461,15 @@ export default async function createServer({
         "Access to the indexed abilities from wrapper-storage with PoN scores, schemas, and execution metadata",
     },
     async (uri) => {
-      const abilities = await listAbilities([]);
-
       return {
         contents: [
           {
             uri: uri.href,
-            text: JSON.stringify(abilities, null, 2),
+            text: JSON.stringify(accessibleAbilities, null, 2),
             mimeType: "application/json",
           },
         ],
       };
-    },
-  );
-
-  // Tool: Execute Wrapper with Credential Injection
-  // Evaluates wrapper code and injects headers from cookiejar
-  server.registerTool(
-    "execute_ability",
-    {
-      title: "Execute Ability",
-      description:
-        "Executes a wrapper/ability with automatic credential injection. The wrapper code is evaluated with a fetch override that injects both static headers (from wrapper definition) and dynamic headers (from encrypted cookiejar). This enables seamless API execution with authentication. On 401+ errors, credentials are automatically marked as expired and login abilities are suggested.",
-      inputSchema: {
-        abilityId: z
-          .string()
-          .describe(
-            "The ability ID to execute (e.g., 'get-hedgemony-stats-simple')",
-          ),
-        payload: z
-          .record(z.any())
-          .optional()
-          .describe(
-            "Input payload matching the ability's input schema (e.g., {tier: 'plus'})",
-          ),
-        options: z
-          .record(z.any())
-          .optional()
-          .describe(
-            "Additional options like baseUrl override (e.g., {baseUrl: 'https://example.com'})",
-          ),
-      },
-    },
-    async ({ abilityId, payload, options }) => {
-      try {
-        if (config.debug) {
-          console.log(
-            `[DEBUG] Executing ability: ${abilityId} with payload:`,
-            payload,
-          );
-        }
-
-        const result = await executeWrapper(
-          abilityId,
-          payload || {},
-          config.secret,
-          options || {},
-        );
-
-        if (config.debug) {
-          console.log(
-            `[DEBUG] Execution result: ${result.success ? "SUCCESS" : "FAILED"} (${result.statusCode || "N/A"})`,
-          );
-          if (result.credentialsExpired) {
-            console.log(
-              `[DEBUG] Credentials expired. Login abilities: ${result.loginAbilities?.map((a) => a.id).join(", ")}`,
-            );
-          }
-        }
-
-        return {
-          content: [
-            {
-              type: "text",
-              text: JSON.stringify(
-                {
-                  success: result.success,
-                  statusCode: result.statusCode,
-                  responseBody: result.responseBody,
-                  responseHeaders: result.responseHeaders,
-                  error: result.error,
-                  credentialsExpired: result.credentialsExpired,
-                  loginAbilities: result.loginAbilities,
-                  executedAt: result.executedAt,
-                },
-                null,
-                2,
-              ),
-            },
-          ],
-        };
-      } catch (error: any) {
-        return {
-          content: [
-            {
-              type: "text",
-              text: JSON.stringify(
-                {
-                  success: false,
-                  error: error.message || String(error),
-                  executedAt: new Date().toISOString(),
-                },
-                null,
-                2,
-              ),
-            },
-          ],
-        };
-      }
     },
   );
 

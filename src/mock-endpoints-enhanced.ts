@@ -15,6 +15,7 @@
  */
 
 import { readdir, readFile } from "fs/promises";
+import { readdirSync, readFileSync } from "fs";
 import { join } from "path";
 import {
   createDecipheriv,
@@ -24,7 +25,19 @@ import {
 } from "crypto";
 
 // Get wrapper storage path - works in both ESM and CommonJS
-const WRAPPER_STORAGE_PATH = join(process.cwd(), "src", "wrapper-storage");
+// Try multiple possible paths for wrapper-storage
+function getWrapperStoragePath(): string {
+  const possiblePaths = [
+    join(process.cwd(), "src", "wrapper-storage"),
+    join(process.cwd(), "wrapper-storage"),
+    join(process.cwd(), "dist", "wrapper-storage"),
+  ];
+
+  // Return first path (will be validated when actually used)
+  return possiblePaths[0];
+}
+
+const WRAPPER_STORAGE_PATH = getWrapperStoragePath();
 
 // Encryption config
 const ALGORITHM = "aes-256-gcm";
@@ -123,6 +136,103 @@ export interface CredentialEntry {
 
 const mockCredentialStore: CredentialEntry[] = [];
 
+function buildIndexedAbility(data: any): IndexedAbility {
+  return {
+    abilityId: data.input.ability_id,
+    abilityName: data.input.ability_name,
+    serviceName: data.input.service_name,
+    description: data.input.description,
+    inputSchema: data.schemas?.input || data.input.input_schema,
+    outputSchema: data.schemas?.output,
+    dynamicHeaderKeys: data.input.dynamic_header_keys || [],
+    requiresDynamicHeaders:
+      (data.input.dynamic_header_keys || []).length > 0,
+    dependencyOrder: data.input.dependency_order || [],
+    dependencies: data.dependencies,
+    ponScore: Math.random() * 0.3 + 0.05,
+    successRate: data.execution?.ok ? 0.95 : 0.75,
+    createdAt: data.createdAt || new Date().toISOString(),
+    updatedAt: data.updatedAt || new Date().toISOString(),
+  };
+}
+
+/**
+ * Filters credentials based on what the user has access to
+ * This simulates the credential endpoint that takes user's credentials
+ * and returns which ones are valid/available
+ */
+export function filterCredentials(
+  userCreds: Record<string, string>,
+): string[] {
+  const availableKeys: string[] = [];
+
+  // Check each credential in the store
+  for (const cred of mockCredentialStore) {
+    if (cred.expired) continue;
+
+    // Check if user has this credential (key exists in userCreds)
+    if (userCreds[cred.key] !== undefined) {
+      availableKeys.push(cred.key);
+    }
+  }
+
+  return availableKeys;
+}
+
+/**
+ * Initialize mock credential store with all credentials from wrapper-storage
+ * This pre-populates credentials so all abilities can be registered as tools
+ */
+function initializeMockCredentials(): void {
+  if (mockCredentialStore.length > 0) return; // Already initialized
+
+  try {
+    const files = readdirSync(WRAPPER_STORAGE_PATH);
+    const jsonFiles = files.filter((f) => f.endsWith(".json"));
+    const credentialKeys = new Set<string>();
+
+    // Collect all unique credential keys from abilities
+    for (const file of jsonFiles) {
+      const filePath = join(WRAPPER_STORAGE_PATH, file);
+      const content = readFileSync(filePath, "utf-8");
+      const data = JSON.parse(content);
+      const dynamicHeaderKeys = data.input.dynamic_header_keys || [];
+
+      dynamicHeaderKeys.forEach((key: string) => {
+        credentialKeys.add(key);
+      });
+    }
+
+    // Create mock credentials for each unique key
+    credentialKeys.forEach((key) => {
+      const domain = key.split("::")[0];
+      const serviceName = domain.replace(/\./g, "-");
+
+      mockCredentialStore.push({
+        key,
+        encryptedValue: "mock-encrypted-value-" + key.replace(/[:.]/g, "-"),
+        serviceName,
+        createdAt: new Date().toISOString(),
+        expired: false,
+      });
+    });
+
+    console.log(
+      `[INFO] Initialized ${mockCredentialStore.length} mock credentials from ${jsonFiles.length} abilities`,
+    );
+    if (mockCredentialStore.length > 0) {
+      console.log(
+        `[INFO] Sample credentials: ${Array.from(credentialKeys).slice(0, 3).join(", ")}`,
+      );
+    }
+  } catch (error) {
+    console.error("[ERROR] Failed to initialize mock credentials:", error);
+  }
+}
+
+// Initialize credentials at module load
+initializeMockCredentials();
+
 /**
  * Extracts domain from credential key (format: "domain::header-name")
  */
@@ -180,12 +290,74 @@ export function getAvailableDomains(): string[] {
  * @param userHasCreds - Credential keys available to user
  * @param filterByDomains - Only return abilities matching credential domains (default: true for private, ignored for public)
  * @param forToolRegistration - If true, only return abilities with credentials (for private registry)
+ * @param trustProvidedCreds - When true, treat provided credential keys as authoritative even if not in store
  * @returns Array of abilities with dependency order
  */
+/**
+ * Synchronous version for server initialization
+ */
+export function listAbilitiesSync(
+  userHasCreds: string[] = [],
+  filterByDomains: boolean = true,
+  forToolRegistration: boolean = false,
+  trustProvidedCreds: boolean = false,
+): IndexedAbility[] {
+  try {
+    let files: string[];
+    try {
+      files = readdirSync(WRAPPER_STORAGE_PATH);
+    } catch (dirError: any) {
+      console.error(`[ERROR] Cannot access wrapper-storage:`, dirError.message);
+      return [];
+    }
+    const jsonFiles = files.filter((f) => f.endsWith(".json"));
+    const validCreds = trustProvidedCreds
+      ? [...new Set(userHasCreds)]
+      : userHasCreds.filter((key) => {
+          const matches = mockCredentialStore.filter(
+            (c) => c.key === key && !c.expired,
+          );
+          return matches.length > 0;
+        });
+    const userDomains = new Set(validCreds.map(extractDomain));
+    const abilities: IndexedAbility[] = [];
+    for (const file of jsonFiles) {
+      const filePath = join(WRAPPER_STORAGE_PATH, file);
+      const content = readFileSync(filePath, "utf-8");
+      const data = JSON.parse(content);
+      const ability = buildIndexedAbility(data);
+      const isPublic = !ability.requiresDynamicHeaders;
+      const hasRequiredCreds = ability.dynamicHeaderKeys.every((key) =>
+        validCreds.includes(key),
+      );
+      const abilityDomains = new Set(
+        ability.dynamicHeaderKeys.map(extractDomain),
+      );
+      const matchesDomain =
+        !filterByDomains ||
+        isPublic ||
+        Array.from(abilityDomains).some((domain) => userDomains.has(domain));
+      if (forToolRegistration) {
+        if (!isPublic && hasRequiredCreds && matchesDomain)
+          abilities.push(ability);
+        continue;
+      }
+      if (isPublic && matchesDomain) abilities.push(ability);
+      else if (!isPublic && hasRequiredCreds && matchesDomain)
+        abilities.push(ability);
+    }
+    return abilities;
+  } catch (error) {
+    console.error("Error listing abilities (sync):", error);
+    return [];
+  }
+}
+
 export async function listAbilities(
   userHasCreds: string[] = [],
   filterByDomains: boolean = true,
   forToolRegistration: boolean = false,
+  trustProvidedCreds: boolean = false,
 ): Promise<IndexedAbility[]> {
   try {
     // Check if directory exists and is accessible
@@ -210,12 +382,14 @@ export async function listAbilities(
     const jsonFiles = files.filter((f) => f.endsWith(".json"));
 
     // Extract unique domains from user credentials (non-expired only)
-    const validCreds = userHasCreds.filter((key) => {
-      const matches = mockCredentialStore.filter(
-        (c) => c.key === key && !c.expired,
-      );
-      return matches.length > 0;
-    });
+    const validCreds = trustProvidedCreds
+      ? [...new Set(userHasCreds)]
+      : userHasCreds.filter((key) => {
+          const matches = mockCredentialStore.filter(
+            (c) => c.key === key && !c.expired,
+          );
+          return matches.length > 0;
+        });
 
     const userDomains = new Set(validCreds.map(extractDomain));
 
@@ -226,23 +400,7 @@ export async function listAbilities(
       const content = await readFile(filePath, "utf-8");
       const data = JSON.parse(content);
 
-      const ability: IndexedAbility = {
-        abilityId: data.input.ability_id,
-        abilityName: data.input.ability_name,
-        serviceName: data.input.service_name,
-        description: data.input.description,
-        inputSchema: data.schemas?.input || data.input.input_schema,
-        outputSchema: data.schemas?.output,
-        dynamicHeaderKeys: data.input.dynamic_header_keys || [],
-        requiresDynamicHeaders:
-          (data.input.dynamic_header_keys || []).length > 0,
-        dependencyOrder: data.input.dependency_order || [],
-        dependencies: data.dependencies,
-        ponScore: Math.random() * 0.3 + 0.05,
-        successRate: data.execution?.ok ? 0.95 : 0.75,
-        createdAt: data.createdAt || new Date().toISOString(),
-        updatedAt: data.updatedAt || new Date().toISOString(),
-      };
+      const ability = buildIndexedAbility(data);
 
       const isPublic = !ability.requiresDynamicHeaders;
 
@@ -285,6 +443,88 @@ export async function listAbilities(
   }
 }
 
+export async function searchAbilities(
+  query: string,
+  userHasCreds: string[] = [],
+  filterByDomains: boolean = true,
+  limit: number = 20,
+  trustProvidedCreds: boolean = false,
+  abilityPool?: IndexedAbility[],
+): Promise<IndexedAbility[]> {
+  const normalized = query.trim().toLowerCase();
+  if (!normalized) {
+    return [];
+  }
+
+  const tokens = normalized.split(/\s+/).filter(Boolean);
+  if (tokens.length === 0) {
+    return [];
+  }
+
+  const abilities = abilityPool
+    ? abilityPool
+    : await listAbilities(
+        userHasCreds,
+        filterByDomains,
+        false,
+        trustProvidedCreds,
+      );
+
+  const scored = abilities
+    .map((ability) => {
+      const name = ability.abilityName.toLowerCase();
+      const service = ability.serviceName.toLowerCase();
+      const description = (ability.description || "").toLowerCase();
+
+      const score = tokens.reduce((total, token) => {
+        let tokenScore = 0;
+        if (name.includes(token)) tokenScore += 3;
+        if (service.includes(token)) tokenScore += 2;
+        if (description.includes(token)) tokenScore += 1;
+        return total + tokenScore;
+      }, 0);
+
+      return {
+        ability,
+        score,
+      };
+    })
+    .filter(({ score }) => score > 0)
+    .sort((a, b) => {
+      if (b.score !== a.score) return b.score - a.score;
+      const aPon = a.ability.ponScore ?? 0;
+      const bPon = b.ability.ponScore ?? 0;
+      if (bPon !== aPon) return bPon - aPon;
+      const aSuccess = a.ability.successRate ?? 0;
+      const bSuccess = b.ability.successRate ?? 0;
+      return bSuccess - aSuccess;
+    })
+    .slice(0, Math.max(1, limit))
+    .map(({ ability }) => ability);
+
+  return scored;
+}
+
+export function listAllAbilities(): IndexedAbility[] {
+  try {
+    const files = readdirSync(WRAPPER_STORAGE_PATH);
+    const jsonFiles = files.filter((f) => f.endsWith(".json"));
+    const abilities: IndexedAbility[] = [];
+
+    for (const file of jsonFiles) {
+      const filePath = join(WRAPPER_STORAGE_PATH, file);
+      const content = readFileSync(filePath, "utf-8");
+      const data = JSON.parse(content);
+      abilities.push(buildIndexedAbility(data));
+    }
+
+    return abilities;
+  } catch (error) {
+    console.error("Error loading all abilities:", error);
+    return [];
+  }
+}
+
 /**
  * Finds login abilities for a given service/domain
  * Used to suggest authentication when credentials expire
@@ -320,10 +560,10 @@ export async function findLoginAbilities(
 /**
  * Gets credentials for a service (non-expired only)
  */
-export async function getCookieJar(
+export function getCookieJarSync(
   serviceName: string,
   secret: string,
-): Promise<Record<string, string> | null> {
+): Record<string, string> | null {
   if (!secret) {
     throw new Error(
       "SECRET environment variable is required for cookiejar access",
@@ -351,6 +591,13 @@ export async function getCookieJar(
   }
 
   return decrypted;
+}
+
+export async function getCookieJar(
+  serviceName: string,
+  secret: string,
+): Promise<Record<string, string> | null> {
+  return getCookieJarSync(serviceName, secret);
 }
 
 /**

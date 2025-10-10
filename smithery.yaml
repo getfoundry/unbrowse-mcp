@@ -8,13 +8,3 @@ config:
     description: "Secret key for encrypting/decrypting credentials in cookiejar endpoint"
     required: true
     secret: true
-  userCredentials:
-    type: string
-    description: "Comma-separated list of credential keys available to this user (e.g., 'www.hedgemony.fund::cookie,www.wom.fun::api-key'). Only abilities matching these credentials will be registered as tools."
-    required: false
-    default: ""
-  filterByDomains:
-    type: boolean
-    description: "Only register tools for domains matching user credentials"
-    required: false
-    default: true
