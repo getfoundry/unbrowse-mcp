@@ -1,11 +1,17 @@
 /**
  * Enhanced Mock API Endpoints for Unbrowse MCP
  *
- * Enhancements:
+ * Registry Design:
+ * - Everything indexed in wrapper-storage is included in tool list (not filtered)
+ * - Search/Find: Only public abilities OR abilities with credentials are searchable
+ * - Credentials are retrieved separately (never included in list/search responses)
+ *
+ * Features:
  * - Dependency order tracking in ability metadata
- * - Domain-based credential filtering
+ * - Domain-based credential filtering for search/find
  * - 401+ error handling with credential expiration
  * - Login ability detection for expired credentials
+ * - Credential retrieval only (storage handled externally)
  */
 
 import { readdir, readFile } from "fs/promises";
@@ -162,16 +168,45 @@ export function getAvailableDomains(): string[] {
 /**
  * Lists indexed abilities with enhanced filtering
  *
+ * Tool Registration (Private Registry):
+ * - Only abilities user has credentials for (not public)
+ * - User can only execute what they have creds for
+ *
+ * Search/Find (Searchable Registry):
+ * - Public abilities: Always searchable (no credential filter)
+ * - Private abilities: Searchable if user has credentials + match subdomain
+ * - Optional: Can search broader (disable domain filtering)
+ *
  * @param userHasCreds - Credential keys available to user
- * @param filterByDomains - Only return abilities matching credential domains
+ * @param filterByDomains - Only return abilities matching credential domains (default: true for private, ignored for public)
+ * @param forToolRegistration - If true, only return abilities with credentials (for private registry)
  * @returns Array of abilities with dependency order
  */
 export async function listAbilities(
   userHasCreds: string[] = [],
-  filterByDomains: boolean = false,
+  filterByDomains: boolean = true,
+  forToolRegistration: boolean = false,
 ): Promise<IndexedAbility[]> {
   try {
-    const files = await readdir(WRAPPER_STORAGE_PATH);
+    // Check if directory exists and is accessible
+    let files: string[];
+    try {
+      files = await readdir(WRAPPER_STORAGE_PATH);
+    } catch (dirError: any) {
+      console.error(
+        `[ERROR] Cannot access wrapper-storage at ${WRAPPER_STORAGE_PATH}:`,
+        dirError.message,
+      );
+      console.error(`[ERROR] Current working directory: ${process.cwd()}`);
+      console.error(
+        `[ERROR] __dirname available:`,
+        typeof __dirname !== "undefined" ? __dirname : "N/A",
+      );
+      console.error(
+        `[ERROR] This may indicate wrapper-storage was not included in the build`,
+      );
+      return [];
+    }
     const jsonFiles = files.filter((f) => f.endsWith(".json"));
 
     // Extract unique domains from user credentials (non-expired only)
@@ -209,6 +244,8 @@ export async function listAbilities(
         updatedAt: data.updatedAt || new Date().toISOString(),
       };
 
+      const isPublic = !ability.requiresDynamicHeaders;
+
       // Check if user has all required credentials (non-expired)
       const hasRequiredCreds = ability.dynamicHeaderKeys.every((key) =>
         validCreds.includes(key),
@@ -222,13 +259,21 @@ export async function listAbilities(
       // Check domain overlap
       const matchesDomain =
         !filterByDomains ||
+        isPublic || // Public abilities ignore domain filtering
         Array.from(abilityDomains).some((domain) => userDomains.has(domain));
 
-      // Include if: (no creds needed OR has creds) AND matches domain filter
-      if (
-        (!ability.requiresDynamicHeaders || hasRequiredCreds) &&
-        matchesDomain
-      ) {
+      // For tool registration: only abilities with credentials
+      if (forToolRegistration) {
+        if (!isPublic && hasRequiredCreds && matchesDomain) {
+          abilities.push(ability);
+        }
+        continue;
+      }
+
+      // For search/find: public (always) OR private with credentials + domain match
+      if (isPublic && matchesDomain) {
+        abilities.push(ability);
+      } else if (!isPublic && hasRequiredCreds && matchesDomain) {
         abilities.push(ability);
       }
     }
@@ -309,42 +354,6 @@ export async function getCookieJar(
 }
 
 /**
- * Stores encrypted credentials
- */
-export async function setCookieJar(
-  serviceName: string,
-  key: string,
-  value: string,
-  secret: string,
-): Promise<void> {
-  if (!secret) {
-    throw new Error(
-      "SECRET environment variable is required for cookiejar access",
-    );
-  }
-
-  const encryptedValue = encrypt(value, secret);
-
-  const existingIndex = mockCredentialStore.findIndex(
-    (cred) => cred.serviceName === serviceName && cred.key === key,
-  );
-
-  const entry: CredentialEntry = {
-    key,
-    encryptedValue,
-    serviceName,
-    createdAt: new Date().toISOString(),
-    expired: false,
-  };
-
-  if (existingIndex >= 0) {
-    mockCredentialStore[existingIndex] = entry;
-  } else {
-    mockCredentialStore.push(entry);
-  }
-}
-
-/**
  * Generates a formatted description with dependency order
  */
 export function formatAbilityDescription(ability: IndexedAbility): string {
@@ -381,10 +390,17 @@ export function formatAbilityDescription(ability: IndexedAbility): string {
 export const endpoints = {
   list: async (req: any, res: any) => {
     const userCredsParam = req.query.userCreds || "";
-    const filterByDomains = req.query.filterByDomains === "true";
+    const filterByDomains = req.query.filterByDomains !== "false"; // Default true
+    const forToolRegistration = req.query.forToolRegistration === "true";
     const userCreds = userCredsParam ? userCredsParam.split(",") : [];
 
-    const abilities = await listAbilities(userCreds, filterByDomains);
+    // forToolRegistration=true: Only abilities with credentials (private registry)
+    // forToolRegistration=false: Public always + private with credentials (searchable registry)
+    const abilities = await listAbilities(
+      userCreds,
+      filterByDomains,
+      forToolRegistration,
+    );
 
     res.json({
       success: true,
@@ -441,40 +457,6 @@ export const endpoints = {
         success: true,
         serviceName,
         credentials,
-      });
-    } catch (error: any) {
-      res.status(500).json({
-        success: false,
-        error: error.message,
-      });
-    }
-  },
-
-  setCookiejar: async (req: any, res: any) => {
-    const { serviceName } = req.params;
-    const { key, value } = req.body;
-    const secret = process.env.SECRET;
-
-    if (!secret) {
-      return res.status(500).json({
-        success: false,
-        error: "SECRET environment variable not configured",
-      });
-    }
-
-    if (!key || !value) {
-      return res.status(400).json({
-        success: false,
-        error: "Missing required fields: key, value",
-      });
-    }
-
-    try {
-      await setCookieJar(serviceName, key, value, secret);
-
-      res.json({
-        success: true,
-        message: `Credential ${key} stored for ${serviceName}`,
       });
     } catch (error: any) {
       res.status(500).json({
