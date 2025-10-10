@@ -30,6 +30,16 @@ export const configSchema = z.object({
   secret: z
     .string()
     .describe("Secret key for encrypting/decrypting credentials"),
+  userCredentials: z
+    .string()
+    .default("")
+    .describe(
+      "Comma-separated list of credential keys for private registry filtering",
+    ),
+  filterByDomains: z
+    .boolean()
+    .default(true)
+    .describe("Only register tools for domains matching user credentials"),
 });
 
 export default async function createServer({
@@ -42,17 +52,37 @@ export default async function createServer({
     version: "1.0.0",
   });
 
-  // Load and register all abilities from wrapper-storage as individual tools on startup
+  // Load and register abilities from private registry endpoint on startup
+  // This filters based on user credentials and domain matching
   if (config.debug) {
-    console.log("[DEBUG] Loading abilities from wrapper-storage...");
+    console.log("[DEBUG] Loading abilities from private registry...");
   }
 
   try {
-    const abilities = await listAbilities([], false);
+    // Parse user credentials from config
+    const userCredsList = config.userCredentials
+      ? config.userCredentials
+          .split(",")
+          .map((s) => s.trim())
+          .filter(Boolean)
+      : [];
 
     if (config.debug) {
       console.log(
-        `[DEBUG] Found ${abilities.length} abilities, registering as tools...`,
+        `[DEBUG] User credentials: ${userCredsList.length > 0 ? userCredsList.join(", ") : "none (public only)"}`,
+      );
+      console.log(`[DEBUG] Filter by domains: ${config.filterByDomains}`);
+    }
+
+    // Call private registry endpoint with credential filtering
+    const abilities = await listAbilities(
+      userCredsList,
+      config.filterByDomains,
+    );
+
+    if (config.debug) {
+      console.log(
+        `[DEBUG] Private registry returned ${abilities.length} abilities accessible to user`,
       );
     }
 
@@ -362,7 +392,7 @@ export default async function createServer({
     {
       title: "Store Credentials in Cookie Jar",
       description:
-        "Stores encrypted credentials for a service using the SECRET environment variable. Use this to save cookies, tokens, or other auth credentials needed for API execution.",
+        "Stores encrypted credentials for a service using the SECRET environment variable. Use this to save cookies, tokens, or other auth credentials needed for API execution. Note: After storing credentials, restart the MCP server to register new tools that require these credentials.",
       inputSchema: {
         serviceName: z
           .string()
@@ -399,7 +429,13 @@ export default async function createServer({
               text: JSON.stringify(
                 {
                   success: true,
-                  message: `Credential ${credentialKey} stored for ${serviceName}`,
+                  message: `Credential ${credentialKey} stored for ${serviceName}. Note: Restart the MCP server or update userCredentials config to register tools that require this credential.`,
+                  credentialKey,
+                  nextSteps: [
+                    "Add this credential to userCredentials config",
+                    "Or restart MCP server to re-register tools",
+                    "New abilities requiring this credential will then be available as tools",
+                  ],
                 },
                 null,
                 2,
