@@ -1,0 +1,2070 @@
+{
+  "input": {
+    "session_id": "har-session-3-mgkehiwd",
+    "service_name": "wom-fun",
+    "ability_id": "get-supabase-vtnzhqawildiecaasapv-hyperevm-tokens",
+    "ability_name": "get_supabase_vtnzhqawildiecaasapv_hyperevm_tokens",
+    "description": "Retrieve HyperEVM tokens from WOM's Supabase database, filtered by active status and ordered by WOM score. Use to get token analytics including market cap, volume, social metrics, and deltas. Example: select='token_symbol,token_name,address,wom_score,market_cap_usd,volume_usd,image_url,is_active,created_at,age,tweet_count,avg_followers_count,shillers,holders,dex_url', is_active='eq.true', order='wom_score.desc'.",
+    "wrapper_code": "export async function wrapper(payload, options) {\n  options = options || {};\n\n  const baseUrl = options.baseUrl || 'https://vtnzhqawildiecaasapv.supabase.co';\n  const url = new URL('/rest/v1/hyperevm_tokens', baseUrl);\n\n  if (payload.select !== undefined) {\n    url.searchParams.set('select', payload.select);\n  }\n  if (payload.is_active !== undefined) {\n    url.searchParams.set('is_active', payload.is_active);\n  }\n  if (payload.order !== undefined) {\n    url.searchParams.set('order', payload.order);\n  }\n  if (payload.address !== undefined) {\n    url.searchParams.set('address', payload.address);\n  }\n\n  const headers = {\n    'accept': '*/*',\n    'accept-language': 'en-US,en;q=0.5',\n    'accept-profile': 'public',\n    'origin': 'https://www.wom.fun',\n    'priority': 'u=4',\n    'referer': 'https://www.wom.fun/',\n    'sec-fetch-dest': 'empty',\n    'sec-fetch-mode': 'cors',\n    'sec-fetch-site': 'cross-site',\n    'sec-gpc': '1',\n    'te': 'trailers',\n    'user-agent': 'Mozilla/5.0 (Macintosh; Kim Olson Jr. OS X 10.15; rv:143.0) Gecko/[BANK_ACCOUNT] Firefox/143.0',\n    'x-client-info': 'supabase-js-web/2.51.0',\n    ... (options.dynamicHeaders || {})\n  };\n\n  const response = await fetch(url.toString(), { method: 'GET', headers });\n  if (!response.ok) {\n    throw new Error('Request failed: ' + response.status + ' ' + response.statusText);\n  }\n  return response;\n}\n\nexport const DYNAMIC_HEADER_KEYS = ['vtnzhqawildiecaasapv.supabase.co::apikey', 'vtnzhqawildiecaasapv.supabase.co::authorization'];\n\nif (typeof module !== 'undefined' && module.exports) {\n  module.exports = { wrapper, DYNAMIC_HEADER_KEYS };\n}",
+    "static_headers": [
+      {
+        "key": "vtnzhqawildiecaasapv.supabase.co::accept",
+        "value_code": "() => \"*/*\""
+      },
+      {
+        "key": "vtnzhqawildiecaasapv.supabase.co::accept-language",
+        "value_code": "() => \"en-US,en;q=0.5\""
+      },
+      {
+        "key": "vtnzhqawildiecaasapv.supabase.co::accept-profile",
+        "value_code": "() => \"public\""
+      },
+      {
+        "key": "vtnzhqawildiecaasapv.supabase.co::origin",
+        "value_code": "() => \"https://www.wom.fun\""
+      },
+      {
+        "key": "vtnzhqawildiecaasapv.supabase.co::priority",
+        "value_code": "() => \"u=4\""
+      },
+      {
+        "key": "vtnzhqawildiecaasapv.supabase.co::referer",
+        "value_code": "() => \"https://www.wom.fun/\""
+      },
+      {
+        "key": "vtnzhqawildiecaasapv.supabase.co::sec-fetch-dest",
+        "value_code": "() => \"empty\""
+      },
+      {
+        "key": "vtnzhqawildiecaasapv.supabase.co::sec-fetch-mode",
+        "value_code": "() => \"cors\""
+      },
+      {
+        "key": "vtnzhqawildiecaasapv.supabase.co::sec-fetch-site",
+        "value_code": "() => \"cross-site\""
+      },
+      {
+        "key": "vtnzhqawildiecaasapv.supabase.co::sec-gpc",
+        "value_code": "() => \"1\""
+      },
+      {
+        "key": "vtnzhqawildiecaasapv.supabase.co::te",
+        "value_code": "() => \"trailers\""
+      },
+      {
+        "key": "vtnzhqawildiecaasapv.supabase.co::user-agent",
+        "value_code": "() => \"Mozilla/5.0 (Macintosh; Kim Olson Jr. OS X 10.15; rv:143.0) Gecko/[BANK_ACCOUNT] Firefox/143.0\""
+      },
+      {
+        "key": "vtnzhqawildiecaasapv.supabase.co::x-client-info",
+        "value_code": "() => \"supabase-js-web/2.51.0\"}]</parameter name="
+      }
+    ],
+    "dynamic_header_keys": [
+      "vtnzhqawildiecaasapv.supabase.co::apikey",
+      "vtnzhqawildiecaasapv.supabase.co::authorization"
+    ],
+    "dynamic_headers": [],
+    "input_schema": {
+      "type": "object",
+      "description": "Input for querying HyperEVM tokens from WOM Supabase.",
+      "properties": {
+        "select": {
+          "type": "string",
+          "description": "Comma-separated fields to select.",
+          "example": "token_symbol,token_name,address,wom_score,market_cap_usd,volume_usd,image_url,is_active,created_at,age,tweet_count,avg_followers_count,shillers,holders,dex_url"
+        },
+        "is_active": {
+          "type": "string",
+          "description": "Filter by active status (e.g., 'eq.true').",
+          "example": "eq.true"
+        },
+        "order": {
+          "type": "string",
+          "description": "Order by field and direction (e.g., 'wom_score.desc').",
+          "example": "wom_score.desc"
+        },
+        "address": {
+          "type": "string",
+          "description": "Filter addresses (e.g., 'in.([ETHEREUM_ADDRESS],[ETHEREUM_ADDRESS])').",
+          "example": "in.([ETHEREUM_ADDRESS],[ETHEREUM_ADDRESS])"
+        }
+      },
+      "required": [
+        "is_active"
+      ]
+    },
+    "test_inputs": {
+      "select": "token_symbol,token_name,address,wom_score,market_cap_usd,volume_usd,image_url,is_active,created_at,age,tweet_count,avg_followers_count,shillers,holders,dex_url",
+      "is_active": "eq.true",
+      "order": "wom_score.desc"
+    },
+    "include_tests": true,
+    "dependency_order": []
+  },
+  "execution": {
+    "statusCode": 200,
+    "responseBody": [
+      {
+        "token_symbol": "$kitten",
+        "token_name": "Kittenswap",
+        "address": "[ETHEREUM_ADDRESS]",
+        "wom_score": 46.64,
+        "market_cap_usd": 53352235,
+        "volume_usd": 21996,
+        "image_url": "https://dd.dexscreener.com/ds-data/tokens/hyperevm/[ETHEREUM_ADDRESS].png?key=c424fa",
+        "is_active": true,
+        "created_at": "2025-07-01T15:17:50.546964+00:00",
+        "age": "2d",
+        "tweet_count": 10,
+        "avg_followers_count": 88853,
+        "shillers": 10,
+        "holders": 1807,
+        "dex_url": "https://dexscreener.com/hyperevm/[ETHEREUM_ADDRESS]"
+      },
+      {
+        "token_symbol": "$lilly",
+        "token_name": "Lilly",
+        "address": "[ETHEREUM_ADDRESS]",
+        "wom_score": 44.57,
+        "market_cap_usd": 525281,
+        "volume_usd": 17699.78,
+        "image_url": "https://dd.dexscreener.com/ds-data/tokens/hyperevm/[ETHEREUM_ADDRESS].png?key=6595fb",
+        "is_active": true,
+        "created_at": "2025-07-01T15:17:50.546964+00:00",
+        "age": "22d",
+        "tweet_count": 10,
+        "avg_followers_count": 2519,
+        "shillers": 91,
+        "holders": 1939,
+        "dex_url": "https://dexscreener.com/hyperevm/[ETHEREUM_ADDRESS]"
+      },
+      {
+        "token_symbol": "$pip",
+        "token_name": "PiP",
+        "address": "[ETHEREUM_ADDRESS]",
+        "wom_score": 44.23,
+        "market_cap_usd": 17334077,
+        "volume_usd": 11877.44,
+        "image_url": "https://dd.dexscreener.com/ds-data/tokens/hyperevm/[ETHEREUM_ADDRESS].png?key=e64a1a",
+        "is_active": true,
+        "created_at": "2025-07-01T15:17:50.546964+00:00",
+        "age": "100d",
+        "tweet_count": 25,
+        "avg_followers_count": 1105,
+        "shillers": 40,
+        "holders": 1937,
+        "dex_url": "https://dexscreener.com/hyperevm/[ETHEREUM_ADDRESS]"
+      },
+      {
+        "token_symbol": "$lsd888",
+        "token_name": "Cindy Davis Derivative ",
+        "address": "[ETHEREUM_ADDRESS]",
+        "wom_score": 43.2,
+        "market_cap_usd": 180504,
+        "volume_usd": 3123.54,
+        "image_url": "https://dd.dexscreener.com/ds-data/tokens/hyperevm/[ETHEREUM_ADDRESS].png?key=8fd170",
+        "is_active": true,
+        "created_at": "2025-07-02T07:58:42.572161+00:00",
+        "age": "26d",
+        "tweet_count": 54,
+        "avg_followers_count": 3506,
+        "shillers": 61,
+        "holders": 755,
+        "dex_url": "https://dexscreener.com/hyperevm/[ETHEREUM_ADDRESS]"
+      },
+      {
+        "token_symbol": "$purr",
+        "token_name": "Purr",
+        "address": "[ETHEREUM_ADDRESS]",
+        "wom_score": 42.69,
+        "market_cap_usd": 124802361,
+        "volume_usd": 258805.44,
+        "image_url": "https://dd.dexscreener.com/ds-data/tokens/hyperevm/[ETHEREUM_ADDRESS].png?key=1b1499",
+        "is_active": true,
+        "created_at": "2025-07-01T07:12:30.492415+00:00",
+        "age": "87d",
+        "tweet_count": 63,
+        "avg_followers_count": 4173,
+        "shillers": 108,
+        "holders": 4481,
+        "dex_url": "https://dexscreener.com/hyperevm/[ETHEREUM_ADDRESS]"
+      },
+      {
+        "token_symbol": "$hl",
+        "token_name": "Elizabeth Crist-Wyman",
+        "address": "[ETHEREUM_ADDRESS]",
+        "wom_score": 42.68,
+        "market_cap_usd": 2827524,
+        "volume_usd": 45435.79,
+        "image_url": "https://dd.dexscreener.com/ds-data/tokens/hyperevm/[ETHEREUM_ADDRESS].png?key=d5f973",
+        "is_active": true,
+        "created_at": "2025-07-01T15:17:50.546964+00:00",
+        "age": "37d",
+        "tweet_count": 47,
+        "avg_followers_count": 1647,
+        "shillers": 69,
+        "holders": 1728,
+        "dex_url": "https://dexscreener.com/hyperevm/[ETHEREUM_ADDRESS]"
+      },
+      {
+        "token_symbol": "$hypd",
+        "token_name": "Traci Trantow",
+        "address": "[ETHEREUM_ADDRESS]",
+        "wom_score": 38.88,
+        "market_cap_usd": 99940,
+        "volume_usd": 8676.64,
+        "image_url": "https://dd.dexscreener.com/ds-data/tokens/hyperevm/[ETHEREUM_ADDRESS].png?key=ed4b2e",
+        "is_active": true,
+        "created_at": "2025-07-01T15:17:50.546964+00:00",
+        "age": "15d",
+        "tweet_count": 24,
+        "avg_followers_count": 9991,
+        "shillers": 30,
+        "holders": 203,
+        "dex_url": "https://dexscreener.com/hyperevm/[ETHEREUM_ADDRESS]"
+      },
+      {
+        "token_symbol": "$perpcoin",
+        "token_name": "perpcoin",
+        "address": "[ETHEREUM_ADDRESS]",
+        "wom_score": 34.45,
+        "market_cap_usd": 2035085,
+        "volume_usd": 75135.15,
+        "image_url": "https://dd.dexscreener.com/ds-data/tokens/hyperevm/[ETHEREUM_ADDRESS].png?key=1fb433",
+        "is_active": true,
+        "created_at": "2025-07-01T15:17:50.546964+00:00",
+        "age": "41d",
+        "tweet_count": 7,
+        "avg_followers_count": 1093,
+        "shillers": 5,
+        "holders": 1168,
+        "dex_url": "https://dexscreener.com/hyperevm/[ETHEREUM_ADDRESS]"
+      },
+      {
+        "token_symbol": "$liqd",
+        "token_name": "LiquidLaunch",
+        "address": "[ETHEREUM_ADDRESS]",
+        "wom_score": 30.79,
+        "market_cap_usd": 50368242,
+        "volume_usd": 66752.88,
+        "image_url": "https://dd.dexscreener.com/ds-data/tokens/hyperevm/[ETHEREUM_ADDRESS].png?key=a42e19",
+        "is_active": true,
+        "created_at": "2025-07-01T07:12:30.492415+00:00",
+        "age": "73d",
+        "tweet_count": 6,
+        "avg_followers_count": 3194,
+        "shillers": 33,
+        "holders": 5211,
+        "dex_url": "https://dexscreener.com/hyperevm/[ETHEREUM_ADDRESS]"
+      },
+      {
+        "token_symbol": "$rub",
+        "token_name": "RUB",
+        "address": "[ETHEREUM_ADDRESS]",
+        "wom_score": 29.34,
+        "market_cap_usd": 3984920,
+        "volume_usd": 10197.91,
+        "image_url": "https://dd.dexscreener.com/ds-data/tokens/hyperevm/[ETHEREUM_ADDRESS].png?key=ff0875",
+        "is_active": true,
+        "created_at": "2025-07-01T15:17:50.546964+00:00",
+        "age": "65d",
+        "tweet_count": 6,
+        "avg_followers_count": 5140,
+        "shillers": 14,
+        "holders": 2072,
+        "dex_url": "https://dexscreener.com/hyperevm/[ETHEREUM_ADDRESS]"
+      },
+      {
+        "token_symbol": "$ld",
+        "token_name": "Harold Nicolas",
+        "address": "[ETHEREUM_ADDRESS]",
+        "wom_score": 24.8,
+        "market_cap_usd": 53025,
+        "volume_usd": 468.76,
+        "image_url": "https://dd.dexscreener.com/ds-data/tokens/hyperevm/[ETHEREUM_ADDRESS].png?key=779f9c",
+        "is_active": true,
+        "created_at": "2025-07-01T15:17:50.546964+00:00",
+        "age": "30d",
+        "tweet_count": 5,
+        "avg_followers_count": 3574,
+        "shillers": 5,
+        "holders": 1789,
+        "dex_url": "https://dexscreener.com/hyperevm/[ETHEREUM_ADDRESS]"
+      },
+      {
+        "token_symbol": "$dndx",
+        "token_name": "Josephine Kuhic",
+        "address": "[ETHEREUM_ADDRESS]",
+        "wom_score": 18.93,
+        "market_cap_usd": 239689,
+        "volume_usd": 112069.17,
+        "image_url": "https://dd.dexscreener.com/ds-data/tokens/hyperevm/[ETHEREUM_ADDRESS].png?key=56f3d5",
+        "is_active": true,
+        "created_at": "2025-07-01T15:17:50.546964+00:00",
+        "age": "40d",
+        "tweet_count": 4,
+        "avg_followers_count": 874,
+        "shillers": 4,
+        "holders": 2121,
+        "dex_url": "https://dexscreener.com/hyperevm/[ETHEREUM_ADDRESS]"
+      },
+      {
+        "token_symbol": "$peg",
+        "token_name": "Peg",
+        "address": "[ETHEREUM_ADDRESS]",
+        "wom_score": 13.47,
+        "market_cap_usd": 528486,
+        "volume_usd": 4337.66,
+        "image_url": "https://dd.dexscreener.com/ds-data/tokens/hyperevm/[ETHEREUM_ADDRESS].png?key=bc56fc",
+        "is_active": true,
+        "created_at": "2025-07-01T15:17:50.546964+00:00",
+        "age": "50d",
+        "tweet_count": 3,
+        "avg_followers_count": 668,
+        "shillers": 6,
+        "holders": 545,
+        "dex_url": "https://dexscreener.com/hyperevm/[ETHEREUM_ADDRESS]"
+      },
+      {
+        "token_symbol": "$hlgato",
+        "token_name": "Kelly Olson",
+        "address": "[ETHEREUM_ADDRESS]",
+        "wom_score": 8.99,
+        "market_cap_usd": 149952,
+        "volume_usd": 1102.63,
+        "image_url": "https://dd.dexscreener.com/ds-data/tokens/hyperevm/[ETHEREUM_ADDRESS].png?key=670f87",
+        "is_active": true,
+        "created_at": "2025-07-01T15:17:50.546964+00:00",
+        "age": "49d",
+        "tweet_count": 2,
+        "avg_followers_count": 902,
+        "shillers": 3,
+        "holders": 236,
+        "dex_url": "https://dexscreener.com/hyperevm/[ETHEREUM_ADDRESS]"
+      },
+      {
+        "token_symbol": "$licko",
+        "token_name": "LICKO",
+        "address": "[ETHEREUM_ADDRESS]",
+        "wom_score": 8.96,
+        "market_cap_usd": 94523,
+        "volume_usd": 1090.33,
+        "image_url": "https://dd.dexscreener.com/ds-data/tokens/hyperevm/[ETHEREUM_ADDRESS].png?key=f8c402",
+        "is_active": true,
+        "created_at": "2025-07-01T15:17:50.546964+00:00",
+        "age": "16d",
+        "tweet_count": 2,
+        "avg_followers_count": 454,
+        "shillers": 6,
+        "holders": 1315,
+        "dex_url": "https://dexscreener.com/hyperevm/[ETHEREUM_ADDRESS]"
+      },
+      {
+        "token_symbol": "$sphere",
+        "token_name": "HYPESPHERE",
+        "address": "[ETHEREUM_ADDRESS]",
+        "wom_score": 8.86,
+        "market_cap_usd": 211908,
+        "volume_usd": 21546.82,
+        "image_url": "https://dd.dexscreener.com/ds-data/tokens/hyperevm/[ETHEREUM_ADDRESS].png?key=5e7ea7",
+        "is_active": true,
+        "created_at": "2025-07-01T15:17:50.546964+00:00",
+        "age": "38d",
+        "tweet_count": 2,
+        "avg_followers_count": 438,
+        "shillers": 3,
+        "holders": 823,
+        "dex_url": "https://dexscreener.com/hyperevm/[ETHEREUM_ADDRESS]"
+      },
+      {
+        "token_symbol": "$cham",
+        "token_name": "Elisa Lehner-Hackett",
+        "address": "[ETHEREUM_ADDRESS]",
+        "wom_score": 5.99,
+        "market_cap_usd": 109661,
+        "volume_usd": 156.01,
+        "image_url": "https://dd.dexscreener.com/ds-data/tokens/hyperevm/[ETHEREUM_ADDRESS].png?key=fb9d0e",
+        "is_active": true,
+        "created_at": "2025-07-01T15:17:50.546964+00:00",
+        "age": "72d",
+        "tweet_count": 1,
+        "avg_followers_count": 25000,
+        "shillers": 1,
+        "holders": 165,
+        "dex_url": "https://dexscreener.com/hyperevm/[ETHEREUM_ADDRESS]"
+      },
+      {
+        "token_symbol": "$whlp",
+        "token_name": "Wrapped HLP",
+        "address": "[ETHEREUM_ADDRESS]",
+        "wom_score": 5.93,
+        "market_cap_usd": 7990700,
+        "volume_usd": 1067155.3,
+        "image_url": "https://dd.dexscreener.com/ds-data/tokens/hyperevm/[ETHEREUM_ADDRESS].png?key=c4406f",
+        "is_active": true,
+        "created_at": "2025-07-01T15:17:50.546964+00:00",
+        "age": "13d",
+        "tweet_count": 1,
+        "avg_followers_count": 67465,
+        "shillers": 8,
+        "holders": 912,
+        "dex_url": "https://dexscreener.com/hyperevm/[ETHEREUM_ADDRESS]"
+      },
+      {
+        "token_symbol": "$joff",
+        "token_name": "Dwight Huel",
+        "address": "[ETHEREUM_ADDRESS]",
+        "wom_score": 5.93,
+        "market_cap_usd": 464973,
+        "volume_usd": 34837.63,
+        "image_url": "https://dd.dexscreener.com/ds-data/tokens/hyperevm/[ETHEREUM_ADDRESS].png?key=cb6898",
+        "is_active": true,
+        "created_at": "2025-07-01T15:17:50.546964+00:00",
+        "age": "37d",
+        "tweet_count": 1,
+        "avg_followers_count": 416,
+        "shillers": 3,
+        "holders": 2725,
+        "dex_url": "https://dexscreener.com/hyperevm/[ETHEREUM_ADDRESS]"
+      },
+      {
+        "token_symbol": "$vegas",
+        "token_name": "Vegas",
+        "address": "[ETHEREUM_ADDRESS]",
+        "wom_score": 5.9,
+        "market_cap_usd": 5029323,
+        "volume_usd": 14665.3,
+        "image_url": "https://dd.dexscreener.com/ds-data/tokens/hyperevm/[ETHEREUM_ADDRESS].png?key=e5aeaa",
+        "is_active": true,
+        "created_at": "2025-07-01T15:17:50.546964+00:00",
+        "age": "100d",
+        "tweet_count": 1,
+        "avg_followers_count": 2277,
+        "shillers": 8,
+        "holders": 1005,
+        "dex_url": "https://dexscreener.com/hyperevm/[ETHEREUM_ADDRESS]"
+      },
+      {
+        "token_symbol": "$loop",
+        "token_name": "Nettie Purdy",
+        "address": "[ETHEREUM_ADDRESS]",
+        "wom_score": 5.89,
+        "market_cap_usd": 4333553,
+        "volume_usd": 32252.13,
+        "image_url": "https://dd.dexscreener.com/ds-data/tokens/hyperevm/[ETHEREUM_ADDRESS].png?key=467fef",
+        "is_active": true,
+        "created_at": "2025-07-01T15:17:50.546964+00:00",
+        "age": "44d",
+        "tweet_count": 1,
+        "avg_followers_count": 2085,
+        "shillers": 7,
+        "holders": 1228,
+        "dex_url": "https://dexscreener.com/hyperevm/[ETHEREUM_ADDRESS]"
+      },
+      {
+        "token_symbol": "$lqscan",
+        "token_name": "LiquidScan",
+        "address": "[ETHEREUM_ADDRESS]",
+        "wom_score": 5.86,
+        "market_cap_usd": 441862,
+        "volume_usd": 32255.96,
+        "image_url": "https://dd.dexscreener.com/ds-data/tokens/hyperevm/[ETHEREUM_ADDRESS].png?key=8ade0c",
+        "is_active": true,
+        "created_at": "2025-07-01T15:17:50.546964+00:00",
+        "age": "53d",
+        "tweet_count": 1,
+        "avg_followers_count": 937,
+        "shillers": 2,
+        "holders": 510,
+        "dex_url": "https://dexscreener.com/hyperevm/[ETHEREUM_ADDRESS]"
+      },
+      {
+        "token_symbol": "$paws",
+        "token_name": "Paws",
+        "address": "[ETHEREUM_ADDRESS]",
+        "wom_score": 5.86,
+        "market_cap_usd": 208565,
+        "volume_usd": 160460.63,
+        "image_url": "https://dd.dexscreener.com/ds-data/tokens/hyperevm/[ETHEREUM_ADDRESS].png?key=a156af",
+        "is_active": true,
+        "created_at": "2025-07-01T15:17:50.546964+00:00",
+        "age": "88d",
+        "tweet_count": 1,
+        "avg_followers_count": 384,
+        "shillers": 1,
+        "holders": 1079,
+        "dex_url": "https://dexscreener.com/hyperevm/[ETHEREUM_ADDRESS]"
+      },
+      {
+        "token_symbol": "$flip",
+        "token_name": "Flip",
+        "address": "[ETHEREUM_ADDRESS]",
+        "wom_score": 5.86,
+        "market_cap_usd": 287219,
+        "volume_usd": 13172.32,
+        "image_url": "https://dd.dexscreener.com/ds-data/tokens/hyperevm/[ETHEREUM_ADDRESS].png?key=825d48",
+        "is_active": true,
+        "created_at": "2025-07-01T15:17:50.546964+00:00",
+        "age": "37d",
+        "tweet_count": 1,
+        "avg_followers_count": 2511,
+        "shillers": 1,
+        "holders": 274,
+        "dex_url": "https://dexscreener.com/hyperevm/[ETHEREUM_ADDRESS]"
+      },
+      {
+        "token_symbol": "$trade",
+        "token_name": "Hytrade",
+        "address": "[ETHEREUM_ADDRESS]",
+        "wom_score": 5.86,
+        "market_cap_usd": 2022829,
+        "volume_usd": 26452.8,
+        "image_url": "https://dd.dexscreener.com/ds-data/tokens/hyperevm/[ETHEREUM_ADDRESS].png?key=2113b8",
+        "is_active": true,
+        "created_at": "2025-07-01T15:17:50.546964+00:00",
+        "age": "24d",
+        "tweet_count": 1,
+        "avg_followers_count": 720,
+        "shillers": 4,
+        "holders": 384,
+        "dex_url": "https://dexscreener.com/hyperevm/[ETHEREUM_ADDRESS]"
+      },
+      {
+        "token_symbol": "$catbal",
+        "token_name": "CATBAL",
+        "address": "[ETHEREUM_ADDRESS]",
+        "wom_score": 5.83,
+        "market_cap_usd": 6273270,
+        "volume_usd": 23369.68,
+        "image_url": "https://dd.dexscreener.com/ds-data/tokens/hyperevm/[ETHEREUM_ADDRESS].png?key=49b580",
+        "is_active": true,
+        "created_at": "2025-07-01T15:17:50.546964+00:00",
+        "age": "99d",
+        "tweet_count": 1,
+        "avg_followers_count": 3648,
+        "shillers": 9,
+        "holders": 1263,
+        "dex_url": "https://dexscreener.com/hyperevm/[ETHEREUM_ADDRESS]"
+      },
+      {
+        "token_symbol": "$hpdoge",
+        "token_name": "HyperDoge",
+        "address": "[ETHEREUM_ADDRESS]",
+        "wom_score": 1,
+        "market_cap_usd": 228072,
+        "volume_usd": 1666.52,
+        "image_url": "https://dd.dexscreener.com/ds-data/tokens/hyperevm/[ETHEREUM_ADDRESS].png?key=d0eabd",
+        "is_active": true,
+        "created_at": "2025-07-02T21:26:29.535947+00:00",
+        "age": "134d",
+        "tweet_count": 0,
+        "avg_followers_count": 0,
+        "shillers": 0,
+        "holders": 311,
+        "dex_url": "https://dexscreener.com/hyperevm/[ETHEREUM_ADDRESS]"
+      },
+      {
+        "token_symbol": "$vision",
+        "token_name": "HyperVision",
+        "address": "[ETHEREUM_ADDRESS]",
+        "wom_score": 1,
+        "market_cap_usd": 135980,
+        "volume_usd": 7092.83,
+        "image_url": "https://dd.dexscreener.com/ds-data/tokens/hyperevm/[ETHEREUM_ADDRESS].png?key=1834a8",
+        "is_active": true,
+        "created_at": "2025-07-01T15:17:50.546964+00:00",
+        "age": "16d",
+        "tweet_count": 0,
+        "avg_followers_count": 0,
+        "shillers": 0,
+        "holders": 145,
+        "dex_url": "https://dexscreener.com/hyperevm/[ETHEREUM_ADDRESS]"
+      },
+      {
+        "token_symbol": "$huff",
+        "token_name": "HyperPuff",
+        "address": "[ETHEREUM_ADDRESS]",
+        "wom_score": 1,
+        "market_cap_usd": 40810,
+        "volume_usd": 9717.31,
+        "image_url": "https://dd.dexscreener.com/ds-data/tokens/hyperevm/[ETHEREUM_ADDRESS].png?key=548290",
+        "is_active": true,
+        "created_at": "2025-07-01T15:17:50.546964+00:00",
+        "age": "21d",
+        "tweet_count": 0,
+        "avg_followers_count": 1593,
+        "shillers": 2,
+        "holders": 144,
+        "dex_url": "https://dexscreener.com/hyperevm/[ETHEREUM_ADDRESS]"
+      },
+      {
+        "token_symbol": "$adan",
+        "token_name": "all day, all night",
+        "address": "[ETHEREUM_ADDRESS]",
+        "wom_score": 1,
+        "market_cap_usd": 69077,
+        "volume_usd": 2235.82,
+        "image_url": "https://dd.dexscreener.com/ds-data/tokens/hyperevm/[ETHEREUM_ADDRESS].png?key=ddc38b",
+        "is_active": true,
+        "created_at": "2025-07-02T04:23:21.560696+00:00",
+        "age": "41d",
+        "tweet_count": 0,
+        "avg_followers_count": 383,
+        "shillers": 1,
+        "holders": 121,
+        "dex_url": "https://dexscreener.com/hyperevm/[ETHEREUM_ADDRESS]"
+      },
+      {
+        "token_symbol": "$squirtcoin",
+        "token_name": "SquirtCoin",
+        "address": "[ETHEREUM_ADDRESS]",
+        "wom_score": 1,
+        "market_cap_usd": 74884,
+        "volume_usd": 284.74,
+        "image_url": "https://dd.dexscreener.com/ds-data/tokens/hyperevm/[ETHEREUM_ADDRESS].png?key=a108f9",
+        "is_active": true,
+        "created_at": "2025-07-01T15:17:50.546964+00:00",
+        "age": "40d",
+        "tweet_count": 0,
+        "avg_followers_count": 0,
+        "shillers": 0,
+        "holders": 425,
+        "dex_url": "https://dexscreener.com/hyperevm/[ETHEREUM_ADDRESS]"
+      },
+      {
+        "token_symbol": "$pgay",
+        "token_name": "peanut is gay",
+        "address": "[ETHEREUM_ADDRESS]",
+        "wom_score": 1,
+        "market_cap_usd": 228542,
+        "volume_usd": 10447.53,
+        "image_url": "https://dd.dexscreener.com/ds-data/tokens/hyperevm/[ETHEREUM_ADDRESS].png?key=4f8f63",
+        "is_active": true,
+        "created_at": "2025-07-01T15:17:50.546964+00:00",
+        "age": "44d",
+        "tweet_count": 0,
+        "avg_followers_count": 4618,
+        "shillers": 12,
+        "holders": 14907,
+        "dex_url": "https://dexscreener.com/hyperevm/[ETHEREUM_ADDRESS]"
+      },
+      {
+        "token_symbol": "$gm",
+        "token_name": "gm",
+        "address": "[ETHEREUM_ADDRESS]",
+        "wom_score": 1,
+        "market_cap_usd": 121666,
+        "volume_usd": 1374.58,
+        "image_url": "https://dd.dexscreener.com/ds-data/tokens/hyperevm/[ETHEREUM_ADDRESS].png?key=4622fb",
+        "is_active": true,
+        "created_at": "2025-07-01T15:17:50.546964+00:00",
+        "age": "55d",
+        "tweet_count": 0,
+        "avg_followers_count": 0,
+        "shillers": 0,
+        "holders": 516,
+        "dex_url": "https://dexscreener.com/hyperevm/[ETHEREUM_ADDRESS]"
+      },
+      {
+        "token_symbol": "$hyperliquid",
+        "token_name": "Hyperliquid",
+        "address": "[ETHEREUM_ADDRESS]",
+        "wom_score": 1,
+        "market_cap_usd": 70980,
+        "volume_usd": 1.46,
+        "image_url": "https://dd.dexscreener.com/ds-data/tokens/hyperevm/[ETHEREUM_ADDRESS].png?key=6a35ae",
+        "is_active": true,
+        "created_at": "2025-07-02T14:52:42.544272+00:00",
+        "age": "131d",
+        "tweet_count": 0,
+        "avg_followers_count": 0,
+        "shillers": 0,
+        "holders": 296,
+        "dex_url": "https://dexscreener.com/hyperevm/[ETHEREUM_ADDRESS]"
+      },
+      {
+        "token_symbol": "$fly",
+        "token_name": "HyperFly",
+        "address": "[ETHEREUM_ADDRESS]",
+        "wom_score": 1,
+        "market_cap_usd": 469271,
+        "volume_usd": 13665.46,
+        "image_url": "https://dd.dexscreener.com/ds-data/tokens/hyperevm/[ETHEREUM_ADDRESS].png?key=490b10",
+        "is_active": true,
+        "created_at": "2025-07-01T15:17:50.546964+00:00",
+        "age": "91d",
+        "tweet_count": 0,
+        "avg_followers_count": 0,
+        "shillers": 0,
+        "holders": 1288,
+        "dex_url": "https://dexscreener.com/hyperevm/[ETHEREUM_ADDRESS]"
+      },
+      {
+        "token_symbol": "$buddy",
+        "token_name": "alright buddy",
+        "address": "[ETHEREUM_ADDRESS]",
+        "wom_score": 1,
+        "market_cap_usd": 13960232,
+        "volume_usd": 249466.72,
+        "image_url": "https://dd.dexscreener.com/ds-data/tokens/hyperevm/[ETHEREUM_ADDRESS].png?key=4a9c0b",
+        "is_active": true,
+        "created_at": "2025-07-01T07:12:30.492415+00:00",
+        "age": "130d",
+        "tweet_count": 0,
+        "avg_followers_count": 0,
+        "shillers": 0,
+        "holders": 7991,
+        "dex_url": "https://dexscreener.com/hyperevm/[ETHEREUM_ADDRESS]"
+      },
+      {
+        "token_symbol": "$ctc",
+        "token_name": "CertiCore",
+        "address": "[ETHEREUM_ADDRESS]",
+        "wom_score": 1,
+        "market_cap_usd": 78241,
+        "volume_usd": 340.65,
+        "image_url": "https://dd.dexscreener.com/ds-data/tokens/hyperevm/[ETHEREUM_ADDRESS].png?key=67d3c3",
+        "is_active": true,
+        "created_at": "2025-07-02T01:23:21.597534+00:00",
+        "age": "30d",
+        "tweet_count": 0,
+        "avg_followers_count": 0,
+        "shillers": 0,
+        "holders": 122,
+        "dex_url": "https://dexscreener.com/hyperevm/[ETHEREUM_ADDRESS]"
+      },
+      {
+        "token_symbol": "$diarrhea",
+        "token_name": "Dixie Lesch",
+        "address": "[ETHEREUM_ADDRESS]",
+        "wom_score": 1,
+        "market_cap_usd": 145134,
+        "volume_usd": 1527.67,
+        "image_url": "https://dd.dexscreener.com/ds-data/tokens/hyperevm/[ETHEREUM_ADDRESS].png?key=1fd9a2",
+        "is_active": true,
+        "created_at": "2025-07-01T15:17:50.546964+00:00",
+        "age": "39d",
+        "tweet_count": 0,
+        "avg_followers_count": 0,
+        "shillers": 0,
+        "holders": 868,
+        "dex_url": "https://dexscreener.com/hyperevm/[ETHEREUM_ADDRESS]"
+      },
+      {
+        "token_symbol": "$bulbul",
+        "token_name": "BULBUL2DAO",
+        "address": "[ETHEREUM_ADDRESS]",
+        "wom_score": 1,
+        "market_cap_usd": 578057,
+        "volume_usd": 1615.94,
+        "image_url": "https://dd.dexscreener.com/ds-data/tokens/hyperevm/[ETHEREUM_ADDRESS].png?key=418ece",
+        "is_active": true,
+        "created_at": "2025-07-01T15:17:50.546964+00:00",
+        "age": "132d",
+        "tweet_count": 0,
+        "avg_followers_count": 0,
+        "shillers": 0,
+        "holders": 1341,
+        "dex_url": "https://dexscreener.com/hyperevm/[ETHEREUM_ADDRESS]"
+      },
+      {
+        "token_symbol": "$milk",
+        "token_name": "SUPERMILK",
+        "address": "[ETHEREUM_ADDRESS]",
+        "wom_score": 1,
+        "market_cap_usd": 297986,
+        "volume_usd": 343.65,
+        "image_url": "https://dd.dexscreener.com/ds-data/tokens/hyperevm/[ETHEREUM_ADDRESS].png?key=96ec61",
+        "is_active": true,
+        "created_at": "2025-07-01T15:17:50.546964+00:00",
+        "age": "126d",
+        "tweet_count": 0,
+        "avg_followers_count": 0,
+        "shillers": 0,
+        "holders": 1637,
+        "dex_url": "https://dexscreener.com/hyperevm/[ETHEREUM_ADDRESS]"
+      }
+    ],
+    "responseBodyPreview": "[{\"token_symbol\":\"$kitten\",\"token_name\":\"Kittenswap\",\"address\":\"[ETHEREUM_ADDRESS]\",\"wom_score\":46.64,\"market_cap_usd\":[BANK_ACCOUNT],\"volume_usd\":[ZIP_CODE],\"image_url\":\"https://dd.dexscreener.com/ds-data/tokens/hyperevm/[ETHEREUM_ADDRESS].png?key=c424fa\",\"is_active\":true,\"created_at\":\"2025-07-01T15:17:50.546964+00:00\",\"age\":\"2d\",\"tweet_count\":10,\"avg_followers_count\":[ZIP_CODE],\"shillers\":10,\"holders\":1807,\"dex_url\":\"https://dexscreener.com/hyperevm/[ETHEREUM_ADDRESS]\"},{\"token_symbol\":\"$lilly\",\"token_name\":\"Lilly\",\"address\":\"[ETHEREUM_ADDRESS]\",\"wom_score\":44.57,\"market_cap_usd\":525281,\"volume_usd\":[ZIP_CODE].78,\"image_url\":\"https://dd.dexscreener.com/ds-data/tokens/hyperevm/0xf2e6a23b1aa09565fdb3a77af7772709de3f...",
+    "ok": true,
+    "executedAt": "2025-10-10T05:24:34.525Z"
+  },
+  "dependencies": null,
+  "schemas": {
+    "input": {
+      "type": "object",
+      "description": "Input for querying HyperEVM tokens from WOM Supabase.",
+      "properties": {
+        "select": {
+          "type": "string",
+          "description": "Comma-separated fields to select.",
+          "example": "token_symbol,token_name,address,wom_score,market_cap_usd,volume_usd,image_url,is_active,created_at,age,tweet_count,avg_followers_count,shillers,holders,dex_url"
+        },
+        "is_active": {
+          "type": "string",
+          "description": "Filter by active status (e.g., 'eq.true').",
+          "example": "eq.true"
+        },
+        "order": {
+          "type": "string",
+          "description": "Order by field and direction (e.g., 'wom_score.desc').",
+          "example": "wom_score.desc"
+        },
+        "address": {
+          "type": "string",
+          "description": "Filter addresses (e.g., 'in.([ETHEREUM_ADDRESS],[ETHEREUM_ADDRESS])').",
+          "example": "in.([ETHEREUM_ADDRESS],[ETHEREUM_ADDRESS])"
+        }
+      },
+      "required": [
+        "is_active"
+      ]
+    },
+    "output": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "token_symbol": {
+            "type": "string"
+          },
+          "token_name": {
+            "type": "string"
+          },
+          "address": {
+            "type": "string"
+          },
+          "wom_score": {
+            "type": "number"
+          },
+          "market_cap_usd": {
+            "type": "integer"
+          },
+          "volume_usd": {
+            "type": "number"
+          },
+          "image_url": {
+            "type": "string"
+          },
+          "is_active": {
+            "type": "boolean"
+          },
+          "created_at": {
+            "type": "string"
+          },
+          "age": {
+            "type": "string"
+          },
+          "tweet_count": {
+            "type": "integer"
+          },
+          "avg_followers_count": {
+            "type": "integer"
+          },
+          "shillers": {
+            "type": "integer"
+          },
+          "holders": {
+            "type": "integer"
+          },
+          "dex_url": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "token_symbol",
+          "token_name",
+          "address",
+          "wom_score",
+          "market_cap_usd",
+          "volume_usd",
+          "image_url",
+          "is_active",
+          "created_at",
+          "age",
+          "tweet_count",
+          "avg_followers_count",
+          "shillers",
+          "holders",
+          "dex_url"
+        ]
+      }
+    }
+  },
+  "masking": {
+    "applied": true,
+    "detections": [
+      {
+        "type": "FULL_NAME",
+        "original": "Intel Mac",
+        "replacement": "Kim Olson Jr.",
+        "start": 1001,
+        "end": 1010,
+        "path": "wrapper_code"
+      },
+      {
+        "type": "BANK_ACCOUNT",
+        "original": "20100101",
+        "replacement": "[BANK_ACCOUNT]",
+        "start": 1039,
+        "end": 1047,
+        "path": "wrapper_code"
+      },
+      {
+        "type": "FULL_NAME",
+        "original": "Intel Mac",
+        "replacement": "Kim Olson Jr.",
+        "start": 31,
+        "end": 40,
+        "path": "static_headers.11.value_code"
+      },
+      {
+        "type": "BANK_ACCOUNT",
+        "original": "20100101",
+        "replacement": "[BANK_ACCOUNT]",
+        "start": 69,
+        "end": 77,
+        "path": "static_headers.11.value_code"
+      },
+      {
+        "type": "ETHEREUM_ADDRESS",
+        "original": "0x618275F8EFE54c2afa87bfB9F210A52F0fF89364",
+        "replacement": "[ETHEREUM_ADDRESS]",
+        "start": 29,
+        "end": 71,
+        "path": "input_schema.properties.address.description"
+      },
+      {
+        "type": "ETHEREUM_ADDRESS",
+        "original": "0xf2E6a23B1aA09565FDb3a77AF7772709De3f4F95",
+        "replacement": "[ETHEREUM_ADDRESS]",
+        "start": 72,
+        "end": 114,
+        "path": "input_schema.properties.address.description"
+      },
+      {
+        "type": "ETHEREUM_ADDRESS",
+        "original": "0x618275F8EFE54c2afa87bfB9F210A52F0fF89364",
+        "replacement": "[ETHEREUM_ADDRESS]",
+        "start": 4,
+        "end": 46,
+        "path": "input_schema.properties.address.example"
+      },
+      {
+        "type": "ETHEREUM_ADDRESS",
+        "original": "0xf2E6a23B1aA09565FDb3a77AF7772709De3f4F95",
+        "replacement": "[ETHEREUM_ADDRESS]",
+        "start": 47,
+        "end": 89,
+        "path": "input_schema.properties.address.example"
+      },
+      {
+        "type": "ETHEREUM_ADDRESS",
+        "original": "0x618275F8EFE54c2afa87bfB9F210A52F0fF89364",
+        "replacement": "[ETHEREUM_ADDRESS]",
+        "start": 0,
+        "end": 42,
+        "path": "responseBody.0.address"
+      },
+      {
+        "type": "ETHEREUM_ADDRESS",
+        "original": "0x618275f8efe54c2afa87bfb9f210a52f0ff89364",
+        "replacement": "[ETHEREUM_ADDRESS]",
+        "start": 51,
+        "end": 93,
+        "path": "responseBody.0.image_url"
+      },
+      {
+        "type": "ETHEREUM_ADDRESS",
+        "original": "0x618275F8EFE54c2afa87bfB9F210A52F0fF89364",
+        "replacement": "[ETHEREUM_ADDRESS]",
+        "start": 33,
+        "end": 75,
+        "path": "responseBody.0.dex_url"
+      },
+      {
+        "type": "ETHEREUM_ADDRESS",
+        "original": "0xf2E6a23B1aA09565FDb3a77AF7772709De3f4F95",
+        "replacement": "[ETHEREUM_ADDRESS]",
+        "start": 0,
+        "end": 42,
+        "path": "responseBody.1.address"
+      },
+      {
+        "type": "ETHEREUM_ADDRESS",
+        "original": "0xf2e6a23b1aa09565fdb3a77af7772709de3f4f95",
+        "replacement": "[ETHEREUM_ADDRESS]",
+        "start": 51,
+        "end": 93,
+        "path": "responseBody.1.image_url"
+      },
+      {
+        "type": "ETHEREUM_ADDRESS",
+        "original": "0xf2E6a23B1aA09565FDb3a77AF7772709De3f4F95",
+        "replacement": "[ETHEREUM_ADDRESS]",
+        "start": 33,
+        "end": 75,
+        "path": "responseBody.1.dex_url"
+      },
+      {
+        "type": "ETHEREUM_ADDRESS",
+        "original": "0x1bEe6762F0B522c606DC2Ffb106C0BB391b2E309",
+        "replacement": "[ETHEREUM_ADDRESS]",
+        "start": 0,
+        "end": 42,
+        "path": "responseBody.2.address"
+      },
+      {
+        "type": "ETHEREUM_ADDRESS",
+        "original": "0x1bee6762f0b522c606dc2ffb106c0bb391b2e309",
+        "replacement": "[ETHEREUM_ADDRESS]",
+        "start": 51,
+        "end": 93,
+        "path": "responseBody.2.image_url"
+      },
+      {
+        "type": "ETHEREUM_ADDRESS",
+        "original": "0x1bEe6762F0B522c606DC2Ffb106C0BB391b2E309",
+        "replacement": "[ETHEREUM_ADDRESS]",
+        "start": 33,
+        "end": 75,
+        "path": "responseBody.2.dex_url"
+      },
+      {
+        "type": "FULL_NAME",
+        "original": "Liquid Synthetic",
+        "replacement": "Cindy Davis",
+        "start": 0,
+        "end": 16,
+        "path": "responseBody.3.token_name"
+      },
+      {
+        "type": "ETHEREUM_ADDRESS",
+        "original": "0xe513ea692202dBA4184ef4C00bA8A6eAC36C4907",
+        "replacement": "[ETHEREUM_ADDRESS]",
+        "start": 0,
+        "end": 42,
+        "path": "responseBody.3.address"
+      },
+      {
+        "type": "ETHEREUM_ADDRESS",
+        "original": "0xe513ea692202dba4184ef4c00ba8a6eac36c4907",
+        "replacement": "[ETHEREUM_ADDRESS]",
+        "start": 51,
+        "end": 93,
+        "path": "responseBody.3.image_url"
+      },
+      {
+        "type": "ETHEREUM_ADDRESS",
+        "original": "0xe513ea692202dBA4184ef4C00bA8A6eAC36C4907",
+        "replacement": "[ETHEREUM_ADDRESS]",
+        "start": 33,
+        "end": 75,
+        "path": "responseBody.3.dex_url"
+      },
+      {
+        "type": "ETHEREUM_ADDRESS",
+        "original": "0x9b498C3c8A0b8CD8BA1D9851d40D186F1872b44E",
+        "replacement": "[ETHEREUM_ADDRESS]",
+        "start": 0,
+        "end": 42,
+        "path": "responseBody.4.address"
+      },
+      {
+        "type": "ETHEREUM_ADDRESS",
+        "original": "0x9b498c3c8a0b8cd8ba1d9851d40d186f1872b44e",
+        "replacement": "[ETHEREUM_ADDRESS]",
+        "start": 51,
+        "end": 93,
+        "path": "responseBody.4.image_url"
+      },
+      {
+        "type": "ETHEREUM_ADDRESS",
+        "original": "0x9b498C3c8A0b8CD8BA1D9851d40D186F1872b44E",
+        "replacement": "[ETHEREUM_ADDRESS]",
+        "start": 33,
+        "end": 75,
+        "path": "responseBody.4.dex_url"
+      },
+      {
+        "type": "FULL_NAME",
+        "original": "Holy Liquid",
+        "replacement": "Elizabeth Crist-Wyman",
+        "start": 0,
+        "end": 11,
+        "path": "responseBody.5.token_name"
+      },
+      {
+        "type": "ETHEREUM_ADDRESS",
+        "original": "0x738dD55C272b0B686382F62DD4a590056839F4F6",
+        "replacement": "[ETHEREUM_ADDRESS]",
+        "start": 0,
+        "end": 42,
+        "path": "responseBody.5.address"
+      },
+      {
+        "type": "ETHEREUM_ADDRESS",
+        "original": "0x738dd55c272b0b686382f62dd4a590056839f4f6",
+        "replacement": "[ETHEREUM_ADDRESS]",
+        "start": 51,
+        "end": 93,
+        "path": "responseBody.5.image_url"
+      },
+      {
+        "type": "ETHEREUM_ADDRESS",
+        "original": "0x738dD55C272b0B686382F62DD4a590056839F4F6",
+        "replacement": "[ETHEREUM_ADDRESS]",
+        "start": 33,
+        "end": 75,
+        "path": "responseBody.5.dex_url"
+      },
+      {
+        "type": "FULL_NAME",
+        "original": "Hyperion Defi",
+        "replacement": "Traci Trantow",
+        "start": 0,
+        "end": 13,
+        "path": "responseBody.6.token_name"
+      },
+      {
+        "type": "ETHEREUM_ADDRESS",
+        "original": "0x9617Ce065c0492CA36F4B4F4eFBfCe8d4750AD50",
+        "replacement": "[ETHEREUM_ADDRESS]",
+        "start": 0,
+        "end": 42,
+        "path": "responseBody.6.address"
+      },
+      {
+        "type": "ETHEREUM_ADDRESS",
+        "original": "0x9617ce065c0492ca36f4b4f4efbfce8d4750ad50",
+        "replacement": "[ETHEREUM_ADDRESS]",
+        "start": 51,
+        "end": 93,
+        "path": "responseBody.6.image_url"
+      },
+      {
+        "type": "ETHEREUM_ADDRESS",
+        "original": "0x9617Ce065c0492CA36F4B4F4eFBfCe8d4750AD50",
+        "replacement": "[ETHEREUM_ADDRESS]",
+        "start": 33,
+        "end": 75,
+        "path": "responseBody.6.dex_url"
+      },
+      {
+        "type": "ETHEREUM_ADDRESS",
+        "original": "0xD2567eE20D75e8B74B44875173054365f6Eb5052",
+        "replacement": "[ETHEREUM_ADDRESS]",
+        "start": 0,
+        "end": 42,
+        "path": "responseBody.7.address"
+      },
+      {
+        "type": "ETHEREUM_ADDRESS",
+        "original": "0xd2567ee20d75e8b74b44875173054365f6eb5052",
+        "replacement": "[ETHEREUM_ADDRESS]",
+        "start": 51,
+        "end": 93,
+        "path": "responseBody.7.image_url"
+      },
+      {
+        "type": "ETHEREUM_ADDRESS",
+        "original": "0xD2567eE20D75e8B74B44875173054365f6Eb5052",
+        "replacement": "[ETHEREUM_ADDRESS]",
+        "start": 33,
+        "end": 75,
+        "path": "responseBody.7.dex_url"
+      },
+      {
+        "type": "ETHEREUM_ADDRESS",
+        "original": "0x1Ecd15865D7F8019D546f76d095d9c93cc34eDFa",
+        "replacement": "[ETHEREUM_ADDRESS]",
+        "start": 0,
+        "end": 42,
+        "path": "responseBody.8.address"
+      },
+      {
+        "type": "ETHEREUM_ADDRESS",
+        "original": "0x1ecd15865d7f8019d546f76d095d9c93cc34edfa",
+        "replacement": "[ETHEREUM_ADDRESS]",
+        "start": 51,
+        "end": 93,
+        "path": "responseBody.8.image_url"
+      },
+      {
+        "type": "ETHEREUM_ADDRESS",
+        "original": "0x1Ecd15865D7F8019D546f76d095d9c93cc34eDFa",
+        "replacement": "[ETHEREUM_ADDRESS]",
+        "start": 33,
+        "end": 75,
+        "path": "responseBody.8.dex_url"
+      },
+      {
+        "type": "ETHEREUM_ADDRESS",
+        "original": "0x7DCfFCb06B40344eecED2d1Cbf096B299fE4b405",
+        "replacement": "[ETHEREUM_ADDRESS]",
+        "start": 0,
+        "end": 42,
+        "path": "responseBody.9.address"
+      },
+      {
+        "type": "ETHEREUM_ADDRESS",
+        "original": "0x7dcffcb06b40344eeced2d1cbf096b299fe4b405",
+        "replacement": "[ETHEREUM_ADDRESS]",
+        "start": 51,
+        "end": 93,
+        "path": "responseBody.9.image_url"
+      },
+      {
+        "type": "ETHEREUM_ADDRESS",
+        "original": "0x7DCfFCb06B40344eecED2d1Cbf096B299fE4b405",
+        "replacement": "[ETHEREUM_ADDRESS]",
+        "start": 33,
+        "end": 75,
+        "path": "responseBody.9.dex_url"
+      },
+      {
+        "type": "FULL_NAME",
+        "original": "Liquid Death",
+        "replacement": "Harold Nicolas",
+        "start": 0,
+        "end": 12,
+        "path": "responseBody.10.token_name"
+      },
+      {
+        "type": "ETHEREUM_ADDRESS",
+        "original": "0xD4c60d0795dc08f8728502772567896d78B4942e",
+        "replacement": "[ETHEREUM_ADDRESS]",
+        "start": 0,
+        "end": 42,
+        "path": "responseBody.10.address"
+      },
+      {
+        "type": "ETHEREUM_ADDRESS",
+        "original": "0xd4c60d0795dc08f8728502772567896d78b4942e",
+        "replacement": "[ETHEREUM_ADDRESS]",
+        "start": 51,
+        "end": 93,
+        "path": "responseBody.10.image_url"
+      },
+      {
+        "type": "ETHEREUM_ADDRESS",
+        "original": "0xD4c60d0795dc08f8728502772567896d78B4942e",
+        "replacement": "[ETHEREUM_ADDRESS]",
+        "start": 33,
+        "end": 75,
+        "path": "responseBody.10.dex_url"
+      },
+      {
+        "type": "FULL_NAME",
+        "original": "Decentralized Nasdaq",
+        "replacement": "Josephine Kuhic",
+        "start": 0,
+        "end": 20,
+        "path": "responseBody.11.token_name"
+      },
+      {
+        "type": "ETHEREUM_ADDRESS",
+        "original": "0x2FD2ee2C17Ace078960028A0970becCAAe1D822B",
+        "replacement": "[ETHEREUM_ADDRESS]",
+        "start": 0,
+        "end": 42,
+        "path": "responseBody.11.address"
+      },
+      {
+        "type": "ETHEREUM_ADDRESS",
+        "original": "0x2fd2ee2c17ace078960028a0970beccaae1d822b",
+        "replacement": "[ETHEREUM_ADDRESS]",
+        "start": 51,
+        "end": 93,
+        "path": "responseBody.11.image_url"
+      },
+      {
+        "type": "ETHEREUM_ADDRESS",
+        "original": "0x2FD2ee2C17Ace078960028A0970becCAAe1D822B",
+        "replacement": "[ETHEREUM_ADDRESS]",
+        "start": 33,
+        "end": 75,
+        "path": "responseBody.11.dex_url"
+      },
+      {
+        "type": "ETHEREUM_ADDRESS",
+        "original": "0x28245AB01298eaEf7933bC90d35Bd9DbCA5C89DB",
+        "replacement": "[ETHEREUM_ADDRESS]",
+        "start": 0,
+        "end": 42,
+        "path": "responseBody.12.address"
+      },
+      {
+        "type": "ETHEREUM_ADDRESS",
+        "original": "0x28245ab01298eaef7933bc90d35bd9dbca5c89db",
+        "replacement": "[ETHEREUM_ADDRESS]",
+        "start": 51,
+        "end": 93,
+        "path": "responseBody.12.image_url"
+      },
+      {
+        "type": "ETHEREUM_ADDRESS",
+        "original": "0x28245AB01298eaEf7933bC90d35Bd9DbCA5C89DB",
+        "replacement": "[ETHEREUM_ADDRESS]",
+        "start": 33,
+        "end": 75,
+        "path": "responseBody.12.dex_url"
+      },
+      {
+        "type": "FULL_NAME",
+        "original": "Hl Gato",
+        "replacement": "Kelly Olson",
+        "start": 0,
+        "end": 7,
+        "path": "responseBody.13.token_name"
+      },
+      {
+        "type": "ETHEREUM_ADDRESS",
+        "original": "0xB2589C360FbB7b3A6eE061359c5a9A2714D26006",
+        "replacement": "[ETHEREUM_ADDRESS]",
+        "start": 0,
+        "end": 42,
+        "path": "responseBody.13.address"
+      },
+      {
+        "type": "ETHEREUM_ADDRESS",
+        "original": "0xb2589c360fbb7b3a6ee061359c5a9a2714d26006",
+        "replacement": "[ETHEREUM_ADDRESS]",
+        "start": 51,
+        "end": 93,
+        "path": "responseBody.13.image_url"
+      },
+      {
+        "type": "ETHEREUM_ADDRESS",
+        "original": "0xB2589C360FbB7b3A6eE061359c5a9A2714D26006",
+        "replacement": "[ETHEREUM_ADDRESS]",
+        "start": 33,
+        "end": 75,
+        "path": "responseBody.13.dex_url"
+      },
+      {
+        "type": "ETHEREUM_ADDRESS",
+        "original": "0xBf7F2B530c073e21EA0627F36DeEaec21A6adfec",
+        "replacement": "[ETHEREUM_ADDRESS]",
+        "start": 0,
+        "end": 42,
+        "path": "responseBody.14.address"
+      },
+      {
+        "type": "ETHEREUM_ADDRESS",
+        "original": "0xbf7f2b530c073e21ea0627f36deeaec21a6adfec",
+        "replacement": "[ETHEREUM_ADDRESS]",
+        "start": 51,
+        "end": 93,
+        "path": "responseBody.14.image_url"
+      },
+      {
+        "type": "ETHEREUM_ADDRESS",
+        "original": "0xBf7F2B530c073e21EA0627F36DeEaec21A6adfec",
+        "replacement": "[ETHEREUM_ADDRESS]",
+        "start": 33,
+        "end": 75,
+        "path": "responseBody.14.dex_url"
+      },
+      {
+        "type": "ETHEREUM_ADDRESS",
+        "original": "0x3e5fBa5dD52E931276B3C84dF7542c2EeEA1440b",
+        "replacement": "[ETHEREUM_ADDRESS]",
+        "start": 0,
+        "end": 42,
+        "path": "responseBody.15.address"
+      },
+      {
+        "type": "ETHEREUM_ADDRESS",
+        "original": "0x3e5fba5dd52e931276b3c84df7542c2eeea1440b",
+        "replacement": "[ETHEREUM_ADDRESS]",
+        "start": 51,
+        "end": 93,
+        "path": "responseBody.15.image_url"
+      },
+      {
+        "type": "ETHEREUM_ADDRESS",
+        "original": "0x3e5fBa5dD52E931276B3C84dF7542c2EeEA1440b",
+        "replacement": "[ETHEREUM_ADDRESS]",
+        "start": 33,
+        "end": 75,
+        "path": "responseBody.15.dex_url"
+      },
+      {
+        "type": "FULL_NAME",
+        "original": "The Chameleon",
+        "replacement": "Elisa Lehner-Hackett",
+        "start": 0,
+        "end": 13,
+        "path": "responseBody.16.token_name"
+      },
+      {
+        "type": "ETHEREUM_ADDRESS",
+        "original": "0x2c9634D152e8B584D4A153A78DBa3E958db7b385",
+        "replacement": "[ETHEREUM_ADDRESS]",
+        "start": 0,
+        "end": 42,
+        "path": "responseBody.16.address"
+      },
+      {
+        "type": "ETHEREUM_ADDRESS",
+        "original": "0x2c9634d152e8b584d4a153a78dba3e958db7b385",
+        "replacement": "[ETHEREUM_ADDRESS]",
+        "start": 51,
+        "end": 93,
+        "path": "responseBody.16.image_url"
+      },
+      {
+        "type": "ETHEREUM_ADDRESS",
+        "original": "0x2c9634D152e8B584D4A153A78DBa3E958db7b385",
+        "replacement": "[ETHEREUM_ADDRESS]",
+        "start": 33,
+        "end": 75,
+        "path": "responseBody.16.dex_url"
+      },
+      {
+        "type": "ETHEREUM_ADDRESS",
+        "original": "0x1359b05241cA5076c9F59605214f4F84114c0dE8",
+        "replacement": "[ETHEREUM_ADDRESS]",
+        "start": 0,
+        "end": 42,
+        "path": "responseBody.17.address"
+      },
+      {
+        "type": "ETHEREUM_ADDRESS",
+        "original": "0x1359b05241ca5076c9f59605214f4f84114c0de8",
+        "replacement": "[ETHEREUM_ADDRESS]",
+        "start": 51,
+        "end": 93,
+        "path": "responseBody.17.image_url"
+      },
+      {
+        "type": "ETHEREUM_ADDRESS",
+        "original": "0x1359b05241cA5076c9F59605214f4F84114c0dE8",
+        "replacement": "[ETHEREUM_ADDRESS]",
+        "start": 33,
+        "end": 75,
+        "path": "responseBody.17.dex_url"
+      },
+      {
+        "type": "FULL_NAME",
+        "original": "Chomolon Joff",
+        "replacement": "Dwight Huel",
+        "start": 0,
+        "end": 13,
+        "path": "responseBody.18.token_name"
+      },
+      {
+        "type": "ETHEREUM_ADDRESS",
+        "original": "0x62D5dD0190376c444a4B2E2e860aa392eC83Ed80",
+        "replacement": "[ETHEREUM_ADDRESS]",
+        "start": 0,
+        "end": 42,
+        "path": "responseBody.18.address"
+      },
+      {
+        "type": "ETHEREUM_ADDRESS",
+        "original": "0x62d5dd0190376c444a4b2e2e860aa392ec83ed80",
+        "replacement": "[ETHEREUM_ADDRESS]",
+        "start": 51,
+        "end": 93,
+        "path": "responseBody.18.image_url"
+      },
+      {
+        "type": "ETHEREUM_ADDRESS",
+        "original": "0x62D5dD0190376c444a4B2E2e860aa392eC83Ed80",
+        "replacement": "[ETHEREUM_ADDRESS]",
+        "start": 33,
+        "end": 75,
+        "path": "responseBody.18.dex_url"
+      },
+      {
+        "type": "ETHEREUM_ADDRESS",
+        "original": "0xB09158c8297ACee00b900Dc1f8715Df46B7246a6",
+        "replacement": "[ETHEREUM_ADDRESS]",
+        "start": 0,
+        "end": 42,
+        "path": "responseBody.19.address"
+      },
+      {
+        "type": "ETHEREUM_ADDRESS",
+        "original": "0xb09158c8297acee00b900dc1f8715df46b7246a6",
+        "replacement": "[ETHEREUM_ADDRESS]",
+        "start": 51,
+        "end": 93,
+        "path": "responseBody.19.image_url"
+      },
+      {
+        "type": "ETHEREUM_ADDRESS",
+        "original": "0xB09158c8297ACee00b900Dc1f8715Df46B7246a6",
+        "replacement": "[ETHEREUM_ADDRESS]",
+        "start": 33,
+        "end": 75,
+        "path": "responseBody.19.dex_url"
+      },
+      {
+        "type": "FULL_NAME",
+        "original": "Looping Collective",
+        "replacement": "Nettie Purdy",
+        "start": 0,
+        "end": 18,
+        "path": "responseBody.20.token_name"
+      },
+      {
+        "type": "ETHEREUM_ADDRESS",
+        "original": "0x00fDBc53719604D924226215bc871D55e40a1009",
+        "replacement": "[ETHEREUM_ADDRESS]",
+        "start": 0,
+        "end": 42,
+        "path": "responseBody.20.address"
+      },
+      {
+        "type": "ETHEREUM_ADDRESS",
+        "original": "0x00fdbc53719604d924226215bc871d55e40a1009",
+        "replacement": "[ETHEREUM_ADDRESS]",
+        "start": 51,
+        "end": 93,
+        "path": "responseBody.20.image_url"
+      },
+      {
+        "type": "ETHEREUM_ADDRESS",
+        "original": "0x00fDBc53719604D924226215bc871D55e40a1009",
+        "replacement": "[ETHEREUM_ADDRESS]",
+        "start": 33,
+        "end": 75,
+        "path": "responseBody.20.dex_url"
+      },
+      {
+        "type": "ETHEREUM_ADDRESS",
+        "original": "0xCB0aC0aa94C67DDE8688Ac34C8E4D6C18E78B638",
+        "replacement": "[ETHEREUM_ADDRESS]",
+        "start": 0,
+        "end": 42,
+        "path": "responseBody.21.address"
+      },
+      {
+        "type": "ETHEREUM_ADDRESS",
+        "original": "0xcb0ac0aa94c67dde8688ac34c8e4d6c18e78b638",
+        "replacement": "[ETHEREUM_ADDRESS]",
+        "start": 51,
+        "end": 93,
+        "path": "responseBody.21.image_url"
+      },
+      {
+        "type": "ETHEREUM_ADDRESS",
+        "original": "0xCB0aC0aa94C67DDE8688Ac34C8E4D6C18E78B638",
+        "replacement": "[ETHEREUM_ADDRESS]",
+        "start": 33,
+        "end": 75,
+        "path": "responseBody.21.dex_url"
+      },
+      {
+        "type": "ETHEREUM_ADDRESS",
+        "original": "0xe3C80b7A1A8631E8cFd59c61E2a74Eb497dB28F6",
+        "replacement": "[ETHEREUM_ADDRESS]",
+        "start": 0,
+        "end": 42,
+        "path": "responseBody.22.address"
+      },
+      {
+        "type": "ETHEREUM_ADDRESS",
+        "original": "0xe3c80b7a1a8631e8cfd59c61e2a74eb497db28f6",
+        "replacement": "[ETHEREUM_ADDRESS]",
+        "start": 51,
+        "end": 93,
+        "path": "responseBody.22.image_url"
+      },
+      {
+        "type": "ETHEREUM_ADDRESS",
+        "original": "0xe3C80b7A1A8631E8cFd59c61E2a74Eb497dB28F6",
+        "replacement": "[ETHEREUM_ADDRESS]",
+        "start": 33,
+        "end": 75,
+        "path": "responseBody.22.dex_url"
+      },
+      {
+        "type": "ETHEREUM_ADDRESS",
+        "original": "0x5875fc0D25A48C17da1147dd1f432c6B54FB7E67",
+        "replacement": "[ETHEREUM_ADDRESS]",
+        "start": 0,
+        "end": 42,
+        "path": "responseBody.23.address"
+      },
+      {
+        "type": "ETHEREUM_ADDRESS",
+        "original": "0x5875fc0d25a48c17da1147dd1f432c6b54fb7e67",
+        "replacement": "[ETHEREUM_ADDRESS]",
+        "start": 51,
+        "end": 93,
+        "path": "responseBody.23.image_url"
+      },
+      {
+        "type": "ETHEREUM_ADDRESS",
+        "original": "0x5875fc0D25A48C17da1147dd1f432c6B54FB7E67",
+        "replacement": "[ETHEREUM_ADDRESS]",
+        "start": 33,
+        "end": 75,
+        "path": "responseBody.23.dex_url"
+      },
+      {
+        "type": "ETHEREUM_ADDRESS",
+        "original": "0x3FEb6c3fa7759A9DF653946104a6ac3CE6a7828a",
+        "replacement": "[ETHEREUM_ADDRESS]",
+        "start": 0,
+        "end": 42,
+        "path": "responseBody.24.address"
+      },
+      {
+        "type": "ETHEREUM_ADDRESS",
+        "original": "0x3feb6c3fa7759a9df653946104a6ac3ce6a7828a",
+        "replacement": "[ETHEREUM_ADDRESS]",
+        "start": 51,
+        "end": 93,
+        "path": "responseBody.24.image_url"
+      },
+      {
+        "type": "ETHEREUM_ADDRESS",
+        "original": "0x3FEb6c3fa7759A9DF653946104a6ac3CE6a7828a",
+        "replacement": "[ETHEREUM_ADDRESS]",
+        "start": 33,
+        "end": 75,
+        "path": "responseBody.24.dex_url"
+      },
+      {
+        "type": "ETHEREUM_ADDRESS",
+        "original": "0x11735dBd0B97CfA7Accf47d005673BA185f7fd49",
+        "replacement": "[ETHEREUM_ADDRESS]",
+        "start": 0,
+        "end": 42,
+        "path": "responseBody.25.address"
+      },
+      {
+        "type": "ETHEREUM_ADDRESS",
+        "original": "0x11735dbd0b97cfa7accf47d005673ba185f7fd49",
+        "replacement": "[ETHEREUM_ADDRESS]",
+        "start": 51,
+        "end": 93,
+        "path": "responseBody.25.image_url"
+      },
+      {
+        "type": "ETHEREUM_ADDRESS",
+        "original": "0x11735dBd0B97CfA7Accf47d005673BA185f7fd49",
+        "replacement": "[ETHEREUM_ADDRESS]",
+        "start": 33,
+        "end": 75,
+        "path": "responseBody.25.dex_url"
+      },
+      {
+        "type": "ETHEREUM_ADDRESS",
+        "original": "0xe7F4A036b6FFa9ef7Bc6be13F47D93D9c482AA9F",
+        "replacement": "[ETHEREUM_ADDRESS]",
+        "start": 0,
+        "end": 42,
+        "path": "responseBody.26.address"
+      },
+      {
+        "type": "ETHEREUM_ADDRESS",
+        "original": "0xe7f4a036b6ffa9ef7bc6be13f47d93d9c482aa9f",
+        "replacement": "[ETHEREUM_ADDRESS]",
+        "start": 51,
+        "end": 93,
+        "path": "responseBody.26.image_url"
+      },
+      {
+        "type": "ETHEREUM_ADDRESS",
+        "original": "0xe7F4A036b6FFa9ef7Bc6be13F47D93D9c482AA9F",
+        "replacement": "[ETHEREUM_ADDRESS]",
+        "start": 33,
+        "end": 75,
+        "path": "responseBody.26.dex_url"
+      },
+      {
+        "type": "ETHEREUM_ADDRESS",
+        "original": "0x775b693cdbA143bDA819F1Eb3E51Be4FeB4D52ea",
+        "replacement": "[ETHEREUM_ADDRESS]",
+        "start": 0,
+        "end": 42,
+        "path": "responseBody.27.address"
+      },
+      {
+        "type": "ETHEREUM_ADDRESS",
+        "original": "0x775b693cdba143bda819f1eb3e51be4feb4d52ea",
+        "replacement": "[ETHEREUM_ADDRESS]",
+        "start": 51,
+        "end": 93,
+        "path": "responseBody.27.image_url"
+      },
+      {
+        "type": "ETHEREUM_ADDRESS",
+        "original": "0x775b693cdbA143bDA819F1Eb3E51Be4FeB4D52ea",
+        "replacement": "[ETHEREUM_ADDRESS]",
+        "start": 33,
+        "end": 75,
+        "path": "responseBody.27.dex_url"
+      },
+      {
+        "type": "ETHEREUM_ADDRESS",
+        "original": "0x3af7aBe2543253cB4e0D0c4CddF47C209c2F5186",
+        "replacement": "[ETHEREUM_ADDRESS]",
+        "start": 0,
+        "end": 42,
+        "path": "responseBody.28.address"
+      },
+      {
+        "type": "ETHEREUM_ADDRESS",
+        "original": "0x3af7abe2543253cb4e0d0c4cddf47c209c2f5186",
+        "replacement": "[ETHEREUM_ADDRESS]",
+        "start": 51,
+        "end": 93,
+        "path": "responseBody.28.image_url"
+      },
+      {
+        "type": "ETHEREUM_ADDRESS",
+        "original": "0x3af7aBe2543253cB4e0D0c4CddF47C209c2F5186",
+        "replacement": "[ETHEREUM_ADDRESS]",
+        "start": 33,
+        "end": 75,
+        "path": "responseBody.28.dex_url"
+      },
+      {
+        "type": "ETHEREUM_ADDRESS",
+        "original": "0xE8B707122Dd2bC8412b8F958B5f0200C70A3e978",
+        "replacement": "[ETHEREUM_ADDRESS]",
+        "start": 0,
+        "end": 42,
+        "path": "responseBody.29.address"
+      },
+      {
+        "type": "ETHEREUM_ADDRESS",
+        "original": "0xe8b707122dd2bc8412b8f958b5f0200c70a3e978",
+        "replacement": "[ETHEREUM_ADDRESS]",
+        "start": 51,
+        "end": 93,
+        "path": "responseBody.29.image_url"
+      },
+      {
+        "type": "ETHEREUM_ADDRESS",
+        "original": "0xE8B707122Dd2bC8412b8F958B5f0200C70A3e978",
+        "replacement": "[ETHEREUM_ADDRESS]",
+        "start": 33,
+        "end": 75,
+        "path": "responseBody.29.dex_url"
+      },
+      {
+        "type": "ETHEREUM_ADDRESS",
+        "original": "0x3C8807120A07c5075F624EfC12a48F2C8a920bfD",
+        "replacement": "[ETHEREUM_ADDRESS]",
+        "start": 0,
+        "end": 42,
+        "path": "responseBody.30.address"
+      },
+      {
+        "type": "ETHEREUM_ADDRESS",
+        "original": "0x3c8807120a07c5075f624efc12a48f2c8a920bfd",
+        "replacement": "[ETHEREUM_ADDRESS]",
+        "start": 51,
+        "end": 93,
+        "path": "responseBody.30.image_url"
+      },
+      {
+        "type": "ETHEREUM_ADDRESS",
+        "original": "0x3C8807120A07c5075F624EfC12a48F2C8a920bfD",
+        "replacement": "[ETHEREUM_ADDRESS]",
+        "start": 33,
+        "end": 75,
+        "path": "responseBody.30.dex_url"
+      },
+      {
+        "type": "ETHEREUM_ADDRESS",
+        "original": "0xE9e70B7C9D108011C5aB15Ce9BF6EF21D0cF8363",
+        "replacement": "[ETHEREUM_ADDRESS]",
+        "start": 0,
+        "end": 42,
+        "path": "responseBody.31.address"
+      },
+      {
+        "type": "ETHEREUM_ADDRESS",
+        "original": "0xe9e70b7c9d108011c5ab15ce9bf6ef21d0cf8363",
+        "replacement": "[ETHEREUM_ADDRESS]",
+        "start": 51,
+        "end": 93,
+        "path": "responseBody.31.image_url"
+      },
+      {
+        "type": "ETHEREUM_ADDRESS",
+        "original": "0xE9e70B7C9D108011C5aB15Ce9BF6EF21D0cF8363",
+        "replacement": "[ETHEREUM_ADDRESS]",
+        "start": 33,
+        "end": 75,
+        "path": "responseBody.31.dex_url"
+      },
+      {
+        "type": "ETHEREUM_ADDRESS",
+        "original": "0xC13242a7864F812bBa566DC2FF12075252bec97b",
+        "replacement": "[ETHEREUM_ADDRESS]",
+        "start": 0,
+        "end": 42,
+        "path": "responseBody.32.address"
+      },
+      {
+        "type": "ETHEREUM_ADDRESS",
+        "original": "0xc13242a7864f812bba566dc2ff12075252bec97b",
+        "replacement": "[ETHEREUM_ADDRESS]",
+        "start": 51,
+        "end": 93,
+        "path": "responseBody.32.image_url"
+      },
+      {
+        "type": "ETHEREUM_ADDRESS",
+        "original": "0xC13242a7864F812bBa566DC2FF12075252bec97b",
+        "replacement": "[ETHEREUM_ADDRESS]",
+        "start": 33,
+        "end": 75,
+        "path": "responseBody.32.dex_url"
+      },
+      {
+        "type": "ETHEREUM_ADDRESS",
+        "original": "0x9115B13E01172E6f4b16CE7396B94c2fab6a99d0",
+        "replacement": "[ETHEREUM_ADDRESS]",
+        "start": 0,
+        "end": 42,
+        "path": "responseBody.33.address"
+      },
+      {
+        "type": "ETHEREUM_ADDRESS",
+        "original": "0x9115b13e01172e6f4b16ce7396b94c2fab6a99d0",
+        "replacement": "[ETHEREUM_ADDRESS]",
+        "start": 51,
+        "end": 93,
+        "path": "responseBody.33.image_url"
+      },
+      {
+        "type": "ETHEREUM_ADDRESS",
+        "original": "0x9115B13E01172E6f4b16CE7396B94c2fab6a99d0",
+        "replacement": "[ETHEREUM_ADDRESS]",
+        "start": 33,
+        "end": 75,
+        "path": "responseBody.33.dex_url"
+      },
+      {
+        "type": "ETHEREUM_ADDRESS",
+        "original": "0x3f244819a8359145A8E7CF0272955e4918A50627",
+        "replacement": "[ETHEREUM_ADDRESS]",
+        "start": 0,
+        "end": 42,
+        "path": "responseBody.34.address"
+      },
+      {
+        "type": "ETHEREUM_ADDRESS",
+        "original": "0x3f244819a8359145a8e7cf0272955e4918a50627",
+        "replacement": "[ETHEREUM_ADDRESS]",
+        "start": 51,
+        "end": 93,
+        "path": "responseBody.34.image_url"
+      },
+      {
+        "type": "ETHEREUM_ADDRESS",
+        "original": "0x3f244819a8359145A8E7CF0272955e4918A50627",
+        "replacement": "[ETHEREUM_ADDRESS]",
+        "start": 33,
+        "end": 75,
+        "path": "responseBody.34.dex_url"
+      },
+      {
+        "type": "ETHEREUM_ADDRESS",
+        "original": "0x47bb061C0204Af921F43DC73C7D7768d2672DdEE",
+        "replacement": "[ETHEREUM_ADDRESS]",
+        "start": 0,
+        "end": 42,
+        "path": "responseBody.35.address"
+      },
+      {
+        "type": "ETHEREUM_ADDRESS",
+        "original": "0x47bb061c0204af921f43dc73c7d7768d2672ddee",
+        "replacement": "[ETHEREUM_ADDRESS]",
+        "start": 51,
+        "end": 93,
+        "path": "responseBody.35.image_url"
+      },
+      {
+        "type": "ETHEREUM_ADDRESS",
+        "original": "0x47bb061C0204Af921F43DC73C7D7768d2672DdEE",
+        "replacement": "[ETHEREUM_ADDRESS]",
+        "start": 33,
+        "end": 75,
+        "path": "responseBody.35.dex_url"
+      },
+      {
+        "type": "ETHEREUM_ADDRESS",
+        "original": "0x626F8b4DE6aeA967C564cc9fc1ed83BCbCD5cF2e",
+        "replacement": "[ETHEREUM_ADDRESS]",
+        "start": 0,
+        "end": 42,
+        "path": "responseBody.36.address"
+      },
+      {
+        "type": "ETHEREUM_ADDRESS",
+        "original": "0x626f8b4de6aea967c564cc9fc1ed83bcbcd5cf2e",
+        "replacement": "[ETHEREUM_ADDRESS]",
+        "start": 51,
+        "end": 93,
+        "path": "responseBody.36.image_url"
+      },
+      {
+        "type": "ETHEREUM_ADDRESS",
+        "original": "0x626F8b4DE6aeA967C564cc9fc1ed83BCbCD5cF2e",
+        "replacement": "[ETHEREUM_ADDRESS]",
+        "start": 33,
+        "end": 75,
+        "path": "responseBody.36.dex_url"
+      },
+      {
+        "type": "FULL_NAME",
+        "original": "Liquid Asset",
+        "replacement": "Dixie Lesch",
+        "start": 0,
+        "end": 12,
+        "path": "responseBody.37.token_name"
+      },
+      {
+        "type": "ETHEREUM_ADDRESS",
+        "original": "0x0C9943DaE040a546B34906dcf63A7BCc828929e5",
+        "replacement": "[ETHEREUM_ADDRESS]",
+        "start": 0,
+        "end": 42,
+        "path": "responseBody.37.address"
+      },
+      {
+        "type": "ETHEREUM_ADDRESS",
+        "original": "0x0c9943dae040a546b34906dcf63a7bcc828929e5",
+        "replacement": "[ETHEREUM_ADDRESS]",
+        "start": 51,
+        "end": 93,
+        "path": "responseBody.37.image_url"
+      },
+      {
+        "type": "ETHEREUM_ADDRESS",
+        "original": "0x0C9943DaE040a546B34906dcf63A7BCc828929e5",
+        "replacement": "[ETHEREUM_ADDRESS]",
+        "start": 33,
+        "end": 75,
+        "path": "responseBody.37.dex_url"
+      },
+      {
+        "type": "ETHEREUM_ADDRESS",
+        "original": "0x99750393c5B40093A53ccD2d8e9f61EF4F401826",
+        "replacement": "[ETHEREUM_ADDRESS]",
+        "start": 0,
+        "end": 42,
+        "path": "responseBody.38.address"
+      },
+      {
+        "type": "ETHEREUM_ADDRESS",
+        "original": "0x99750393c5b40093a53ccd2d8e9f61ef4f401826",
+        "replacement": "[ETHEREUM_ADDRESS]",
+        "start": 51,
+        "end": 93,
+        "path": "responseBody.38.image_url"
+      },
+      {
+        "type": "ETHEREUM_ADDRESS",
+        "original": "0x99750393c5B40093A53ccD2d8e9f61EF4F401826",
+        "replacement": "[ETHEREUM_ADDRESS]",
+        "start": 33,
+        "end": 75,
+        "path": "responseBody.38.dex_url"
+      },
+      {
+        "type": "ETHEREUM_ADDRESS",
+        "original": "0xFE69bc93B936B34D371defa873686C116C8488c2",
+        "replacement": "[ETHEREUM_ADDRESS]",
+        "start": 0,
+        "end": 42,
+        "path": "responseBody.39.address"
+      },
+      {
+        "type": "ETHEREUM_ADDRESS",
+        "original": "0xfe69bc93b936b34d371defa873686c116c8488c2",
+        "replacement": "[ETHEREUM_ADDRESS]",
+        "start": 51,
+        "end": 93,
+        "path": "responseBody.39.image_url"
+      },
+      {
+        "type": "ETHEREUM_ADDRESS",
+        "original": "0xFE69bc93B936B34D371defa873686C116C8488c2",
+        "replacement": "[ETHEREUM_ADDRESS]",
+        "start": 33,
+        "end": 75,
+        "path": "responseBody.39.dex_url"
+      },
+      {
+        "type": "BANK_ACCOUNT",
+        "original": "53352235",
+        "replacement": "[BANK_ACCOUNT]",
+        "start": 143,
+        "end": 151,
+        "path": "responseBodyPreview"
+      },
+      {
+        "type": "ZIP_CODE",
+        "original": "21996",
+        "replacement": "[ZIP_CODE]",
+        "start": 165,
+        "end": 170,
+        "path": "responseBodyPreview"
+      },
+      {
+        "type": "ZIP_CODE",
+        "original": "88853",
+        "replacement": "[ZIP_CODE]",
+        "start": 409,
+        "end": 414,
+        "path": "responseBodyPreview"
+      },
+      {
+        "type": "ZIP_CODE",
+        "original": "17699",
+        "replacement": "[ZIP_CODE]",
+        "start": 689,
+        "end": 694,
+        "path": "responseBodyPreview"
+      },
+      {
+        "type": "ETHEREUM_ADDRESS",
+        "original": "0x618275F8EFE54c2afa87bfB9F210A52F0fF89364",
+        "replacement": "[ETHEREUM_ADDRESS]",
+        "start": 64,
+        "end": 106,
+        "path": "responseBodyPreview"
+      },
+      {
+        "type": "ETHEREUM_ADDRESS",
+        "original": "0x618275f8efe54c2afa87bfb9f210a52f0ff89364",
+        "replacement": "[ETHEREUM_ADDRESS]",
+        "start": 235,
+        "end": 277,
+        "path": "responseBodyPreview"
+      },
+      {
+        "type": "ETHEREUM_ADDRESS",
+        "original": "0x618275F8EFE54c2afa87bfB9F210A52F0fF89364",
+        "replacement": "[ETHEREUM_ADDRESS]",
+        "start": 488,
+        "end": 530,
+        "path": "responseBodyPreview"
+      },
+      {
+        "type": "ETHEREUM_ADDRESS",
+        "original": "0xf2E6a23B1aA09565FDb3a77AF7772709De3f4F95",
+        "replacement": "[ETHEREUM_ADDRESS]",
+        "start": 590,
+        "end": 632,
+        "path": "responseBodyPreview"
+      }
+    ]
+  },
+  "createdAt": "2025-10-10T05:24:34.534Z",
+  "updatedAt": "2025-10-10T05:24:34.534Z"
+}

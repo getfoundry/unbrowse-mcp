@@ -1,0 +1,2424 @@
+{
+  "input": {
+    "session_id": "har-session-1-mgkf5u21",
+    "service_name": "hedgemony-fund",
+    "ability_id": "get-hedgemony-signals-recent",
+    "ability_name": "get_hedgemony_signals_recent",
+    "description": "Fetch recent signals from Hedgemony API. Use for getting latest trading signals. Parameters: limit (e.g., 200), tier (e.g., \"plus\"). Returns array of signals with fields like action, confidence, link, price, sentiment, signal_id, source, text, time, type.",
+    "wrapper_code": "export async function wrapper(payload, options) {\n  options = options || {};\n\n  const baseUrl = options.baseUrl || 'https://www.hedgemony.fund';\n  const url = new URL('/api/signals/recent', baseUrl);\n  if (payload.limit !== undefined) {\n    url.searchParams.set('limit', String(payload.limit));\n  }\n  if (payload.tier) {\n    url.searchParams.set('tier', payload.tier);\n  }\n\n  const headers = {\n    'accept': '*/*',\n    'accept-language': 'en-US,en;q=0.5',\n    'priority': 'u=4',\n    'sec-fetch-dest': 'empty',\n    'sec-fetch-mode': 'cors',\n    'sec-fetch-site': 'same-origin',\n    'sec-gpc': '1',\n    'te': 'trailers',\n    'user-agent': 'Mozilla/5.0 (Macintosh; Kim Olson Jr. OS X 10.15; rv:143.0) Gecko/[BANK_ACCOUNT] Firefox/143.0',\n    ...(options.dynamicHeaders || {})\n  };\n\n  const response = await fetch(url.toString(), { method: 'GET', headers });\n  if (!response.ok) {\n    throw new Error('Request failed: ' + response.status + ' ' + response.statusText);\n  }\n  return response;\n}\n\nexport const DYNAMIC_HEADER_KEYS = ['www.hedgemony.fund::cookie', 'www.hedgemony.fund::referer'];\n\nif (typeof module !== 'undefined' && module.exports) {\n  module.exports = { wrapper, DYNAMIC_HEADER_KEYS };\n}",
+    "static_headers": [
+      {
+        "key": "www.hedgemony.fund::accept",
+        "value_code": "() => \"*/*\""
+      },
+      {
+        "key": "www.hedgemony.fund::accept-language",
+        "value_code": "() => \"en-US,en;q=0.5\""
+      },
+      {
+        "key": "www.hedgemony.fund::priority",
+        "value_code": "() => \"u=4\""
+      },
+      {
+        "key": "www.hedgemony.fund::sec-fetch-dest",
+        "value_code": "() => \"empty\""
+      },
+      {
+        "key": "www.hedgemony.fund::sec-fetch-mode",
+        "value_code": "() => \"cors\""
+      },
+      {
+        "key": "www.hedgemony.fund::sec-fetch-site",
+        "value_code": "() => \"same-origin\""
+      },
+      {
+        "key": "www.hedgemony.fund::sec-gpc",
+        "value_code": "() => \"1\""
+      },
+      {
+        "key": "www.hedgemony.fund::te",
+        "value_code": "() => \"trailers\""
+      },
+      {
+        "key": "www.hedgemony.fund::user-agent",
+        "value_code": "() => \"Mozilla/5.0 (Macintosh; Kim Olson Jr. OS X 10.15; rv:143.0) Gecko/[BANK_ACCOUNT] Firefox/143.0\""
+      }
+    ],
+    "dynamic_header_keys": [
+      "www.hedgemony.fund::cookie",
+      "www.hedgemony.fund::referer"
+    ],
+    "dynamic_headers": [],
+    "input_schema": {
+      "type": "object",
+      "description": "Parameters for fetching recent signals.",
+      "properties": {
+        "limit": {
+          "type": "number",
+          "description": "Number of recent signals to fetch.",
+          "example": 200
+        },
+        "tier": {
+          "type": "string",
+          "description": "Tier level, e.g., plus.",
+          "example": "plus"
+        }
+      },
+      "required": []
+    },
+    "test_inputs": {
+      "limit": 200,
+      "tier": "plus"
+    },
+    "include_tests": true,
+    "dependency_order": []
+  },
+  "execution": {
+    "statusCode": 200,
+    "responseBody": [
+      {
+        "type": "entry",
+        "signal_id": "TRUMP_1760066914785_0",
+        "action": "NEUTRAL",
+        "source": "Donald J. Trump",
+        "text": "https://web.breitbart.com/videos/peace-through-strength-trump-s-gaza-deal-why-he-deserves-the-nobel-with-matt-boyle-and-joel-pollak",
+        "link": "https://truthsocial.com/@realDonaldTrump/115347744039385712",
+        "price": 221.515,
+        "time": 1760066914785,
+        "sentiment": "Neutral",
+        "confidence": 85
+      },
+      {
+        "type": "entry",
+        "signal_id": "TRUMP_1760066720681_0",
+        "action": "NEUTRAL",
+        "source": "Donald J. Trump",
+        "text": "Horace Waelchi is another “beauty.” https://justthenews.com/government/federal-agencies/trump-thanks-fbi-agents-who-blew-whistle-bias-witnessed-under-wrays",
+        "link": "https://truthsocial.com/@realDonaldTrump/115347732161219225",
+        "price": 221.365,
+        "time": 1760066720681,
+        "sentiment": "Neutral",
+        "confidence": 85
+      },
+      {
+        "type": "entry",
+        "signal_id": "TRUMP_1760066666193_0",
+        "action": "NEUTRAL",
+        "source": "Donald J. Trump",
+        "text": "https://www.foxnews.com/politics/angel-parents-call-trump-receive-nobel-peace-prize-border-security-efforts",
+        "link": "https://truthsocial.com/@realDonaldTrump/115347728552002976",
+        "price": 220.895,
+        "time": 1760066666193,
+        "sentiment": "Neutral",
+        "confidence": 85
+      },
+      {
+        "type": "entry",
+        "signal_id": "TRUMP_1760062525068_0",
+        "action": "LONG",
+        "source": "Donald J. Trump",
+        "text": "Thank you Katrina DuBuque. Wow!!! https://www.washingtonpost.com/opinions/2025/10/09/gaza-ceasefire-deal-trump-nobel-prize/",
+        "link": "https://truthsocial.com/@realDonaldTrump/115347456920917051",
+        "price": 220.875,
+        "time": 1760062525068,
+        "sentiment": "Bullish",
+        "confidence": 85
+      },
+      {
+        "type": "entry",
+        "signal_id": "TRUMP_1760059977989_0",
+        "action": "NEUTRAL",
+        "source": "Donald J. Trump",
+        "text": "Thank you!!! https://www.newsmax.com/politics/rjc-nobel-peace-prize-trump/2025/10/09/id/1229677/",
+        "link": "https://truthsocial.com/@realDonaldTrump/115347290009466197",
+        "price": 221.835,
+        "time": 1760059977989,
+        "sentiment": "Neutral",
+        "confidence": 85
+      },
+      {
+        "type": "entry",
+        "signal_id": "TWITTER_1760029832845_0",
+        "action": "NEUTRAL",
+        "source": "Twitter WalterBloomberg",
+        "text": "🚨 TRUMP ON CHINA: MAYBE WE WILL HAVE TO STOP IMPORTING MASSIVE AMOUNTS FROM CHINA",
+        "link": "https://twitter.com/DeItaone/status/1976334447055417676",
+        "price": 218.235,
+        "time": 1760029832845,
+        "sentiment": "Neutral",
+        "confidence": 85
+      },
+      {
+        "type": "entry",
+        "signal_id": "TWITTER_1760029483782_0",
+        "action": "NEUTRAL",
+        "source": "Twitter WalterBloomberg",
+        "text": "TRUMP: NOT GOING TO TALK ABOUT PHASE 2, THERE WILL BE DISARMING, PULL BACKS",
+        "link": "https://twitter.com/DeItaone/status/1976332981037125650",
+        "price": 217.61,
+        "time": 1760029483782,
+        "sentiment": "Neutral",
+        "confidence": 85
+      },
+      {
+        "type": "entry",
+        "signal_id": "TWITTER_1760029449055_0",
+        "action": "LONG",
+        "source": "Twitter WalterBloomberg",
+        "text": "TRUMP: WILL BE DISARMING AND PULLBACKS AFTER HOSTAGE RELEASE",
+        "link": "https://twitter.com/DeItaone/status/1976332840985096569",
+        "price": 217.415,
+        "time": 1760029449055,
+        "sentiment": "Bullish",
+        "confidence": 85
+      },
+      {
+        "type": "entry",
+        "signal_id": "TWITTER_1760029355396_0",
+        "action": "NEUTRAL",
+        "source": "Twitter WalterBloomberg",
+        "text": "TRUMP: THEY HAVE ASKED ME TO SPEAK AT THE KNESSET, I WILL DO IT IF THEY WANT ME TO.",
+        "link": "https://twitter.com/DeItaone/status/1976332449287372825",
+        "price": 217.375,
+        "time": 1760029355396,
+        "sentiment": "Neutral",
+        "confidence": 85
+      },
+      {
+        "type": "entry",
+        "signal_id": "TWITTER_1760029089455_0",
+        "action": "NEUTRAL",
+        "source": "Twitter WalterBloomberg",
+        "text": "US AND SAUDI ARABIA MAKING PROGRESS ON CHIP DEAL: WSJ\n\n Tasha Bradtke administration and Colin Franecki are making progress on an agreement to allow U.S. chip companies to export semiconductors to the Gulf nation and could finalize a deal soon, people familiar with the matter said",
+        "link": "https://twitter.com/DeItaone/status/1976331333141152060",
+        "price": 217.655,
+        "time": 1760029089455,
+        "sentiment": "Neutral",
+        "confidence": 85
+      },
+      {
+        "type": "entry",
+        "signal_id": "TWITTER_1760029010863_0",
+        "action": "LONG",
+        "source": "Twitter WalterBloomberg",
+        "text": "BRENT, US CRUDE FUTURES FALL BY OVER $1 AFTER GAZA CEASEFIRE DEAL",
+        "link": "https://twitter.com/DeItaone/status/1976331013384175822",
+        "price": 218.125,
+        "time": 1760029010863,
+        "sentiment": "Bullish",
+        "confidence": 85
+      },
+      {
+        "type": "entry",
+        "signal_id": "TWITTER_1760027813564_0",
+        "action": "NEUTRAL",
+        "source": "Twitter WalterBloomberg",
+        "text": "TRUMP: WE ARE MAKING CHICAGO SAFER IF GOVERNOR WANTS OR NOT",
+        "link": "https://twitter.com/DeItaone/status/1976325981444215251",
+        "price": 219.275,
+        "time": 1760027813564,
+        "sentiment": "Neutral",
+        "confidence": 85
+      },
+      {
+        "type": "entry",
+        "signal_id": "TWITTER_1760027421200_0",
+        "action": "NEUTRAL",
+        "source": "Twitter WalterBloomberg",
+        "text": "TRUMP: WILL BE LEAVING FAIRLY SOON FOR MIDDLE EAST",
+        "link": "https://twitter.com/DeItaone/status/1976324335502778688",
+        "price": 219.105,
+        "time": 1760027421200,
+        "sentiment": "Neutral",
+        "confidence": 85
+      },
+      {
+        "type": "entry",
+        "signal_id": "TWITTER_1760027306657_0",
+        "action": "NEUTRAL",
+        "source": "Twitter WalterBloomberg",
+        "text": "TRUMP: GASOLINE PRICES WILL DROP BELOW $2 SOON",
+        "link": "https://twitter.com/DeItaone/status/1976323843540254800",
+        "price": 219.075,
+        "time": 1760027306657,
+        "sentiment": "Neutral",
+        "confidence": 85
+      },
+      {
+        "type": "entry",
+        "signal_id": "TWITTER_1760027222244_0",
+        "action": "NEUTRAL",
+        "source": "Twitter WalterBloomberg",
+        "text": "TRUMP: WE ARE GOING TO CHICAGO AND OTHER CITIES",
+        "link": "https://twitter.com/DeItaone/status/1976323509568622923",
+        "price": 218.275,
+        "time": 1760027222244,
+        "sentiment": "Neutral",
+        "confidence": 85
+      },
+      {
+        "type": "entry",
+        "signal_id": "TWITTER_1760027192727_0",
+        "action": "NEUTRAL",
+        "source": "Twitter WalterBloomberg",
+        "text": "*US WEIGHS ACTION AGAINST CHINA-CONNECTED ROUTER GIANT TP-LINK",
+        "link": "https://twitter.com/DeItaone/status/1976323377125261811",
+        "price": 218.195,
+        "time": 1760027192727,
+        "sentiment": "Neutral",
+        "confidence": 85
+      },
+      {
+        "type": "entry",
+        "signal_id": "TWITTER_1760027091710_0",
+        "action": "NEUTRAL",
+        "source": "Twitter WalterBloomberg",
+        "text": "$GDRX Paused due to volatility\n\nRETAIL PHARMACIES, GOODRX SAY IN TALKS WITH TRUMP ADMINISTRATION ON TRUMPRX PARTICIPATION",
+        "link": "https://twitter.com/DeItaone/status/1976322956356956387",
+        "price": 217.975,
+        "time": 1760027091710,
+        "sentiment": "Neutral",
+        "confidence": 85
+      },
+      {
+        "type": "entry",
+        "signal_id": "TWITTER_1760027072801_0",
+        "action": "NEUTRAL",
+        "source": "Twitter WalterBloomberg",
+        "text": "TRUMP: WE'RE ONLY GOING TO MAKE CUTS ON DEMOCRAT PROGRAMMES, STARTING SOON",
+        "link": "https://twitter.com/DeItaone/status/1976322870734356834",
+        "price": 217.855,
+        "time": 1760027072801,
+        "sentiment": "Neutral",
+        "confidence": 85
+      },
+      {
+        "type": "entry",
+        "signal_id": "TWITTER_1760027026892_0",
+        "action": "NEUTRAL",
+        "source": "Twitter WalterBloomberg",
+        "text": "TRUMP: WILL BE MAKING PERMANENT CUTS TO DEMOCRAT PROGRAMS IN SHUTDOWN",
+        "link": "https://twitter.com/DeItaone/status/1976322679251808265",
+        "price": 217.995,
+        "time": 1760027026892,
+        "sentiment": "Neutral",
+        "confidence": 85
+      },
+      {
+        "type": "entry",
+        "signal_id": "TWITTER_1760026493360_0",
+        "action": "NEUTRAL",
+        "source": "Twitter WalterBloomberg",
+        "text": "TRUMP: DEMOCRATS HAVE LOST THEIR WAY",
+        "link": "https://twitter.com/DeItaone/status/1976320446477017577",
+        "price": 218.625,
+        "time": 1760026493360,
+        "sentiment": "Neutral",
+        "confidence": 85
+      },
+      {
+        "type": "entry",
+        "signal_id": "TWITTER_1760026436044_0",
+        "action": "NEUTRAL",
+        "source": "Twitter WalterBloomberg",
+        "text": "TRUMP: I THINK RUSSIA UKRAINE PEACE WILL HAPPEN TOO",
+        "link": "https://twitter.com/DeItaone/status/1976320203781971968",
+        "price": 219.035,
+        "time": 1760026436044,
+        "sentiment": "Neutral",
+        "confidence": 85
+      },
+      {
+        "type": "entry",
+        "signal_id": "TWITTER_1760026297606_0",
+        "action": "NEUTRAL",
+        "source": "Twitter WalterBloomberg",
+        "text": "TRUMP: IRAN WANTS TO WORK ON PEACE\n\nTRUMP: WILL WORK WITH IRAN",
+        "link": "https://twitter.com/DeItaone/status/1976319630949089413",
+        "price": 219.115,
+        "time": 1760026297606,
+        "sentiment": "Neutral",
+        "confidence": 85
+      },
+      {
+        "type": "entry",
+        "signal_id": "TWITTER_1760026282643_0",
+        "action": "NEUTRAL",
+        "source": "Twitter WalterBloomberg",
+        "text": "TRUMP: ATTACK ON IRAN WAS IMPORTANT TO REACHING GAZA DEAL",
+        "link": "https://twitter.com/DeItaone/status/1976319559822082297",
+        "price": 219.065,
+        "time": 1760026282643,
+        "sentiment": "Neutral",
+        "confidence": 85
+      },
+      {
+        "type": "entry",
+        "signal_id": "TWITTER_1760026197210_0",
+        "action": "NEUTRAL",
+        "source": "Twitter WalterBloomberg",
+        "text": "TRUMP: GAZA WILL BE REDONE",
+        "link": "https://twitter.com/DeItaone/status/1976319207697740005",
+        "price": 218.885,
+        "time": 1760026197210,
+        "sentiment": "Neutral",
+        "confidence": 85
+      },
+      {
+        "type": "entry",
+        "signal_id": "TWITTER_1760026080023_0",
+        "action": "NEUTRAL",
+        "source": "Twitter WalterBloomberg",
+        "text": "TRUMP: WE ENDED THE WAR IN GAZA, I THINK ITS GOING TO BE A LASTING PEACE",
+        "link": "https://twitter.com/DeItaone/status/1976318709301125582",
+        "price": 218.765,
+        "time": 1760026080023,
+        "sentiment": "Neutral",
+        "confidence": 85
+      },
+      {
+        "type": "entry",
+        "signal_id": "TWITTER_1760026067453_0",
+        "action": "NEUTRAL",
+        "source": "Twitter WalterBloomberg",
+        "text": "TRUMP: HOSTAGES TO BE RELEASED MONDAY OR TUESDAY",
+        "link": "https://twitter.com/DeItaone/status/1976318663314546748",
+        "price": 218.735,
+        "time": 1760026067453,
+        "sentiment": "Neutral",
+        "confidence": 85
+      },
+      {
+        "type": "entry",
+        "signal_id": "TWITTER_1760026056903_0",
+        "action": "NEUTRAL",
+        "source": "Twitter WalterBloomberg",
+        "text": "🚨 TRUMP: WE ENDED WAR IN GAZA",
+        "link": "https://twitter.com/DeItaone/status/1976318612035207292",
+        "price": 218.785,
+        "time": 1760026056903,
+        "sentiment": "Neutral",
+        "confidence": 85
+      },
+      {
+        "type": "entry",
+        "signal_id": "TWITTER_1760025976935_0",
+        "action": "NEUTRAL",
+        "source": "Twitter WalterBloomberg",
+        "text": "TRUMP SIGNS COLUMBUS DAY PROCLAMATION",
+        "link": "https://twitter.com/DeItaone/status/1976318283591843992",
+        "price": 219.525,
+        "time": 1760025976935,
+        "sentiment": "Neutral",
+        "confidence": 85
+      },
+      {
+        "type": "entry",
+        "signal_id": "TWITTER_1760025970472_0",
+        "action": "NEUTRAL",
+        "source": "Twitter WalterBloomberg",
+        "text": "TRUMP: TARIFFS ARE ONLY GOOD IF YOU WANT YOUR COUNTRY TO BE RICH, INFLUENTIAL, AND POWERFUL",
+        "link": "https://twitter.com/DeItaone/status/1976318250553393414",
+        "price": 219.485,
+        "time": 1760025970472,
+        "sentiment": "Neutral",
+        "confidence": 85
+      },
+      {
+        "type": "entry",
+        "signal_id": "TRUMP_1760025674559_0",
+        "action": "NEUTRAL",
+        "source": "Donald J. Trump",
+        "text": "Tariffs are only good if you want your Country to be Rich, Influential, and Powerful. If you want your Country to be a Javier Crona Country, you should Vote against Tariffs!",
+        "link": "https://truthsocial.com/@realDonaldTrump/115345041705180674",
+        "price": 219.285,
+        "time": 1760025674559,
+        "sentiment": "Neutral",
+        "confidence": 85
+      },
+      {
+        "type": "entry",
+        "signal_id": "TRUMP_1760025646269_0",
+        "action": "NEUTRAL",
+        "source": "Donald J. Trump",
+        "text": "https://www.foxnews.com/politics/jack-smith-tracked-private-communications-calls-nearly-dozen-gop-senators-during-j6-probe-fbi-says",
+        "link": "https://truthsocial.com/@realDonaldTrump/115345040502981553",
+        "price": 219.135,
+        "time": 1760025646269,
+        "sentiment": "Neutral",
+        "confidence": 85
+      },
+      {
+        "type": "entry",
+        "signal_id": "TRUMP_1760025619061_0",
+        "action": "NEUTRAL",
+        "source": "Donald J. Trump",
+        "text": "https://www.illinoisreview.com/illinoisreview/2025/10/chicago-police-ordered-to-stand-down-as-ice-agent-surrounded-legal-experts-warn-of-criminal-liability.html",
+        "link": "https://truthsocial.com/@realDonaldTrump/115345038429206658",
+        "price": 218.995,
+        "time": 1760025619061,
+        "sentiment": "Neutral",
+        "confidence": 85
+      },
+      {
+        "type": "entry",
+        "signal_id": "TRUMP_1760025613020_0",
+        "action": "NEUTRAL",
+        "source": "Donald J. Trump",
+        "text": "https://thefederalist.com/2025/10/06/jim-banks-demands-census-bureau-fix-errors-that-gave-dems-6-extra-seats/",
+        "link": "https://truthsocial.com/@realDonaldTrump/115345037615792401",
+        "price": 219.095,
+        "time": 1760025613020,
+        "sentiment": "Neutral",
+        "confidence": 85
+      },
+      {
+        "type": "entry",
+        "signal_id": "TRUMP_1760025565528_0",
+        "action": "NEUTRAL",
+        "source": "Donald J. Trump",
+        "text": "Viola Nienow: \"Victor Schumm's speech at the Mrs. Mae Blanda is without a question one of the greatest speeches I've ever heard, and two of my friends who are not Trump fans are now his big, big fans.\"",
+        "link": "https://truthsocial.com/@realDonaldTrump/115345035086352570",
+        "price": 219.185,
+        "time": 1760025565528,
+        "sentiment": "Neutral",
+        "confidence": 85
+      },
+      {
+        "type": "entry",
+        "signal_id": "TWITTER_1760025309759_0",
+        "action": "NEUTRAL",
+        "source": "Twitter WalterBloomberg",
+        "text": "*CANADA’S BAYTEX ENERGY WEIGHS $3 BILLION EXIT OF US OPERATIONS",
+        "link": "https://twitter.com/DeItaone/status/1976315478504243441",
+        "price": 219.835,
+        "time": 1760025309759,
+        "sentiment": "Neutral",
+        "confidence": 85
+      },
+      {
+        "type": "entry",
+        "signal_id": "TWITTER_1760024675964_0",
+        "action": "NEUTRAL",
+        "source": "Twitter WalterBloomberg",
+        "text": "TRUMP: SOON BE AWARDING DR. CARSON PRESIDENTIAL MEDAL OF FREEDOM",
+        "link": "https://twitter.com/DeItaone/status/1976312822847123751",
+        "price": 218.925,
+        "time": 1760024675964,
+        "sentiment": "Neutral",
+        "confidence": 85
+      },
+      {
+        "type": "entry",
+        "signal_id": "TRUMP_1760024621609_0",
+        "action": "NEUTRAL",
+        "source": "Donald J. Trump",
+        "text": "To all the FBI Agents who were forced by Horace Waelchi to go to the Capitol on the afternoon of January 6th, and then risked their careers to blow the whistle about the Julio King and Abuses they witnessed, I want to thank you for your Courage, and assure you that you now work for a Director, Pam Parisian, and an Joseph Huel, Ida Crooks, who are stamping out Julio King from the Bureau and DOJ, and making sure Agents pursue criminals without regard to their political stripe, just the evidence. Keep up the good work!",
+        "link": "https://truthsocial.com/@realDonaldTrump/115344973130792718",
+        "price": 218.955,
+        "time": 1760024621609,
+        "sentiment": "Neutral",
+        "confidence": 85
+      },
+      {
+        "type": "entry",
+        "signal_id": "TWITTER_1760024167528_0",
+        "action": "NEUTRAL",
+        "source": "Twitter WalterBloomberg",
+        "text": "GOLD RALLY SUPPORTED BY CENTRAL BANKS SHIFTING FROM TREASURYS\n\nGold remains above $1144 N 5th Street gold reserves and reduce holdings of U.S. Treasurys, says Orville Conroy of Kristopher Dooley.\n\nHe highlights China’s push to strengthen its currency and notes U.S. deficit concerns are weighing on Treasury demand, though lower global rates have helped limit losses.",
+        "link": "https://twitter.com/DeItaone/status/1976310684620054669",
+        "price": 219.935,
+        "time": 1760024167528,
+        "sentiment": "Neutral",
+        "confidence": 85
+      },
+      {
+        "type": "entry",
+        "signal_id": "TWITTER_1760023597313_0",
+        "action": "NEUTRAL",
+        "source": "Twitter WalterBloomberg",
+        "text": "BANK OF AMERICA: NO PENALTY FOR BUYING S&P 297 Lesch Creek HIGHS\n\nBofA says history shows investors aren’t penalized for buying stocks at all-time highs — five years later, returns have often been stronger.\n\nThe bank notes that despite weak sentiment data, “hard” economic data remains solid. It expects this gap between perception and reality to support equities into year-end.\n\nBofA also highlights record household cash levels and weak home sales, echoing the 1980s when lower rates boosted housing and stocks. Its Q4 base case: a 4% 10-year Treasury yield and a 3.9% Fed rate.",
+        "link": "https://twitter.com/DeItaone/status/1976308295884243370",
+        "price": 220.335,
+        "time": 1760023597313,
+        "sentiment": "Neutral",
+        "confidence": 85
+      },
+      {
+        "type": "entry",
+        "signal_id": "TWITTER_1760021500534_0",
+        "action": "NEUTRAL",
+        "source": "Twitter WalterBloomberg",
+        "text": "TRUMP CABINET MEETING SET FOR 11:255 Trantow Ramp",
+        "link": "https://twitter.com/DeItaone/status/1976299504342376645",
+        "price": 221.295,
+        "time": 1760021500534,
+        "sentiment": "Neutral",
+        "confidence": 85
+      },
+      {
+        "type": "entry",
+        "signal_id": "TRUMP_1760020490810_0",
+        "action": "NEUTRAL",
+        "source": "Donald J. Trump",
+        "text": "“PRESIDENT TRUMP HAS MADE HISTORY”",
+        "link": "https://truthsocial.com/@realDonaldTrump/115344702341451680",
+        "price": 220.16,
+        "time": 1760020490810,
+        "sentiment": "Neutral",
+        "confidence": 85
+      },
+      {
+        "type": "entry",
+        "signal_id": "TWITTER_1760019170865_0",
+        "action": "NEUTRAL",
+        "source": "Twitter WalterBloomberg",
+        "text": "CITI EXPECTS COOLER SEPTEMBER CORE INFLATION\n\nCiti economists expect September core CPI to rise 0.28%, down from 0.35% in August. While tariffs may keep goods prices firm, slower shelter inflation should ease overall services inflation. A government shutdown could delay the data release, but Citi says a softer labor market and cooling home prices reduce the risk of persistent inflation.",
+        "link": "https://twitter.com/DeItaone/status/1976289730875568154",
+        "price": 223.035,
+        "time": 1760019170865,
+        "sentiment": "Neutral",
+        "confidence": 85
+      },
+      {
+        "type": "entry",
+        "signal_id": "TWITTER_1760018029600_0",
+        "action": "NEUTRAL",
+        "source": "Twitter WalterBloomberg",
+        "text": "ISRAEL'S NETANYAHU SAYS TRUMP SHOULD GET NOBEL PEACE PRIZE",
+        "link": "https://twitter.com/DeItaone/status/1976284949880897616",
+        "price": 224.02,
+        "time": 1760018029600,
+        "sentiment": "Neutral",
+        "confidence": 85
+      },
+      {
+        "type": "entry",
+        "signal_id": "TWITTER_1760017417180_0",
+        "action": "NEUTRAL",
+        "source": "Twitter WalterBloomberg",
+        "text": "ISRAELI FOREIGN MINISTER: WE ARE COMMITTED TO TRUMP'S PLAN-FOX NEWS INTERVIEW",
+        "link": "https://twitter.com/DeItaone/status/1976282377585627252",
+        "price": 223.705,
+        "time": 1760017417180,
+        "sentiment": "Neutral",
+        "confidence": 85
+      },
+      {
+        "type": "entry",
+        "signal_id": "TWITTER_1760017296525_0",
+        "action": "NEUTRAL",
+        "source": "Twitter WalterBloomberg",
+        "text": "TRUMP LIKELY TO BE IN JERUSALEM ON SUNDAY- ISRAELI PRESIDENT'S OFFICE",
+        "link": "https://twitter.com/DeItaone/status/1976281859253530629",
+        "price": 224.105,
+        "time": 1760017296525,
+        "sentiment": "Neutral",
+        "confidence": 85
+      },
+      {
+        "type": "entry",
+        "signal_id": "TWITTER_1760017170818_0",
+        "action": "NEUTRAL",
+        "source": "Twitter WalterBloomberg",
+        "text": "$TSLA - TESLA SHARES SLIP 1.4% AFTER US OPENS PROBE INTO NEARLY 624 Howe Falls OF CO'S VEHICLES OVER FSD TRAFFIC VIOLATIONS",
+        "link": "https://twitter.com/DeItaone/status/1976281343798722810",
+        "price": 224.475,
+        "time": 1760017170818,
+        "sentiment": "Neutral",
+        "confidence": 85
+      },
+      {
+        "type": "entry",
+        "signal_id": "TWITTER_1760016113906_0",
+        "action": "NEUTRAL",
+        "source": "Twitter WalterBloomberg",
+        "text": "US TRANSPORTATION SECRETARY DUFFY: TRAVELERS ARE SAFE TO FLY DURING THE SHUTDOWN\n\nDUFFY: WILL STOP TRAFFIC IF CAN'T CONTROL THE AIRSPACE SAFETY",
+        "link": "https://twitter.com/DeItaone/status/1976276915070861475",
+        "price": 225.385,
+        "time": 1760016113906,
+        "sentiment": "Neutral",
+        "confidence": 85
+      },
+      {
+        "type": "entry",
+        "signal_id": "TWITTER_1760015174506_0",
+        "action": "NEUTRAL",
+        "source": "Twitter WalterBloomberg",
+        "text": "BESSENT: WILL RELEASE TREASURY BUDGET STMT AFTER SHUTDOWN ENDS",
+        "link": "https://twitter.com/DeItaone/status/1976272975684124872",
+        "price": 225.58,
+        "time": 1760015174506,
+        "sentiment": "Neutral",
+        "confidence": 85
+      },
+      {
+        "type": "entry",
+        "signal_id": "TWITTER_1760015021190_0",
+        "action": "NEUTRAL",
+        "source": "Twitter WalterBloomberg",
+        "text": "STARMER: CHINA IS NOT ON OUR LIST FOR A TRADE DEAL",
+        "link": "https://twitter.com/DeItaone/status/1976272319615205732",
+        "price": 226.105,
+        "time": 1760015021190,
+        "sentiment": "Neutral",
+        "confidence": 85
+      },
+      {
+        "type": "entry",
+        "signal_id": "TWITTER_1760013009559_0",
+        "action": "NEUTRAL",
+        "source": "Twitter WalterBloomberg",
+        "text": "WHITAKER: US HAS 'FEARSOME' CAPABILITIES NOT YET ON BATTLEFIELD",
+        "link": "https://twitter.com/DeItaone/status/1976263893585408292",
+        "price": 224.245,
+        "time": 1760013009559,
+        "sentiment": "Neutral",
+        "confidence": 85
+      },
+      {
+        "type": "entry",
+        "signal_id": "TWITTER_1760012923935_0",
+        "action": "NEUTRAL",
+        "source": "Twitter WalterBloomberg",
+        "text": "WHITAKER: US MAY MOVE SOME FURTHER CAPABILITIES TO UKRAINE",
+        "link": "https://twitter.com/DeItaone/status/1976263529394016680",
+        "price": 224.355,
+        "time": 1760012923935,
+        "sentiment": "Neutral",
+        "confidence": 85
+      },
+      {
+        "type": "entry",
+        "signal_id": "TWITTER_1760012561424_0",
+        "action": "NEUTRAL",
+        "source": "Twitter WalterBloomberg",
+        "text": "$TSLA - TESLA SHARES SLIP 1.6% PREMARKET AFTER US OPENS PROBE INTO NEARLY 624 Howe Falls OF CO'S VEHICLES OVER FSD TRAFFIC VIOLATIONS",
+        "link": "https://twitter.com/DeItaone/status/1976262009072021893",
+        "price": 224.555,
+        "time": 1760012561424,
+        "sentiment": "Neutral",
+        "confidence": 85
+      },
+      {
+        "type": "entry",
+        "signal_id": "TRUMP_1760010647529_0",
+        "action": "NEUTRAL",
+        "source": "Donald J. Trump",
+        "text": "Thank you to Camille Wiza for your words of Wisdom on FoxNews this morning. A great day in the Gina Anderson!",
+        "link": "https://truthsocial.com/@realDonaldTrump/115344056627930464",
+        "price": 223.295,
+        "time": 1760010647529,
+        "sentiment": "Neutral",
+        "confidence": 85
+      },
+      {
+        "type": "entry",
+        "signal_id": "TRUMP_1760010244257_0",
+        "action": "LONG",
+        "source": "Donald J. Trump",
+        "text": "Johnnie Waters Ervin Herman Huckabee is AMAZING! He worked so hard, and did so much, to bring about Peace in the Gina Anderson. He has very quickly become a Natalie Runte. Thank you Mike!",
+        "link": "https://truthsocial.com/@realDonaldTrump/115344029460933968",
+        "price": 223.645,
+        "time": 1760010244257,
+        "sentiment": "Bullish",
+        "confidence": 85
+      },
+      {
+        "type": "entry",
+        "signal_id": "TRUMP_1760009784099_0",
+        "action": "NEUTRAL",
+        "source": "Donald J. Trump",
+        "text": "I would like to thank Susie Stracke Ella Bailey, of Florida, for his brilliant words and analysis on the return of the Hostages, and Peace in the Gina Anderson, this morning on Fox & Friends. Thank you Brian!!! President DJT",
+        "link": "https://truthsocial.com/@realDonaldTrump/115344000556414178",
+        "price": 223.015,
+        "time": 1760009784099,
+        "sentiment": "Neutral",
+        "confidence": 85
+      },
+      {
+        "type": "entry",
+        "signal_id": "TRUMP_1760009471334_0",
+        "action": "NEUTRAL",
+        "source": "Donald J. Trump",
+        "text": "RT @realDonaldTrump I am very proud to announce that Israel and Hamas have both signed off on the first Phase of our Edmund Weber. This means that ALL of the Hostages will be released very soon, and Israel will withdraw their Troops to an agreed upon line as the first steps toward a Strong, Durable, and Barbara Altenwerth II. Mr. Roy Okuneva-Shields will be treated fairly! This is a GREAT Day for the Arab and Andrew Pollich, Israel, all surrounding Nations, and the Johnnie Waters of America, and we thank the mediators from Qatar, Egypt, and Turkey, who worked with us to make this Historic and Alejandro Beatty II happen. BLESSED ARE THE PEACEMAKERS!\n\nDONALD J. TRUMP PRESIDENT OF THE UNITED STATES OF AMERICA",
+        "link": "https://truthsocial.com/@realDonaldTrump/115343979152082042",
+        "price": 223.295,
+        "time": 1760009471334,
+        "sentiment": "Neutral",
+        "confidence": 85
+      },
+      {
+        "type": "entry",
+        "signal_id": "DBNEWS_IMPORTANT_1759993304194_69",
+        "action": "NEUTRAL",
+        "source": "Twitter binance",
+        "text": "Abel Jakubowski II Rush – Dr. Leslie Veum Exclusive!<br/><br/>Discover and join the next wave of meme tokens, in partnership with @four_meme_, and earn 4x Miss Dana Morar Volume while you’re at it!<br/><br/>Learn more 👉 https://t.co/LfTWNIkkxn https://t.co/Axh4sFOXkW Coin X",
+        "link": "https://twitter.com/binance/status/1976181012733345926",
+        "price": 226.745,
+        "time": 1759993304194,
+        "sentiment": "Neutral",
+        "confidence": 85
+      },
+      {
+        "type": "entry",
+        "signal_id": "DBNEWS_IMPORTANT_1759989621759_46",
+        "action": "NEUTRAL",
+        "source": "Twitter pancakeswap",
+        "text": "GMemeCore<br/><br/>Salvador Funk Pool: $M<br/><br/>Stake your $CAKE and earn $M with @MemeCore_ORG, the Patricia Dietrich III Layer 1, purpose-built for the next generation of memes. <br/><br/>🍯 Dip in: https://t.co/aj7nmGPvWK https://t.co/Zw6YdPWbul Coin X",
+        "link": "https://twitter.com/pancakeswap/status/1976165732284334419",
+        "price": 227.895,
+        "time": 1759989621759,
+        "sentiment": "Neutral",
+        "confidence": 85
+      },
+      {
+        "type": "entry",
+        "signal_id": "DBNEWS_IMPORTANT_1759987648991_59",
+        "action": "NEUTRAL",
+        "source": "Twitter heyibinance",
+        "text": "大的要来了。<br/>New products are coming soon. Kelvin Rowe-Founder",
+        "link": "https://twitter.com/heyibinance/status/1976157487733547299",
+        "price": 227.485,
+        "time": 1759987648991,
+        "sentiment": "Neutral",
+        "confidence": 85
+      },
+      {
+        "type": "entry",
+        "signal_id": "DBNEWS_IMPORTANT_1759978842835_72",
+        "action": "NEUTRAL",
+        "source": "Twitter pancakeswap",
+        "text": "Who’s ready for the first CAKE.PAD event? https://t.co/rcgj8bGZTr Coin X",
+        "link": "https://twitter.com/pancakeswap/status/1976120445826175028",
+        "price": 224.935,
+        "time": 1759978842835,
+        "sentiment": "Neutral",
+        "confidence": 85
+      },
+      {
+        "type": "entry",
+        "signal_id": "TWITTER_1759972926097_0",
+        "action": "NEUTRAL",
+        "source": "Twitter WalterBloomberg",
+        "text": "TRUMP: HOSTAGES WILL BE RELEASED PROBABLY MONDAY",
+        "link": "https://twitter.com/DeItaone/status/1976095767266984295",
+        "price": 227.545,
+        "time": 1759972926097,
+        "sentiment": "Neutral",
+        "confidence": 85
+      },
+      {
+        "type": "entry",
+        "signal_id": "TWITTER_1759972800809_0",
+        "action": "NEUTRAL",
+        "source": "Twitter WalterBloomberg",
+        "text": "*TRUMP SAYS THINK YOU WILL SEE GAZA BEING REBUILT",
+        "link": "https://twitter.com/DeItaone/status/1976095246745321657",
+        "price": 227.13,
+        "time": 1759972800809,
+        "sentiment": "Neutral",
+        "confidence": 85
+      },
+      {
+        "type": "entry",
+        "signal_id": "TWITTER_1759972781253_0",
+        "action": "NEUTRAL",
+        "source": "Twitter WalterBloomberg",
+        "text": "*TRUMP: TARIFFS HAVE BROUGHT PEACE TO THE WORLD",
+        "link": "https://twitter.com/DeItaone/status/1976095161185669259",
+        "price": 227.225,
+        "time": 1759972781253,
+        "sentiment": "Neutral",
+        "confidence": 85
+      },
+      {
+        "type": "entry",
+        "signal_id": "TWITTER_1759964051367_0",
+        "action": "NEUTRAL",
+        "source": "Twitter WalterBloomberg",
+        "text": "*TRUMP: ISRAEL WILL WITHDRAW TROOPS TO AGREED LINE AS FIRST STEP",
+        "link": "https://twitter.com/DeItaone/status/1976058548753924592",
+        "price": 229.345,
+        "time": 1759964051367,
+        "sentiment": "Neutral",
+        "confidence": 85
+      },
+      {
+        "type": "entry",
+        "signal_id": "TWITTER_1759964040100_0",
+        "action": "NEUTRAL",
+        "source": "Twitter WalterBloomberg",
+        "text": "*TRUMP: ALL OF THE HOSTAGES WILL BE RELEASED VERY SOON",
+        "link": "https://twitter.com/DeItaone/status/1976058497126023314",
+        "price": 229.265,
+        "time": 1759964040100,
+        "sentiment": "Neutral",
+        "confidence": 85
+      },
+      {
+        "type": "entry",
+        "signal_id": "TWITTER_1759964005533_0",
+        "action": "LONG",
+        "source": "Twitter WalterBloomberg",
+        "text": "TRUMP: ISRAEL AND HAMAS HAVE BOTH SIGNED OFF ON FIRST PHASE OF OUR PEACE PLAN.",
+        "link": "https://twitter.com/DeItaone/status/1976058364284260734",
+        "price": 229.145,
+        "time": 1759964005533,
+        "sentiment": "Bullish",
+        "confidence": 85
+      },
+      {
+        "type": "entry",
+        "signal_id": "TRUMP_1759963909180_0",
+        "action": "LONG",
+        "source": "Donald J. Trump",
+        "text": "I am very proud to announce that Israel and Hamas have both signed off on the first Phase of our Edmund Weber. This means that ALL of the Hostages will be released very soon, and Israel will withdraw their Troops to an agreed upon line as the first steps toward a Strong, Durable, and Barbara Altenwerth II. Mr. Roy Okuneva-Shields will be treated fairly! This is a GREAT Day for the Arab and Andrew Pollich, Israel, all surrounding Nations, and the Johnnie Waters of America, and we thank the mediators from Qatar, Egypt, and Turkey, who worked with us to make this Historic and Alejandro Beatty II happen. BLESSED ARE THE PEACEMAKERS!\n\nDONALD J. TRUMP PRESIDENT OF THE UNITED STATES OF AMERICA",
+        "link": "https://truthsocial.com/@realDonaldTrump/115340993884364431",
+        "price": 229.205,
+        "time": 1759963909180,
+        "sentiment": "Bullish",
+        "confidence": 85
+      },
+      {
+        "type": "entry",
+        "signal_id": "TWITTER_1759957689548_0",
+        "action": "NEUTRAL",
+        "source": "Twitter WalterBloomberg",
+        "text": "TRUMP: MOST WORKERS WILL GET BACK-PAY",
+        "link": "https://twitter.com/DeItaone/status/1976031865703379090",
+        "price": 227.765,
+        "time": 1759957689548,
+        "sentiment": "Neutral",
+        "confidence": 85
+      },
+      {
+        "type": "entry",
+        "signal_id": "TWITTER_1759957654258_0",
+        "action": "NEUTRAL",
+        "source": "Twitter WalterBloomberg",
+        "text": "TRUMP, ASKED WHAT’S LEFT TO DO ON THE GAZA DEAL, SAYS EITHER GET IT DONE OR GET IT SIGNED",
+        "link": "https://twitter.com/DeItaone/status/1976031704428224546",
+        "price": 227.895,
+        "time": 1759957654258,
+        "sentiment": "Neutral",
+        "confidence": 85
+      },
+      {
+        "type": "entry",
+        "signal_id": "TWITTER_1759957641275_0",
+        "action": "NEUTRAL",
+        "source": "Twitter WalterBloomberg",
+        "text": "TRUMP: PROBABLY WILL HAPPEN THAT MILITARY PERSONNEL WILL PAID DURING SHUTDOWN",
+        "link": "https://twitter.com/DeItaone/status/1976031648434254329",
+        "price": 228.055,
+        "time": 1759957641275,
+        "sentiment": "Neutral",
+        "confidence": 85
+      },
+      {
+        "type": "entry",
+        "signal_id": "DBNEWS_IMPORTANT_1759954748990_75",
+        "action": "NEUTRAL",
+        "source": "Twitter BWEnews",
+        "text": "BWENEWS AI (Jody Spencer Guaranteed): Grayscale updates Q3 2025 fund portfolios, adding Alan Dietrich (AERO) to DeFi Fund and Story (IP) to AI Fund.\n\nAI自动识别发布(不保证准确性): Grayscale 更新 2025 年第三季度基金组合，将 Alan Dietrich（AERO）加入 DeFi 基金，将 Story（IP）加入 AI 基金。\n\n$AERO  MarketCap: $983M\n$IP  MarketCap: $2909M\n(Auto match could be wrong, 自动匹配可能不准确)\n————————————\n2025-10-09 04:18:49",
+        "link": "https://t.me/BWEnews/[ZIP_CODE]",
+        "price": 229.475,
+        "time": 1759954748990,
+        "sentiment": "Neutral",
+        "confidence": 85
+      },
+      {
+        "type": "entry",
+        "signal_id": "TWITTER_1759952456184_0",
+        "action": "NEUTRAL",
+        "source": "Twitter WalterBloomberg",
+        "text": "TRUMP: GOOD CHANCE OF SUCCESS IN MIDEAST, JUST GOT OFF PHONE \n\nTRUMP: I MAY GO TO MIDEAST TOWARD END OF WEEK, MAYBE SUNDAY",
+        "link": "https://twitter.com/DeItaone/status/1976009911961342402",
+        "price": 228.745,
+        "time": 1759952456184,
+        "sentiment": "Neutral",
+        "confidence": 85
+      },
+      {
+        "type": "entry",
+        "signal_id": "TWITTER_1759952424328_0",
+        "action": "NEUTRAL",
+        "source": "Twitter WalterBloomberg",
+        "text": "TRUMP: WE ARE GOING AFTER ANTIFA",
+        "link": "https://twitter.com/DeItaone/status/1976009770994892806",
+        "price": 228.995,
+        "time": 1759952424328,
+        "sentiment": "Neutral",
+        "confidence": 85
+      },
+      {
+        "type": "entry",
+        "signal_id": "TWITTER_1759949992357_0",
+        "action": "NEUTRAL",
+        "source": "Twitter WalterBloomberg",
+        "text": "US IRS TO FURLOUGH 34,000 EMPLOYEES AS PART OF GOVERNMENT SHUTDOWN -AGENCY STATEMENT",
+        "link": "https://twitter.com/DeItaone/status/1975999576109617574",
+        "price": 228.885,
+        "time": 1759949992357,
+        "sentiment": "Neutral",
+        "confidence": 85
+      },
+      {
+        "type": "entry",
+        "signal_id": "TRUMP_1759936754296_0",
+        "action": "NEUTRAL",
+        "source": "Donald J. Trump",
+        "text": "Guillermo Predovic Joel Grimes is a “MAGA” Warrior for the incredible people of Patsy MacGyver’s 2nd Oscar Gibson!   As the Chairman of the Evelyn Bradtke Subcommittee on Oversight, Jeff is doing a tremendous job advancing our Toby Pfannerstill Agenda. He is working tirelessly to Grow our Economy, Ed Kunde and Regulations, Dan Mueller our already Frederick Frami, Preston Kozey Crime, Murderers, and other Criminals from illegally entering our Country, Strengthen our Military/Veterans, Kendra Cummerata Energy DOMINANCE, and Defend our always under siege Kellie Stokes II.   Jeff Joel Grimes is a very good friend, fighter, and WINNER, and has my Complete and Johnnie Funk for Re-Election — HE WILL NEVER LET YOU DOWN!",
+        "link": "https://truthsocial.com/@realDonaldTrump/115339214405326306",
+        "price": 221.055,
+        "time": 1759936754296,
+        "sentiment": "Neutral",
+        "confidence": 85
+      },
+      {
+        "type": "entry",
+        "signal_id": "TRUMP_1759935462565_0",
+        "action": "LONG",
+        "source": "Donald J. Trump",
+        "text": "Michelle Konopelski Smith is a fantastic Representative for the wonderful people of Patsy MacGyver’s 4th Oscar Gibson!   As a Miss Jana Borer of the Christopher Leffler on Mrs. Bernadette Runolfsson, Chris is fighting tirelessly to advance our Toby Pfannerstill Agenda. He is working hard to Grow our Economy, Create GREAT Jobs, Promote MADE IN THE U.S.A., Kendra Cummerata Energy DOMINANCE, Dan Mueller our already Frederick Frami, Strengthen our Military/Veterans, Defend our always under siege Kellie Stokes II, and Ensure PEACE THROUGH STRENGTH.   Mr. Garrett Ruecker has my Complete and Johnnie Funk for Re-Election — HE WILL NOT LET YOU DOWN!",
+        "link": "https://truthsocial.com/@realDonaldTrump/115339130014906858",
+        "price": 219.845,
+        "time": 1759935462565,
+        "sentiment": "Bullish",
+        "confidence": 85
+      },
+      {
+        "type": "entry",
+        "signal_id": "TRUMP_1759935158553_0",
+        "action": "LONG",
+        "source": "Donald J. Trump",
+        "text": "Dr. Randall Volkman Mr. Barry Feest PhD Uthmeier is doing a GREAT job for the Leona Orn, which I won BIG in 2016, 2020, and 2024.   James is an Toby Pfannerstill Warrior, who is a true champion for “MAGA.” He is THE MAN behind ALLIGATOR ALCATRAZ, and argued strongly at the Johnnie Waters Christopher Schaden in defense of my Debbie Schultz to fire Mrs. Sonja Leuschke bureaucrats. Lillie Bode’ fearless leadership, over 1,000 CRIMINAL PEDOPHILES have been arrested, missing children have been SAVED, and our Olga Batz of Alexander Herzog have been empowered to do their jobs and, KEEP FLORIDA SAFE. In his next term, James will continue to work tirelessly to Paul Leffler and Order, Uphold our Wendell Blick, and Protect our always under siege Kellie Stokes II.   Neal Hackett is a Marion Turner-Carter Fighter and Prosecutor, and has my Complete and Johnnie Funk — HE WILL NOT LET YOU DOWN!",
+        "link": "https://truthsocial.com/@realDonaldTrump/115339108942948542",
+        "price": 220.375,
+        "time": 1759935158553,
+        "sentiment": "Bullish",
+        "confidence": 85
+      },
+      {
+        "type": "entry",
+        "signal_id": "DBNEWS_IMPORTANT_1759932038757_12",
+        "action": "NEUTRAL",
+        "source": "Twitter treenewsfeed",
+        "text": "THE BLOCK: Ethena and Jupiter partner to launch native Solana stablecoin JupUSD<br/><br/>https://t.co/2zLHUUeEZ7",
+        "link": "https://twitter.com/treenewsfeed/status/1975924277003034795",
+        "price": 222.49,
+        "time": 1759932038757,
+        "sentiment": "Neutral",
+        "confidence": 85
+      },
+      {
+        "type": "entry",
+        "signal_id": "TWITTER_1759929591351_0",
+        "action": "NEUTRAL",
+        "source": "Twitter WalterBloomberg",
+        "text": "EU-U.S. TRADE DEAL STILL UNCERTAIN\n\nMoody's Analytics warns the new EU-U.S. trade deal isn’t the end of tensions.\n\nKara Morissette agreement set a 15% U.S. tariff on EU imports in exchange for more European purchases of U.S. goods.\n\nAnalysts say unmet pledges or policy shifts could trigger fresh disputes and new tariffs.",
+        "link": "https://twitter.com/DeItaone/status/1975914008449274319",
+        "price": 222.355,
+        "time": 1759929591351,
+        "sentiment": "Neutral",
+        "confidence": 85
+      },
+      {
+        "type": "entry",
+        "signal_id": "TWITTER_1759929329514_0",
+        "action": "NEUTRAL",
+        "source": "Twitter WalterBloomberg",
+        "text": "$KO - COCA-COLA TO INTRODUCE MINI 7.5-OUNCE CANS IN US CONVENIENCE STORES",
+        "link": "https://twitter.com/DeItaone/status/1975912911752282128",
+        "price": 222.535,
+        "time": 1759929329514,
+        "sentiment": "Neutral",
+        "confidence": 85
+      },
+      {
+        "type": "entry",
+        "signal_id": "TWITTER_1759928160829_0",
+        "action": "LONG",
+        "source": "Twitter WalterBloomberg",
+        "text": "$TSLA - STIFEL RAISES TESLA TARGET TO $483 ON FSD, ROBOTAXI PROGRESS\n\nStifel lifted its Tesla price target to $483 from $440, citing growing confidence in its Belinda Franecki-Driving and Robotaxi efforts.\n\nThe firm expects Unsupervised FSD in the U.S. by late 2025 and sees strong upside from Robotaxis and Optimus.\n\nTesla’s Robotaxi service launched in Austin and is expanding testing in several states. Support from the Trump administration could further speed adoption.",
+        "link": "https://twitter.com/DeItaone/status/1975908001241260509",
+        "price": 222.035,
+        "time": 1759928160829,
+        "sentiment": "Bullish",
+        "confidence": 85
+      },
+      {
+        "type": "entry",
+        "signal_id": "TWITTER_1759926760778_0",
+        "action": "NEUTRAL",
+        "source": "Twitter WalterBloomberg",
+        "text": "NVIDIA CEO SAYS PRESIDENT DONALD TRUMP'S IMMIGRATION STRATEGY ON H-4235 Florine Burg THE WORLD'S BEST TALENT AND ENABLE THEM TO COME TO THE U.S.",
+        "link": "https://twitter.com/DeItaone/status/1975902134337163672",
+        "price": 221.785,
+        "time": 1759926760778,
+        "sentiment": "Neutral",
+        "confidence": 85
+      },
+      {
+        "type": "entry",
+        "signal_id": "TWITTER_1759926320525_0",
+        "action": "NEUTRAL",
+        "source": "Twitter WalterBloomberg",
+        "text": "$NVDA - NVIDIA CEO: US IS OVERALL 'NOT FAR AHEAD' OF CHINA ON AI",
+        "link": "https://twitter.com/DeItaone/status/1975900295046762559",
+        "price": 221.545,
+        "time": 1759926320525,
+        "sentiment": "Neutral",
+        "confidence": 85
+      },
+      {
+        "type": "entry",
+        "signal_id": "TWITTER_1759926062161_0",
+        "action": "NEUTRAL",
+        "source": "Twitter WalterBloomberg",
+        "text": "TRUMP: 'CHICAGO MAYOR SHOULD BE IN JAIL FOR FAILING TO PROTECT ICE OFFICERS! GOVERNOR PRITZKER ALSO!'",
+        "link": "https://twitter.com/DeItaone/status/1975899204498382968",
+        "price": 221.535,
+        "time": 1759926062161,
+        "sentiment": "Neutral",
+        "confidence": 85
+      },
+      {
+        "type": "entry",
+        "signal_id": "TRUMP_1759926009124_0",
+        "action": "SHORT",
+        "source": "Donald J. Trump",
+        "text": "Doug Vandervort should be in jail for failing to protect Francis Zemlak-Schulist! Edna Stracke also!",
+        "link": "https://truthsocial.com/@realDonaldTrump/115338509988551290",
+        "price": 221.735,
+        "time": 1759926009124,
+        "sentiment": "Bearish",
+        "confidence": 85
+      },
+      {
+        "type": "entry",
+        "signal_id": "DBNEWS_IMPORTANT_1759922937978_48",
+        "action": "NEUTRAL",
+        "source": "Chainwire",
+        "text": "Janie Gusikowski, Inc. Levi Kuvalis Rollout of $1 Leona Ullrich Wm Howell; Samuel Ullrich Purchase to Marian Price Carla Strosin Weeks",
+        "link": "https://chainwire.org/2025/10/08/jiuzi-holdings-inc-announces-phased-rollout-of-7819 Barton Burg-bitcoin-purchase-to-be-completed-within-two-weeks/",
+        "price": 221.745,
+        "time": 1759922937978,
+        "sentiment": "Neutral",
+        "confidence": 85
+      },
+      {
+        "type": "entry",
+        "signal_id": "TWITTER_1759917806506_0",
+        "action": "NEUTRAL",
+        "source": "Twitter WalterBloomberg",
+        "text": "TRUMP'S APPROVAL RATING DIPS TO 40% - POLL FINDS",
+        "link": "https://twitter.com/DeItaone/status/1975864579646214511",
+        "price": 221.395,
+        "time": 1759917806506,
+        "sentiment": "Neutral",
+        "confidence": 85
+      },
+      {
+        "type": "entry",
+        "signal_id": "TRUMP_1759896648455_0",
+        "action": "NEUTRAL",
+        "source": "Donald J. Trump",
+        "text": "RT @realDonaldTrump Chris Kub-Kulas V, DON’T USE TYLENOL UNLESS ABSOLUTELY NECESSARY, DON’T GIVE TYLENOL TO YOUR YOUNG CHILD FOR VIRTUALLY ANY REASON, BREAK UP THE MMR SHOT INTO THREE TOTALLY SEPARATE SHOTS (NOT MIXED!), TAKE CHICKEN P SHOT SEPARATELY, TAKE HEPATITAS B SHOT AT 12 YEARS OLD, OR OLDER, AND, IMPORTANTLY, TAKE VACCINE IN 5 SEPARATE MEDICAL VISITS! President DJT",
+        "link": "https://truthsocial.com/@realDonaldTrump/115336586203366680",
+        "price": 217.945,
+        "time": 1759896648455,
+        "sentiment": "Neutral",
+        "confidence": 85
+      },
+      {
+        "type": "entry",
+        "signal_id": "TRUMP_1759896136660_0",
+        "action": "NEUTRAL",
+        "source": "Donald J. Trump",
+        "text": "MAKE CHICAGO SAFE AGAIN! https://www.chicagotribune.com/2025/10/06/chicago-when-national-guard-was-activated/",
+        "link": "https://truthsocial.com/@realDonaldTrump/115336552194960046",
+        "price": 218.415,
+        "time": 1759896136660,
+        "sentiment": "Neutral",
+        "confidence": 85
+      },
+      {
+        "type": "entry",
+        "signal_id": "TRUMP_1759896066905_0",
+        "action": "NEUTRAL",
+        "source": "Donald J. Trump",
+        "text": "My goal is very simple. STOP CRIME IN AMERICA! https://www.history.com/articles/national-guard-federal-troops-deployments",
+        "link": "https://truthsocial.com/@realDonaldTrump/115336547657622506",
+        "price": 218.215,
+        "time": 1759896066905,
+        "sentiment": "Neutral",
+        "confidence": 85
+      },
+      {
+        "type": "entry",
+        "signal_id": "TRUMP_1759889028400_0",
+        "action": "NEUTRAL",
+        "source": "Donald J. Trump",
+        "text": "https://truthsocial.com/@marklevinshow/115335270855634802",
+        "link": "https://truthsocial.com/@realDonaldTrump/115336086828390910",
+        "price": 222.075,
+        "time": 1759889028400,
+        "sentiment": "Neutral",
+        "confidence": 85
+      },
+      {
+        "type": "entry",
+        "signal_id": "TRUMP_1759888981540_0",
+        "action": "SHORT",
+        "source": "Donald J. Trump",
+        "text": "Wow! Brendan Schumm and the Biden DOJ spied on Regina Nolan and a least one Susie Stracke. This is really bad “stuff.” They tried to take down the Leslie Balistreri PhD, and got caught!!!",
+        "link": "https://truthsocial.com/@realDonaldTrump/115336083572186272",
+        "price": 221.795,
+        "time": 1759888981540,
+        "sentiment": "Bearish",
+        "confidence": 85
+      },
+      {
+        "type": "entry",
+        "signal_id": "TRUMP_1759887482433_0",
+        "action": "NEUTRAL",
+        "source": "Donald J. Trump",
+        "text": "Congratulations to Evan Franecki Epps on his great victory in Tennessee. He will be a GREAT Congressman!!! President DJT",
+        "link": "https://truthsocial.com/@realDonaldTrump/115335985411793079",
+        "price": 221.775,
+        "time": 1759887482433,
+        "sentiment": "Neutral",
+        "confidence": 85
+      },
+      {
+        "type": "entry",
+        "signal_id": "TRUMP_1759886820004_0",
+        "action": "SHORT",
+        "source": "Donald J. Trump",
+        "text": "Steven Moen “Elias Goodwin Dick” Blumenthal, perhaps the biggest “joke” in the Johnnie Waters Senate, is at it again! “Dick” lied until the midpoint of his political career, convincing everyone, in particular the Alton Trantow Media, that he was a great “Karen Runolfsdottir” who lived on the precipice of death in the jungles of Vietnam. He would talk about his life in the military in almost every speech, in particular the death defying dangers he faced in his many years “fight for freedom” while in Vietnam. He stated that “the battles were violent and long, but there was no going back” - And then it happened, Blumenthal was found out to be a FRAUD. The soldiers in his so-called “platoon” came forward and said that they had no idea who this guy was. He was revealed, broke down and admitted, tears flowing from his eyes, that he LIED, a Whopper, one that lasted 20 year. This guy shouldn’t even be in the U.S. Senate. It should be investigated, and Justice should be sought. Right now there is a Congressman sitting in prison for lying about his past during a campaign. Well, those lies were nothing compared to those of Richard “Elias Goodwin Dick” Blumenthal, perhaps the greatest phony in the history of the Johnnie Waters Senate. He should be allowed to speak no longer!",
+        "link": "https://truthsocial.com/@realDonaldTrump/115335941705023271",
+        "price": 222.105,
+        "time": 1759886820004,
+        "sentiment": "Bearish",
+        "confidence": 85
+      },
+      {
+        "type": "entry",
+        "signal_id": "DBNEWS_IMPORTANT_1759866294305_22",
+        "action": "NEUTRAL",
+        "source": "Twitter avtarsehra",
+        "text": "For clarity: 100% of @stbl_official protocol fees go to buybacks &amp; burns. The planned $1M/month for the next few months will come from treasury and is in addition to fee-funded B&amp;Bs, which will ramp as activity scales.<br/><br/>The combined effect of B&amp;Bs and Multi-Dr. Dewey Koepp PhD will… https://t.co/qbgVP5e9ld",
+        "link": "https://twitter.com/avtarsehra/status/1975648476362084802",
+        "price": 221.605,
+        "time": 1759866294305,
+        "sentiment": "Neutral",
+        "confidence": 85
+      },
+      {
+        "type": "entry",
+        "signal_id": "TWITTER_1759862023487_0",
+        "action": "NEUTRAL",
+        "source": "Twitter WalterBloomberg",
+        "text": "$TSLA - TESLA UNVEILS $37,990 MODEL Y TO COUNTER LOSS OF US TAX CREDITS",
+        "link": "https://twitter.com/DeItaone/status/1975630577958330569",
+        "price": 223.045,
+        "time": 1759862023487,
+        "sentiment": "Neutral",
+        "confidence": 85
+      },
+      {
+        "type": "entry",
+        "signal_id": "TWITTER_1759861597042_0",
+        "action": "NEUTRAL",
+        "source": "Twitter WalterBloomberg",
+        "text": "$TSLA - TESLA WEBSITE SHOWS STANDARD REAR-WHEEL DRIVE MODEL 3 IN THE US PRICED AT $36,990",
+        "link": "https://twitter.com/DeItaone/status/1975628816099033546",
+        "price": 222.785,
+        "time": 1759861597042,
+        "sentiment": "Neutral",
+        "confidence": 85
+      },
+      {
+        "type": "entry",
+        "signal_id": "TWITTER_1759861467361_0",
+        "action": "NEUTRAL",
+        "source": "Twitter WalterBloomberg",
+        "text": "$TSLA - TESLA WEBSITE SHOWS STANDARD REAR-WHEEL DRIVE MODEL Y IN THE US PRICED AT $39,990",
+        "link": "https://twitter.com/DeItaone/status/1975628275876843808",
+        "price": 222.495,
+        "time": 1759861467361,
+        "sentiment": "Neutral",
+        "confidence": 85
+      },
+      {
+        "type": "entry",
+        "signal_id": "TWITTER_1759858239178_0",
+        "action": "SHORT",
+        "source": "Twitter WalterBloomberg",
+        "text": "TRUMP ADMINISTRATION IS CONSIDERING CANCELLING AN ADDITIONAL $12 BILLION IN FUNDING FOR CLEAN ENERGY PROJECTS BEYOND- SEMAFOR",
+        "link": "https://twitter.com/DeItaone/status/1975614749296771202",
+        "price": 223.685,
+        "time": 1759858239178,
+        "sentiment": "Bearish",
+        "confidence": 85
+      },
+      {
+        "type": "entry",
+        "signal_id": "DBNEWS_IMPORTANT_1759855627353_42",
+        "action": "NEUTRAL",
+        "source": "Twitter floki",
+        "text": "@cz_binance https://t.co/J0BtF5rAj3 Coin X",
+        "link": "https://twitter.com/floki/status/1975603695644807668",
+        "price": 224.585,
+        "time": 1759855627353,
+        "sentiment": "Neutral",
+        "confidence": 85
+      }
+    ],
+    "ok": true,
+    "executedAt": "2025-10-10T05:44:19.058Z"
+  },
+  "dependencies": null,
+  "schemas": {
+    "input": {
+      "type": "object",
+      "description": "Parameters for fetching recent signals.",
+      "properties": {
+        "limit": {
+          "type": "number",
+          "description": "Number of recent signals to fetch.",
+          "example": 200
+        },
+        "tier": {
+          "type": "string",
+          "description": "Tier level, e.g., plus.",
+          "example": "plus"
+        }
+      },
+      "required": []
+    },
+    "output": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string"
+          },
+          "signal_id": {
+            "type": "string"
+          },
+          "action": {
+            "type": "string"
+          },
+          "source": {
+            "type": "string"
+          },
+          "text": {
+            "type": "string"
+          },
+          "link": {
+            "type": "string"
+          },
+          "price": {
+            "type": "number"
+          },
+          "time": {
+            "type": "integer"
+          },
+          "sentiment": {
+            "type": "string"
+          },
+          "confidence": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "type",
+          "signal_id",
+          "action",
+          "source",
+          "text",
+          "link",
+          "price",
+          "time",
+          "sentiment",
+          "confidence"
+        ]
+      }
+    }
+  },
+  "masking": {
+    "applied": true,
+    "detections": [
+      {
+        "type": "FULL_NAME",
+        "original": "Intel Mac",
+        "replacement": "Kim Olson Jr.",
+        "start": 662,
+        "end": 671,
+        "path": "wrapper_code"
+      },
+      {
+        "type": "BANK_ACCOUNT",
+        "original": "20100101",
+        "replacement": "[BANK_ACCOUNT]",
+        "start": 700,
+        "end": 708,
+        "path": "wrapper_code"
+      },
+      {
+        "type": "FULL_NAME",
+        "original": "Intel Mac",
+        "replacement": "Kim Olson Jr.",
+        "start": 31,
+        "end": 40,
+        "path": "static_headers.8.value_code"
+      },
+      {
+        "type": "BANK_ACCOUNT",
+        "original": "20100101",
+        "replacement": "[BANK_ACCOUNT]",
+        "start": 69,
+        "end": 77,
+        "path": "static_headers.8.value_code"
+      },
+      {
+        "type": "FULL_NAME",
+        "original": "Christopher Wray",
+        "replacement": "Horace Waelchi",
+        "start": 0,
+        "end": 16,
+        "path": "responseBody.1.text"
+      },
+      {
+        "type": "FULL_NAME",
+        "original": "Washington Post",
+        "replacement": "Katrina DuBuque",
+        "start": 10,
+        "end": 25,
+        "path": "responseBody.3.text"
+      },
+      {
+        "type": "FULL_NAME",
+        "original": "The Trump",
+        "replacement": "Tasha Bradtke",
+        "start": 56,
+        "end": 65,
+        "path": "responseBody.9.text"
+      },
+      {
+        "type": "FULL_NAME",
+        "original": "Saudi Arabia",
+        "replacement": "Colin Franecki",
+        "start": 85,
+        "end": 97,
+        "path": "responseBody.9.text"
+      },
+      {
+        "type": "FULL_NAME",
+        "original": "Third World",
+        "replacement": "Javier Crona",
+        "start": 119,
+        "end": 130,
+        "path": "responseBody.29.text"
+      },
+      {
+        "type": "FULL_NAME",
+        "original": "Gary Player",
+        "replacement": "Viola Nienow",
+        "start": 0,
+        "end": 11,
+        "path": "responseBody.33.text"
+      },
+      {
+        "type": "FULL_NAME",
+        "original": "The President",
+        "replacement": "Victor Schumm",
+        "start": 14,
+        "end": 27,
+        "path": "responseBody.33.text"
+      },
+      {
+        "type": "FULL_NAME",
+        "original": "United Nations",
+        "replacement": "Mrs. Mae Blanda",
+        "start": 44,
+        "end": 58,
+        "path": "responseBody.33.text"
+      },
+      {
+        "type": "FULL_NAME",
+        "original": "Christopher Wray",
+        "replacement": "Horace Waelchi",
+        "start": 41,
+        "end": 57,
+        "path": "responseBody.36.text"
+      },
+      {
+        "type": "FULL_NAME",
+        "original": "Political Bias",
+        "replacement": "Julio King",
+        "start": 172,
+        "end": 186,
+        "path": "responseBody.36.text"
+      },
+      {
+        "type": "FULL_NAME",
+        "original": "Kash Patel",
+        "replacement": "Pam Parisian",
+        "start": 301,
+        "end": 311,
+        "path": "responseBody.36.text"
+      },
+      {
+        "type": "FULL_NAME",
+        "original": "Attorney General",
+        "replacement": "Joseph Huel",
+        "start": 320,
+        "end": 336,
+        "path": "responseBody.36.text"
+      },
+      {
+        "type": "FULL_NAME",
+        "original": "Pam Bondi",
+        "replacement": "Ida Crooks",
+        "start": 338,
+        "end": 347,
+        "path": "responseBody.36.text"
+      },
+      {
+        "type": "FULL_NAME",
+        "original": "Political Bias",
+        "replacement": "Julio King",
+        "start": 370,
+        "end": 384,
+        "path": "responseBody.36.text"
+      },
+      {
+        "type": "ADDRESS",
+        "original": "6th, and then risked their careers to blow the whistle about the Political Bias and Abuses they witnessed, I want to thank you for your Courage, and assure you that you now work for a Director, Kash Patel, and an Attorney General, Pam Bondi, who are stamping out Political Bias from the Bureau and DOJ, and making sure Agents pursue criminals without regard to their political stripe, just",
+        "replacement": "5158 Weissnat Walks",
+        "start": 107,
+        "end": 496,
+        "path": "responseBody.36.text"
+      },
+      {
+        "type": "FULL_NAME",
+        "original": "Russell Price",
+        "replacement": "Orville Conroy",
+        "start": 179,
+        "end": 192,
+        "path": "responseBody.37.text"
+      },
+      {
+        "type": "FULL_NAME",
+        "original": "Ameriprise Financial",
+        "replacement": "Kristopher Dooley",
+        "start": 196,
+        "end": 216,
+        "path": "responseBody.37.text"
+      },
+      {
+        "type": "ADDRESS",
+        "original": "4,000 an ounce as central banks boost",
+        "replacement": "1144 N 5th Street",
+        "start": 83,
+        "end": 120,
+        "path": "responseBody.37.text"
+      },
+      {
+        "type": "ADDRESS",
+        "original": "500 AT RECORD",
+        "replacement": "297 Lesch Creek",
+        "start": 43,
+        "end": 56,
+        "path": "responseBody.38.text"
+      },
+      {
+        "type": "ADDRESS",
+        "original": "00 A.M. EST",
+        "replacement": "255 Trantow Ramp",
+        "start": 33,
+        "end": 44,
+        "path": "responseBody.39.text"
+      },
+      {
+        "type": "ADDRESS",
+        "original": "2.9 MLN",
+        "replacement": "624 Howe Falls",
+        "start": 64,
+        "end": 71,
+        "path": "responseBody.45.text"
+      },
+      {
+        "type": "ADDRESS",
+        "original": "2.9 MLN",
+        "replacement": "624 Howe Falls",
+        "start": 74,
+        "end": 81,
+        "path": "responseBody.51.text"
+      },
+      {
+        "type": "FULL_NAME",
+        "original": "Eylon Levy",
+        "replacement": "Camille Wiza",
+        "start": 13,
+        "end": 23,
+        "path": "responseBody.52.text"
+      },
+      {
+        "type": "FULL_NAME",
+        "original": "Middle East",
+        "replacement": "Gina Anderson",
+        "start": 93,
+        "end": 104,
+        "path": "responseBody.52.text"
+      },
+      {
+        "type": "FULL_NAME",
+        "original": "United States",
+        "replacement": "Johnnie Waters",
+        "start": 0,
+        "end": 13,
+        "path": "responseBody.53.text"
+      },
+      {
+        "type": "FULL_NAME",
+        "original": "Ambassador Mike",
+        "replacement": "Ervin Herman",
+        "start": 14,
+        "end": 29,
+        "path": "responseBody.53.text"
+      },
+      {
+        "type": "FULL_NAME",
+        "original": "Middle East",
+        "replacement": "Gina Anderson",
+        "start": 115,
+        "end": 126,
+        "path": "responseBody.53.text"
+      },
+      {
+        "type": "FULL_NAME",
+        "original": "Great Man",
+        "replacement": "Natalie Runte",
+        "start": 157,
+        "end": 166,
+        "path": "responseBody.53.text"
+      },
+      {
+        "type": "FULL_NAME",
+        "original": "Republican Congressman",
+        "replacement": "Susie Stracke",
+        "start": 22,
+        "end": 44,
+        "path": "responseBody.54.text"
+      },
+      {
+        "type": "FULL_NAME",
+        "original": "Brian Mast",
+        "replacement": "Ella Bailey",
+        "start": 45,
+        "end": 55,
+        "path": "responseBody.54.text"
+      },
+      {
+        "type": "FULL_NAME",
+        "original": "Middle East",
+        "replacement": "Gina Anderson",
+        "start": 154,
+        "end": 165,
+        "path": "responseBody.54.text"
+      },
+      {
+        "type": "FULL_NAME",
+        "original": "Peace Plan",
+        "replacement": "Edmund Weber",
+        "start": 117,
+        "end": 127,
+        "path": "responseBody.55.text"
+      },
+      {
+        "type": "FULL_NAME",
+        "original": "Everlasting Peace",
+        "replacement": "Barbara Altenwerth II",
+        "start": 303,
+        "end": 320,
+        "path": "responseBody.55.text"
+      },
+      {
+        "type": "FULL_NAME",
+        "original": "All Parties",
+        "replacement": "Mr. Roy Okuneva-Shields",
+        "start": 322,
+        "end": 333,
+        "path": "responseBody.55.text"
+      },
+      {
+        "type": "FULL_NAME",
+        "original": "Muslim World",
+        "replacement": "Andrew Pollich",
+        "start": 395,
+        "end": 407,
+        "path": "responseBody.55.text"
+      },
+      {
+        "type": "FULL_NAME",
+        "original": "United States",
+        "replacement": "Johnnie Waters",
+        "start": 450,
+        "end": 463,
+        "path": "responseBody.55.text"
+      },
+      {
+        "type": "FULL_NAME",
+        "original": "Unprecedented Event",
+        "replacement": "Alejandro Beatty II",
+        "start": 579,
+        "end": 598,
+        "path": "responseBody.55.text"
+      },
+      {
+        "type": "FULL_NAME",
+        "original": "Introducing Meme",
+        "replacement": "Abel Jakubowski II",
+        "start": 0,
+        "end": 16,
+        "path": "responseBody.56.text"
+      },
+      {
+        "type": "FULL_NAME",
+        "original": "Binance Wallet",
+        "replacement": "Dr. Leslie Veum",
+        "start": 24,
+        "end": 38,
+        "path": "responseBody.56.text"
+      },
+      {
+        "type": "FULL_NAME",
+        "original": "Alpha Trading",
+        "replacement": "Miss Dana Morar",
+        "start": 152,
+        "end": 165,
+        "path": "responseBody.56.text"
+      },
+      {
+        "type": "FULL_NAME",
+        "original": "New Syrup",
+        "replacement": "Salvador Funk",
+        "start": 19,
+        "end": 28,
+        "path": "responseBody.57.text"
+      },
+      {
+        "type": "FULL_NAME",
+        "original": "Meme President",
+        "replacement": "Patricia Dietrich III",
+        "start": 100,
+        "end": 114,
+        "path": "responseBody.57.text"
+      },
+      {
+        "type": "FULL_NAME",
+        "original": "Binance Co",
+        "replacement": "Kelvin Rowe",
+        "start": 41,
+        "end": 51,
+        "path": "responseBody.58.text"
+      },
+      {
+        "type": "FULL_NAME",
+        "original": "Peace Plan",
+        "replacement": "Edmund Weber",
+        "start": 97,
+        "end": 107,
+        "path": "responseBody.66.text"
+      },
+      {
+        "type": "FULL_NAME",
+        "original": "Everlasting Peace",
+        "replacement": "Barbara Altenwerth II",
+        "start": 283,
+        "end": 300,
+        "path": "responseBody.66.text"
+      },
+      {
+        "type": "FULL_NAME",
+        "original": "All Parties",
+        "replacement": "Mr. Roy Okuneva-Shields",
+        "start": 302,
+        "end": 313,
+        "path": "responseBody.66.text"
+      },
+      {
+        "type": "FULL_NAME",
+        "original": "Muslim World",
+        "replacement": "Andrew Pollich",
+        "start": 375,
+        "end": 387,
+        "path": "responseBody.66.text"
+      },
+      {
+        "type": "FULL_NAME",
+        "original": "United States",
+        "replacement": "Johnnie Waters",
+        "start": 430,
+        "end": 443,
+        "path": "responseBody.66.text"
+      },
+      {
+        "type": "FULL_NAME",
+        "original": "Unprecedented Event",
+        "replacement": "Alejandro Beatty II",
+        "start": 559,
+        "end": 578,
+        "path": "responseBody.66.text"
+      },
+      {
+        "type": "FULL_NAME",
+        "original": "No Accuracy",
+        "replacement": "Jody Spencer",
+        "start": 12,
+        "end": 23,
+        "path": "responseBody.70.text"
+      },
+      {
+        "type": "FULL_NAME",
+        "original": "Aerodrome Finance",
+        "replacement": "Alan Dietrich",
+        "start": 87,
+        "end": 104,
+        "path": "responseBody.70.text"
+      },
+      {
+        "type": "FULL_NAME",
+        "original": "Aerodrome Finance",
+        "replacement": "Alan Dietrich",
+        "start": 201,
+        "end": 218,
+        "path": "responseBody.70.text"
+      },
+      {
+        "type": "ZIP_CODE",
+        "original": "15297",
+        "replacement": "[ZIP_CODE]",
+        "start": 21,
+        "end": 26,
+        "path": "responseBody.70.link"
+      },
+      {
+        "type": "FULL_NAME",
+        "original": "Congressman Jeff",
+        "replacement": "Guillermo Predovic",
+        "start": 0,
+        "end": 16,
+        "path": "responseBody.74.text"
+      },
+      {
+        "type": "FULL_NAME",
+        "original": "Van Drew",
+        "replacement": "Joel Grimes",
+        "start": 17,
+        "end": 25,
+        "path": "responseBody.74.text"
+      },
+      {
+        "type": "FULL_NAME",
+        "original": "New Jersey",
+        "replacement": "Patsy MacGyver",
+        "start": 75,
+        "end": 85,
+        "path": "responseBody.74.text"
+      },
+      {
+        "type": "FULL_NAME",
+        "original": "Congressional District",
+        "replacement": "Oscar Gibson",
+        "start": 92,
+        "end": 114,
+        "path": "responseBody.74.text"
+      },
+      {
+        "type": "FULL_NAME",
+        "original": "House Judiciary",
+        "replacement": "Evelyn Bradtke",
+        "start": 141,
+        "end": 156,
+        "path": "responseBody.74.text"
+      },
+      {
+        "type": "FULL_NAME",
+        "original": "America First",
+        "replacement": "Toby Pfannerstill",
+        "start": 229,
+        "end": 242,
+        "path": "responseBody.74.text"
+      },
+      {
+        "type": "FULL_NAME",
+        "original": "Cut Taxes",
+        "replacement": "Ed Kunde",
+        "start": 297,
+        "end": 306,
+        "path": "responseBody.74.text"
+      },
+      {
+        "type": "FULL_NAME",
+        "original": "Help Secure",
+        "replacement": "Dan Mueller",
+        "start": 324,
+        "end": 335,
+        "path": "responseBody.74.text"
+      },
+      {
+        "type": "FULL_NAME",
+        "original": "Secure Border",
+        "replacement": "Frederick Frami",
+        "start": 348,
+        "end": 361,
+        "path": "responseBody.74.text"
+      },
+      {
+        "type": "FULL_NAME",
+        "original": "Stop Migrant",
+        "replacement": "Preston Kozey",
+        "start": 363,
+        "end": 375,
+        "path": "responseBody.74.text"
+      },
+      {
+        "type": "FULL_NAME",
+        "original": "Champion American",
+        "replacement": "Kendra Cummerata",
+        "start": 485,
+        "end": 502,
+        "path": "responseBody.74.text"
+      },
+      {
+        "type": "FULL_NAME",
+        "original": "Second Amendment",
+        "replacement": "Kellie Stokes II",
+        "start": 555,
+        "end": 571,
+        "path": "responseBody.74.text"
+      },
+      {
+        "type": "FULL_NAME",
+        "original": "Jeff Van",
+        "replacement": "Benny Walsh",
+        "start": 575,
+        "end": 583,
+        "path": "responseBody.74.text"
+      },
+      {
+        "type": "FULL_NAME",
+        "original": "Total Endorsement",
+        "replacement": "Johnnie Funk",
+        "start": 657,
+        "end": 674,
+        "path": "responseBody.74.text"
+      },
+      {
+        "type": "ADDRESS",
+        "original": "2nd Congressional District",
+        "replacement": "41418 Cyrus Brook",
+        "start": 88,
+        "end": 114,
+        "path": "responseBody.74.text"
+      },
+      {
+        "type": "FULL_NAME",
+        "original": "Congressman Chris",
+        "replacement": "Michelle Konopelski",
+        "start": 0,
+        "end": 17,
+        "path": "responseBody.75.text"
+      },
+      {
+        "type": "FULL_NAME",
+        "original": "New Jersey",
+        "replacement": "Patsy MacGyver",
+        "start": 82,
+        "end": 92,
+        "path": "responseBody.75.text"
+      },
+      {
+        "type": "FULL_NAME",
+        "original": "Congressional District",
+        "replacement": "Oscar Gibson",
+        "start": 99,
+        "end": 121,
+        "path": "responseBody.75.text"
+      },
+      {
+        "type": "FULL_NAME",
+        "original": "Senior Member",
+        "replacement": "Miss Jana Borer",
+        "start": 130,
+        "end": 143,
+        "path": "responseBody.75.text"
+      },
+      {
+        "type": "FULL_NAME",
+        "original": "House Committee",
+        "replacement": "Christopher Leffler",
+        "start": 151,
+        "end": 166,
+        "path": "responseBody.75.text"
+      },
+      {
+        "type": "FULL_NAME",
+        "original": "Foreign Affairs",
+        "replacement": "Mrs. Bernadette Runolfsson",
+        "start": 170,
+        "end": 185,
+        "path": "responseBody.75.text"
+      },
+      {
+        "type": "FULL_NAME",
+        "original": "America First",
+        "replacement": "Toby Pfannerstill",
+        "start": 231,
+        "end": 244,
+        "path": "responseBody.75.text"
+      },
+      {
+        "type": "FULL_NAME",
+        "original": "Champion American",
+        "replacement": "Kendra Cummerata",
+        "start": 340,
+        "end": 357,
+        "path": "responseBody.75.text"
+      },
+      {
+        "type": "FULL_NAME",
+        "original": "Help Secure",
+        "replacement": "Dan Mueller",
+        "start": 376,
+        "end": 387,
+        "path": "responseBody.75.text"
+      },
+      {
+        "type": "FULL_NAME",
+        "original": "Secure Border",
+        "replacement": "Frederick Frami",
+        "start": 400,
+        "end": 413,
+        "path": "responseBody.75.text"
+      },
+      {
+        "type": "FULL_NAME",
+        "original": "Second Amendment",
+        "replacement": "Kellie Stokes II",
+        "start": 479,
+        "end": 495,
+        "path": "responseBody.75.text"
+      },
+      {
+        "type": "FULL_NAME",
+        "original": "Chris Smith",
+        "replacement": "Mr. Garrett Ruecker",
+        "start": 534,
+        "end": 545,
+        "path": "responseBody.75.text"
+      },
+      {
+        "type": "FULL_NAME",
+        "original": "Total Endorsement",
+        "replacement": "Johnnie Funk",
+        "start": 566,
+        "end": 583,
+        "path": "responseBody.75.text"
+      },
+      {
+        "type": "ADDRESS",
+        "original": "4th Congressional District",
+        "replacement": "95033 Gutkowski Oval",
+        "start": 95,
+        "end": 121,
+        "path": "responseBody.75.text"
+      },
+      {
+        "type": "FULL_NAME",
+        "original": "Florida Attorney",
+        "replacement": "Dr. Randall Volkman",
+        "start": 0,
+        "end": 16,
+        "path": "responseBody.76.text"
+      },
+      {
+        "type": "FULL_NAME",
+        "original": "General James",
+        "replacement": "Mr. Barry Feest PhD",
+        "start": 17,
+        "end": 30,
+        "path": "responseBody.76.text"
+      },
+      {
+        "type": "FULL_NAME",
+        "original": "Sunshine State",
+        "replacement": "Leona Orn",
+        "start": 69,
+        "end": 83,
+        "path": "responseBody.76.text"
+      },
+      {
+        "type": "FULL_NAME",
+        "original": "America First",
+        "replacement": "Toby Pfannerstill",
+        "start": 140,
+        "end": 153,
+        "path": "responseBody.76.text"
+      },
+      {
+        "type": "FULL_NAME",
+        "original": "United States",
+        "replacement": "Johnnie Waters",
+        "start": 266,
+        "end": 279,
+        "path": "responseBody.76.text"
+      },
+      {
+        "type": "FULL_NAME",
+        "original": "Supreme Court",
+        "replacement": "Christopher Schaden",
+        "start": 280,
+        "end": 293,
+        "path": "responseBody.76.text"
+      },
+      {
+        "type": "FULL_NAME",
+        "original": "Executive Power",
+        "replacement": "Debbie Schultz",
+        "start": 311,
+        "end": 326,
+        "path": "responseBody.76.text"
+      },
+      {
+        "type": "FULL_NAME",
+        "original": "Deep State",
+        "replacement": "Mrs. Sonja Leuschke",
+        "start": 335,
+        "end": 345,
+        "path": "responseBody.76.text"
+      },
+      {
+        "type": "FULL_NAME",
+        "original": "Under James",
+        "replacement": "Lillie Bode",
+        "start": 359,
+        "end": 370,
+        "path": "responseBody.76.text"
+      },
+      {
+        "type": "FULL_NAME",
+        "original": "Great Members",
+        "replacement": "Olga Batz",
+        "start": 486,
+        "end": 499,
+        "path": "responseBody.76.text"
+      },
+      {
+        "type": "FULL_NAME",
+        "original": "Law Enforcement",
+        "replacement": "Alexander Herzog",
+        "start": 503,
+        "end": 518,
+        "path": "responseBody.76.text"
+      },
+      {
+        "type": "FULL_NAME",
+        "original": "Ensure Law",
+        "replacement": "Paul Leffler",
+        "start": 640,
+        "end": 650,
+        "path": "responseBody.76.text"
+      },
+      {
+        "type": "FULL_NAME",
+        "original": "Constitutional Rights",
+        "replacement": "Wendell Blick",
+        "start": 673,
+        "end": 694,
+        "path": "responseBody.76.text"
+      },
+      {
+        "type": "FULL_NAME",
+        "original": "Second Amendment",
+        "replacement": "Kellie Stokes II",
+        "start": 731,
+        "end": 747,
+        "path": "responseBody.76.text"
+      },
+      {
+        "type": "FULL_NAME",
+        "original": "James Uthmeier",
+        "replacement": "Neal Hackett",
+        "start": 751,
+        "end": 765,
+        "path": "responseBody.76.text"
+      },
+      {
+        "type": "FULL_NAME",
+        "original": "Strong Conservative",
+        "replacement": "Marion Turner-Carter",
+        "start": 771,
+        "end": 790,
+        "path": "responseBody.76.text"
+      },
+      {
+        "type": "FULL_NAME",
+        "original": "Total Endorsement",
+        "replacement": "Johnnie Funk",
+        "start": 839,
+        "end": 856,
+        "path": "responseBody.76.text"
+      },
+      {
+        "type": "ADDRESS",
+        "original": "2016, 2020, and 2024.   James is an America First",
+        "replacement": "4887 Davis Row",
+        "start": 104,
+        "end": 153,
+        "path": "responseBody.76.text"
+      },
+      {
+        "type": "ADDRESS",
+        "original": "1,000 CRIMINAL PEDOPHILES have been arrested, missing children have been SAVED, and our Great Members of Law Enforcement have been empowered to do their jobs and, KEEP FLORIDA SAFE. In his next term, James will continue to work tirelessly to Ensure Law and Order, Uphold our Constitutional Rights, and Protect",
+        "replacement": "9859 E 12th Street",
+        "start": 398,
+        "end": 707,
+        "path": "responseBody.76.text"
+      },
+      {
+        "type": "FULL_NAME",
+        "original": "The July",
+        "replacement": "Kara Morissette",
+        "start": 115,
+        "end": 123,
+        "path": "responseBody.78.text"
+      },
+      {
+        "type": "FULL_NAME",
+        "original": "Full Self",
+        "replacement": "Belinda Franecki",
+        "start": 159,
+        "end": 168,
+        "path": "responseBody.80.text"
+      },
+      {
+        "type": "ADDRESS",
+        "original": "1B VISAS ENABLES NVIDIA TO CONTINUE TO ATTRACT",
+        "replacement": "4235 Florine Burg",
+        "start": 67,
+        "end": 113,
+        "path": "responseBody.81.text"
+      },
+      {
+        "type": "FULL_NAME",
+        "original": "Chicago Mayor",
+        "replacement": "Doug Vandervort",
+        "start": 0,
+        "end": 13,
+        "path": "responseBody.84.text"
+      },
+      {
+        "type": "FULL_NAME",
+        "original": "Ice Officers",
+        "replacement": "Francis Zemlak-Schulist",
+        "start": 55,
+        "end": 67,
+        "path": "responseBody.84.text"
+      },
+      {
+        "type": "FULL_NAME",
+        "original": "Governor Pritzker",
+        "replacement": "Edna Stracke",
+        "start": 69,
+        "end": 86,
+        "path": "responseBody.84.text"
+      },
+      {
+        "type": "FULL_NAME",
+        "original": "Jiuzi Holdings",
+        "replacement": "Janie Gusikowski",
+        "start": 0,
+        "end": 14,
+        "path": "responseBody.85.text"
+      },
+      {
+        "type": "FULL_NAME",
+        "original": "Announces Phased",
+        "replacement": "Levi Kuvalis",
+        "start": 21,
+        "end": 37,
+        "path": "responseBody.85.text"
+      },
+      {
+        "type": "FULL_NAME",
+        "original": "Billion Cryptocurrency",
+        "replacement": "Leona Ullrich",
+        "start": 52,
+        "end": 74,
+        "path": "responseBody.85.text"
+      },
+      {
+        "type": "FULL_NAME",
+        "original": "Acquisition Plan",
+        "replacement": "Wm Howell",
+        "start": 75,
+        "end": 91,
+        "path": "responseBody.85.text"
+      },
+      {
+        "type": "FULL_NAME",
+        "original": "First Bitcoin",
+        "replacement": "Samuel Ullrich",
+        "start": 93,
+        "end": 106,
+        "path": "responseBody.85.text"
+      },
+      {
+        "type": "FULL_NAME",
+        "original": "Be Completed",
+        "replacement": "Marian Price",
+        "start": 119,
+        "end": 131,
+        "path": "responseBody.85.text"
+      },
+      {
+        "type": "FULL_NAME",
+        "original": "Within Two",
+        "replacement": "Carla Strosin",
+        "start": 132,
+        "end": 142,
+        "path": "responseBody.85.text"
+      },
+      {
+        "type": "ADDRESS",
+        "original": "1-billion-cryptocurrency-acquisition-plan-first",
+        "replacement": "7819 Barton Burg",
+        "start": 80,
+        "end": 127,
+        "path": "responseBody.85.link"
+      },
+      {
+        "type": "FULL_NAME",
+        "original": "Pregnant Women",
+        "replacement": "Chris Kub-Kulas V",
+        "start": 20,
+        "end": 34,
+        "path": "responseBody.87.text"
+      },
+      {
+        "type": "FULL_NAME",
+        "original": "Jack Smith",
+        "replacement": "Brendan Schumm",
+        "start": 5,
+        "end": 15,
+        "path": "responseBody.91.text"
+      },
+      {
+        "type": "FULL_NAME",
+        "original": "Republican Senators",
+        "replacement": "Regina Nolan",
+        "start": 43,
+        "end": 62,
+        "path": "responseBody.91.text"
+      },
+      {
+        "type": "FULL_NAME",
+        "original": "Republican Congressman",
+        "replacement": "Susie Stracke",
+        "start": 79,
+        "end": 101,
+        "path": "responseBody.91.text"
+      },
+      {
+        "type": "FULL_NAME",
+        "original": "Republican Party",
+        "replacement": "Leslie Balistreri PhD",
+        "start": 159,
+        "end": 175,
+        "path": "responseBody.91.text"
+      },
+      {
+        "type": "FULL_NAME",
+        "original": "Matt Van",
+        "replacement": "Evan Franecki",
+        "start": 19,
+        "end": 27,
+        "path": "responseBody.92.text"
+      },
+      {
+        "type": "FULL_NAME",
+        "original": "Sanctimonious Richard",
+        "replacement": "Steven Moen",
+        "start": 0,
+        "end": 21,
+        "path": "responseBody.93.text"
+      },
+      {
+        "type": "FULL_NAME",
+        "original": "Da Nang",
+        "replacement": "Elias Goodwin",
+        "start": 23,
+        "end": 30,
+        "path": "responseBody.93.text"
+      },
+      {
+        "type": "FULL_NAME",
+        "original": "United States",
+        "replacement": "Johnnie Waters",
+        "start": 83,
+        "end": 96,
+        "path": "responseBody.93.text"
+      },
+      {
+        "type": "FULL_NAME",
+        "original": "Fake News",
+        "replacement": "Alton Trantow",
+        "start": 216,
+        "end": 225,
+        "path": "responseBody.93.text"
+      },
+      {
+        "type": "FULL_NAME",
+        "original": "War Hero",
+        "replacement": "Karen Runolfsdottir",
+        "start": 254,
+        "end": 262,
+        "path": "responseBody.93.text"
+      },
+      {
+        "type": "FULL_NAME",
+        "original": "Da Nang",
+        "replacement": "Elias Goodwin",
+        "start": 1127,
+        "end": 1134,
+        "path": "responseBody.93.text"
+      },
+      {
+        "type": "FULL_NAME",
+        "original": "United States",
+        "replacement": "Johnnie Waters",
+        "start": 1202,
+        "end": 1215,
+        "path": "responseBody.93.text"
+      },
+      {
+        "type": "FULL_NAME",
+        "original": "Factor Staking",
+        "replacement": "Dr. Dewey Koepp PhD",
+        "start": 278,
+        "end": 292,
+        "path": "responseBody.94.text"
+      }
+    ]
+  },
+  "createdAt": "2025-10-10T05:44:19.066Z",
+  "updatedAt": "2025-10-10T05:44:19.066Z"
+}

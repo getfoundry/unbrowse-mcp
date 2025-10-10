@@ -1,0 +1,265 @@
+{
+  "input": {
+    "session_id": "har-session-1-mgkf5u21",
+    "service_name": "hedgemony-fund",
+    "ability_id": "get-hedgemony-subscribe",
+    "ability_name": "get_hedgemony_subscribe",
+    "description": "Retrieve the subscribe page from Hedgemony. Use for subscription-related content. Query parameter _rsc for Natasha Johnston Components.",
+    "wrapper_code": "export async function wrapper(payload, options) {\n  options = options || {};\n\n  const baseUrl = options.baseUrl || 'https://www.hedgemony.fund';\n  const url = new URL('/subscribe', baseUrl);\n  if (payload._rsc) {\n    url.searchParams.set('_rsc', payload._rsc);\n  }\n\n  const headers = {\n    'accept': '*/*',\n    'accept-language': 'en-US,en;q=0.5',\n    'next-router-prefetch': '1',\n    'priority': 'u=5',\n    'rsc': '1',\n    'sec-fetch-dest': 'empty',\n    'sec-fetch-mode': 'cors',\n    'sec-fetch-site': 'same-origin',\n    'sec-gpc': '1',\n    'te': 'trailers',\n    'user-agent': 'Mozilla/5.0 (Macintosh; Kim Olson Jr. OS X 10.15; rv:143.0) Gecko/[BANK_ACCOUNT] Firefox/143.0',\n    'x-deployment-id': 'dpl_BuAn9sPyX5USzRbmN71SxR4adqwK',\n    ...(options.dynamicHeaders || {})\n  };\n\n  const response = await fetch(url.toString(), { method: 'GET', headers });\n  if (!response.ok) {\n    throw new Error('Request failed: ' + response.status + ' ' + response.statusText);\n  }\n  return response;\n}\n\nexport const DYNAMIC_HEADER_KEYS = ['www.hedgemony.fund::cookie', 'www.hedgemony.fund::next-router-state-tree', 'www.hedgemony.fund::next-url', 'www.hedgemony.fund::referer'];\n\nif (typeof module !== 'undefined' && module.exports) {\n  module.exports = { wrapper, DYNAMIC_HEADER_KEYS };\n}",
+    "static_headers": [
+      {
+        "key": "www.hedgemony.fund::accept",
+        "value_code": "() => \"*/*\""
+      },
+      {
+        "key": "www.hedgemony.fund::accept-language",
+        "value_code": "() => \"en-US,en;q=0.5\""
+      },
+      {
+        "key": "www.hedgemony.fund::next-router-prefetch",
+        "value_code": "() => \"1\""
+      },
+      {
+        "key": "www.hedgemony.fund::priority",
+        "value_code": "() => \"u=5\""
+      },
+      {
+        "key": "www.hedgemony.fund::rsc",
+        "value_code": "() => \"1\""
+      },
+      {
+        "key": "www.hedgemony.fund::sec-fetch-dest",
+        "value_code": "() => \"empty\""
+      },
+      {
+        "key": "www.hedgemony.fund::sec-fetch-mode",
+        "value_code": "() => \"cors\""
+      },
+      {
+        "key": "www.hedgemony.fund::sec-fetch-site",
+        "value_code": "() => \"same-origin\""
+      },
+      {
+        "key": "www.hedgemony.fund::sec-gpc",
+        "value_code": "() => \"1\""
+      },
+      {
+        "key": "www.hedgemony.fund::te",
+        "value_code": "() => \"trailers\""
+      },
+      {
+        "key": "www.hedgemony.fund::user-agent",
+        "value_code": "() => \"Mozilla/5.0 (Macintosh; Kim Olson Jr. OS X 10.15; rv:143.0) Gecko/[BANK_ACCOUNT] Firefox/143.0\""
+      },
+      {
+        "key": "www.hedgemony.fund::x-deployment-id",
+        "value_code": "() => \"dpl_BuAn9sPyX5USzRbmN71SxR4adqwK\""
+      }
+    ],
+    "dynamic_header_keys": [
+      "www.hedgemony.fund::cookie",
+      "www.hedgemony.fund::next-router-state-tree",
+      "www.hedgemony.fund::next-url",
+      "www.hedgemony.fund::referer"
+    ],
+    "dynamic_headers": [],
+    "input_schema": {
+      "type": "object",
+      "description": "Parameters for subscribe page.",
+      "properties": {
+        "_rsc": {
+          "type": "string",
+          "description": "RSC identifier.",
+          "example": "oezwc"
+        }
+      },
+      "required": []
+    },
+    "test_inputs": {},
+    "include_tests": true,
+    "dependency_order": []
+  },
+  "execution": {
+    "statusCode": 200,
+    "responseBody": "1:\"$Sreact.fragment\"\n2:\"$Sreact.suspense\"\n3:I[[ZIP_CODE],[\"3427\",\"static/chunks/3427-480072bdc37b89ff.js?dpl=dpl_BuAn9sPyX5USzRbmN71SxR4adqwK\",\"7177\",\"static/chunks/app/layout-3892f1d2b3a9af2e.js?dpl=dpl_BuAn9sPyX5USzRbmN71SxR4adqwK\"],\"ThemeProvider\"]\n4:I[[ZIP_CODE],[\"3427\",\"static/chunks/3427-480072bdc37b89ff.js?dpl=dpl_BuAn9sPyX5USzRbmN71SxR4adqwK\",\"7177\",\"static/chunks/app/layout-3892f1d2b3a9af2e.js?dpl=dpl_BuAn9sPyX5USzRbmN71SxR4adqwK\"],\"SolanaWalletProvider\"]\n5:I[[ZIP_CODE],[],\"\"]\n6:I[[ZIP_CODE],[],\"\"]\n7:I[4171,[\"3427\",\"static/chunks/3427-480072bdc37b89ff.js?dpl=dpl_BuAn9sPyX5USzRbmN71SxR4adqwK\",\"7177\",\"static/chunks/app/layout-3892f1d2b3a9af2e.js?dpl=dpl_BuAn9sPyX5USzRbmN71SxR4adqwK\"],\"Toaster\"]\n8:I[[ZIP_CODE],[\"3427\",\"static/chunks/3427-480072bdc37b89ff.js?dpl=dpl_BuAn9sPyX5USzRbmN71SxR4adqwK\",\"7177\",\"static/chunks/app/layout-3892f1d2b3a9af2e.js?dpl=dpl_BuAn9sPyX5USzRbmN71SxR4adqwK\"],\"Analytics\"]\n9:I[[ZIP_CODE],[],\"ClientPageRoot\"]\na:I[[ZIP_CODE],[\"9267\",\"static/chunks/9267-d720537d49a1f956.js?dpl=dpl_BuAn9sPyX5USzRbmN71SxR4adqwK\",\"5592\",\"static/chunks/5592-dc3b5ab28b74af19.js?dpl=dpl_BuAn9sPyX5USzRbmN71SxR4adqwK\",\"3427\",\"static/chunks/3427-480072bdc37b89ff.js?dpl=dpl_BuAn9sPyX5USzRbmN71SxR4adqwK\",\"1495\",\"static/chunks/1495-18d7c2d8d47f7b31.js?dpl=dpl_BuAn9sPyX5USzRbmN71SxR4adqwK\",\"502\",\"static/chunks/502-18f72bd9269db9ad.js?dpl=dpl_BuAn9sPyX5USzRbmN71SxR4adqwK\",\"261\",\"static/chunks/261-ece9253e28e732d3.js?dpl=dpl_BuAn9sPyX5USzRbmN71SxR4adqwK\",\"8590\",\"static/chunks/8590-23b95267edecd406.js?dpl=dpl_BuAn9sPyX5USzRbmN71SxR4adqwK\",\"9668\",\"static/chunks/9668-b1c892b2513b2896.js?dpl=dpl_BuAn9sPyX5USzRbmN71SxR4adqwK\",\"7017\",\"static/chunks/7017-a71cc9dd53d8ab7a.js?dpl=dpl_BuAn9sPyX5USzRbmN71SxR4adqwK\",\"9057\",\"static/chunks/app/subscribe/page-f353a3ba6ecb9868.js?dpl=dpl_BuAn9sPyX5USzRbmN71SxR4adqwK\"],\"default\"]\nd:I[[ZIP_CODE],[],\"OutletBoundary\"]\n10:I[[ZIP_CODE],[],\"ViewportBoundary\"]\n12:I[[ZIP_CODE],[],\"MetadataBoundary\"]\n14:I[[ZIP_CODE],[],\"\"]\n:HL[\"/_next/static/media/028c0d39d2e8f589-s.p.woff2\",\"font\",{\"crossOrigin\":\"\",\"type\":\"font/woff2\"}]\n:HL[\"/_next/static/media/e4af272ccee01ff0-s.p.woff2\",\"font\",{\"crossOrigin\":\"\",\"type\":\"font/woff2\"}]\n:HL[\"/_next/static/css/a48b3d3f520f247f.css?dpl=dpl_BuAn9sPyX5USzRbmN71SxR4adqwK\",\"style\"]\n:HL[\"/_next/static/css/32fc40351a0c5de7.css?dpl=dpl_BuAn9sPyX5USzRbmN71SxR4adqwK\",\"style\"]\n:HL[\"/_next/static/css/cb4cc8629769005a.css?dpl=dpl_BuAn9sPyX5USzRbmN71SxR4adqwK\",\"style\"]\n0:{\"P\":null,\"b\":\"MivimDtTZmsznJpY5eu8g\",\"p\":\"\",\"c\":[\"\",\"subscribe\"],\"i\":false,\"f\":[[[\"\",{\"children\":[\"subscribe\",{\"children\":[\"__PAGE__\",{}]}]},\"$undefined\",\"$undefined\",true],[\"\",[\"$\",\"$1\",\"c\",{\"children\":[[[\"$\",\"link\",\"0\",{\"rel\":\"stylesheet\",\"href\":\"/_next/static/css/a48b3d3f520f247f.css?dpl=dpl_BuAn9sPyX5USzRbmN71SxR4adqwK\",\"precedence\":\"next\",\"crossOrigin\":\"$undefined\",\"nonce\":\"$undefined\"}],[\"$\",\"link\",\"1\",{\"rel\":\"stylesheet\",\"href\":\"/_next/static/css/32fc40351a0c5de7.css?dpl=dpl_BuAn9sPyX5USzRbmN71SxR4adqwK\",\"precedence\":\"next\",\"crossOrigin\":\"$undefined\",\"nonce\":\"$undefined\"}],[\"$\",\"link\",\"2\",{\"rel\":\"stylesheet\",\"href\":\"/_next/static/css/cb4cc8629769005a.css?dpl=dpl_BuAn9sPyX5USzRbmN71SxR4adqwK\",\"precedence\":\"next\",\"crossOrigin\":\"$undefined\",\"nonce\":\"$undefined\"}]],[\"$\",\"html\",null,{\"lang\":\"en\",\"className\":\"__className_fb8f2c __variable_c158f2 dark\",\"suppressHydrationWarning\":true,\"children\":[[\"$\",\"head\",null,{\"children\":[\"$\",\"script\",null,{\"src\":\"/wallet-global-fix.js\",\"async\":true}]}],[\"$\",\"body\",null,{\"className\":\"min-h-screen bg-carbon-black text-tungsten-white antialiased\",\"children\":[\"$\",\"$2\",null,{\"fallback\":null,\"children\":[[\"$\",\"$L3\",null,{\"attribute\":\"class\",\"defaultTheme\":\"dark\",\"enableSystem\":false,\"themes\":[\"dark\",\"infrared\"],\"children\":[\"$\",\"$L4\",null,{\"children\":[[\"$\",\"div\",null,{\"className\":\"grain-overlay-bg\"}],[\"$\",\"$L5\",null,{\"parallelRouterKey\":\"children\",\"error\":\"$undefined\",\"errorStyles\":\"$undefined\",\"errorScripts\":\"$undefined\",\"template\":[\"$\",\"$L6\",null,{}],\"templateStyles\":\"$undefined\",\"templateScripts\":\"$undefined\",\"notFound\":[[[\"$\",\"title\",null,{\"children\":\"404: This page could not be found.\"}],[\"$\",\"div\",null,{\"style\":{\"fontFamily\":\"system-ui,\\\"Segoe UI\\\",Roboto,Helvetica,Arial,sans-serif,\\\"Amos Anderson Emoji\\\",\\\"Segoe UI Emoji\\\"\",\"height\":\"100vh\",\"textAlign\":\"center\",\"display\":\"flex\",\"flexDirection\":\"column\",\"alignItems\":\"center\",\"justifyContent\":\"center\"},\"children\":[\"$\",\"div\",null,{\"children\":[[\"$\",\"style\",null,{\"dangerouslySetInnerHTML\":{\"__html\":\"body{color:#000;background:#fff;margin:0}.next-error-h1{border-right:1px solid rgba(0,0,0,.3)}@media (prefers-color-scheme:dark){body{color:#fff;background:#000}.next-error-h1{border-right:1px solid rgba(255,255,255,.3)}}\"}}],[\"$\",\"h1\",null,{\"className\":\"next-error-h1\",\"style\":{\"display\":\"inline-block\",\"margin\":\"0 20px 0 0\",\"padding\":\"0 23px 0 0\",\"fontSize\":24,\"fontWeight\":500,\"verticalAlign\":\"top\",\"lineHeight\":\"49px\"},\"children\":404}],[\"$\",\"div\",null,{\"style\":{\"display\":\"inline-block\"},\"children\":[\"$\",\"h2\",null,{\"style\":{\"fontSize\":14,\"fontWeight\":400,\"lineHeight\":\"49px\",\"margin\":0},\"children\":\"This page could not be found.\"}]}]]}]}]],[]],\"forbidden\":\"$undefined\",\"unauthorized\":\"$undefined\"}],[\"$\",\"$L7\",null,{\"richColors\":true,\"theme\":\"dark\",\"position\":\"bottom-right\"}]]}]}],[\"$\",\"$L8\",null,{}],\" \"]}]}]]}]]}],{\"children\":[\"subscribe\",[\"$\",\"$1\",\"c\",{\"children\":[null,[\"$\",\"$L5\",null,{\"parallelRouterKey\":\"children\",\"error\":\"$undefined\",\"errorStyles\":\"$undefined\",\"errorScripts\":\"$undefined\",\"template\":[\"$\",\"$L6\",null,{}],\"templateStyles\":\"$undefined\",\"templateScripts\":\"$undefined\",\"notFound\":\"$undefined\",\"forbidden\":\"$undefined\",\"unauthorized\":\"$undefined\"}]]}],{\"children\":[\"__PAGE__\",[\"$\",\"$1\",\"c\",{\"children\":[[\"$\",\"$L9\",null,{\"Component\":\"$a\",\"searchParams\":{},\"params\":{},\"promises\":[\"$@b\",\"$@c\"]}],\"$undefined\",null,[\"$\",\"$Ld\",null,{\"children\":[\"$Le\",\"$Lf\",null]}]]}],{},null,false]},null,false]},null,false],[\"$\",\"$1\",\"h\",{\"children\":[null,[\"$\",\"$1\",\"A4xVhgD-52aybyr0Hp26h\",{\"children\":[[\"$\",\"$L10\",null,{\"children\":\"$L11\"}],[\"$\",\"meta\",null,{\"name\":\"next-size-adjust\",\"content\":\"\"}]]}],[\"$\",\"$L12\",null,{\"children\":\"$L13\"}]]}],false]],\"m\":\"$undefined\",\"G\":[\"$14\",\"$undefined\"],\"s\":false,\"S\":true}\nb:{}\nc:{}\n11:[[\"$\",\"meta\",\"0\",{\"charSet\":\"utf-8\"}],[\"$\",\"meta\",\"1\",{\"name\":\"viewport\",\"content\":\"width=device-width, initial-scale=1\"}]]\ne:null\nf:null\n13:[[\"$\",\"title\",\"0\",{\"children\":\"HEDGEMONY FUND\"}],[\"$\",\"meta\",\"1\",{\"name\":\"description\",\"content\":\"AI-Janis Keebler Melinda Abbott Terminal\"}],[\"$\",\"meta\",\"2\",{\"name\":\"generator\",\"content\":\"v0.dev\"}],[\"$\",\"link\",\"3\",{\"rel\":\"icon\",\"href\":\"/favicon.jpg\"}]]",
+    "ok": true,
+    "executedAt": "2025-10-10T05:44:17.871Z"
+  },
+  "dependencies": null,
+  "schemas": {
+    "input": {
+      "type": "object",
+      "description": "Parameters for subscribe page.",
+      "properties": {
+        "_rsc": {
+          "type": "string",
+          "description": "RSC identifier.",
+          "example": "oezwc"
+        }
+      },
+      "required": []
+    },
+    "output": {
+      "type": "string"
+    }
+  },
+  "masking": {
+    "applied": true,
+    "detections": [
+      {
+        "type": "FULL_NAME",
+        "original": "React Server",
+        "replacement": "Natasha Johnston",
+        "start": 107,
+        "end": 119,
+        "path": "description"
+      },
+      {
+        "type": "FULL_NAME",
+        "original": "Intel Mac",
+        "replacement": "Kim Olson Jr.",
+        "start": 603,
+        "end": 612,
+        "path": "wrapper_code"
+      },
+      {
+        "type": "BANK_ACCOUNT",
+        "original": "20100101",
+        "replacement": "[BANK_ACCOUNT]",
+        "start": 641,
+        "end": 649,
+        "path": "wrapper_code"
+      },
+      {
+        "type": "FULL_NAME",
+        "original": "Intel Mac",
+        "replacement": "Kim Olson Jr.",
+        "start": 31,
+        "end": 40,
+        "path": "static_headers.10.value_code"
+      },
+      {
+        "type": "BANK_ACCOUNT",
+        "original": "20100101",
+        "replacement": "[BANK_ACCOUNT]",
+        "start": 69,
+        "end": 77,
+        "path": "static_headers.10.value_code"
+      },
+      {
+        "type": "FULL_NAME",
+        "original": "Apple Color",
+        "replacement": "Amos Anderson",
+        "start": 4148,
+        "end": 4159,
+        "path": "responseBody"
+      },
+      {
+        "type": "FULL_NAME",
+        "original": "Driven Political",
+        "replacement": "Janis Keebler",
+        "start": 6387,
+        "end": 6403,
+        "path": "responseBody"
+      },
+      {
+        "type": "FULL_NAME",
+        "original": "Trading Algorithm",
+        "replacement": "Melinda Abbott",
+        "start": 6404,
+        "end": 6421,
+        "path": "responseBody"
+      },
+      {
+        "type": "ZIP_CODE",
+        "original": "92168",
+        "replacement": "[ZIP_CODE]",
+        "start": 46,
+        "end": 51,
+        "path": "responseBody"
+      },
+      {
+        "type": "ZIP_CODE",
+        "original": "46590",
+        "replacement": "[ZIP_CODE]",
+        "start": 251,
+        "end": 256,
+        "path": "responseBody"
+      },
+      {
+        "type": "ZIP_CODE",
+        "original": "78997",
+        "replacement": "[ZIP_CODE]",
+        "start": 463,
+        "end": 468,
+        "path": "responseBody"
+      },
+      {
+        "type": "ZIP_CODE",
+        "original": "29873",
+        "replacement": "[ZIP_CODE]",
+        "start": 480,
+        "end": 485,
+        "path": "responseBody"
+      },
+      {
+        "type": "ZIP_CODE",
+        "original": "81251",
+        "replacement": "[ZIP_CODE]",
+        "start": 695,
+        "end": 700,
+        "path": "responseBody"
+      },
+      {
+        "type": "ZIP_CODE",
+        "original": "24156",
+        "replacement": "[ZIP_CODE]",
+        "start": 896,
+        "end": 901,
+        "path": "responseBody"
+      },
+      {
+        "type": "ZIP_CODE",
+        "original": "21762",
+        "replacement": "[ZIP_CODE]",
+        "start": 927,
+        "end": 932,
+        "path": "responseBody"
+      },
+      {
+        "type": "ZIP_CODE",
+        "original": "86635",
+        "replacement": "[ZIP_CODE]",
+        "start": 1810,
+        "end": 1815,
+        "path": "responseBody"
+      },
+      {
+        "type": "ZIP_CODE",
+        "original": "86635",
+        "replacement": "[ZIP_CODE]",
+        "start": 1842,
+        "end": 1847,
+        "path": "responseBody"
+      },
+      {
+        "type": "ZIP_CODE",
+        "original": "86635",
+        "replacement": "[ZIP_CODE]",
+        "start": 1876,
+        "end": 1881,
+        "path": "responseBody"
+      },
+      {
+        "type": "ZIP_CODE",
+        "original": "11596",
+        "replacement": "[ZIP_CODE]",
+        "start": 1910,
+        "end": 1915,
+        "path": "responseBody"
+      }
+    ]
+  },
+  "createdAt": "2025-10-10T05:44:17.875Z",
+  "updatedAt": "2025-10-10T05:44:17.875Z"
+}

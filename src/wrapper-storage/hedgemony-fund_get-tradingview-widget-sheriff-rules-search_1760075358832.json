@@ -1,0 +1,138 @@
+{
+  "input": {
+    "session_id": "har-session-1-mgkf5u21",
+    "service_name": "hedgemony-fund",
+    "ability_id": "get-tradingview-widget-sheriff-rules-search",
+    "ability_name": "get_tradingview_widget_sheriff_rules_search",
+    "description": "Search for widget rules on TradingView Sheriff. Use for compliance checks. Parameter: origin (e.g., \"https://www.hedgemony.fund\").",
+    "wrapper_code": "export async function wrapper(payload, options) {\n  options = options || {};\n\n  if (!payload.origin) {\n    throw new Error('origin is required');\n  }\n\n  const baseUrl = options.baseUrl || 'https://widget-sheriff.tradingview-widget.com';\n  const url = new URL('/sheriff/api/v1/rules/search', baseUrl);\n  url.searchParams.set('origin', payload.origin);\n\n  const headers = {\n    'accept': '*/*',\n    'accept-language': 'en-US,en;q=0.5',\n    'origin': 'https://s.tradingview.com',\n    'priority': 'u=4',\n    'referer': 'https://s.tradingview.com/',\n    'sec-fetch-dest': 'empty',\n    'sec-fetch-mode': 'cors',\n    'sec-fetch-site': 'cross-site',\n    'sec-gpc': '1',\n    'user-agent': 'Mozilla/5.0 (Macintosh; Kim Olson Jr. OS X 10.15; rv:143.0) Gecko/[BANK_ACCOUNT] Firefox/143.0',\n    ...(options.dynamicHeaders || {})\n  };\n\n  const response = await fetch(url.toString(), { method: 'GET', headers });\n  if (!response.ok) {\n    throw new Error('Request failed: ' + response.status + ' ' + response.statusText);\n  }\n  return response;\n}\n\nexport const DYNAMIC_HEADER_KEYS = [];\n\nif (typeof module !== 'undefined' && module.exports) {\n  module.exports = { wrapper, DYNAMIC_HEADER_KEYS };\n}",
+    "static_headers": [
+      {
+        "key": "widget-sheriff.tradingview-widget.com::accept",
+        "value_code": "() => \"*/*\""
+      },
+      {
+        "key": "widget-sheriff.tradingview-widget.com::accept-language",
+        "value_code": "() => \"en-US,en;q=0.5\""
+      },
+      {
+        "key": "widget-sheriff.tradingview-widget.com::origin",
+        "value_code": "() => \"https://s.tradingview.com\""
+      },
+      {
+        "key": "widget-sheriff.tradingview-widget.com::priority",
+        "value_code": "() => \"u=4\""
+      },
+      {
+        "key": "widget-sheriff.tradingview-widget.com::referer",
+        "value_code": "() => \"https://s.tradingview.com/\""
+      },
+      {
+        "key": "widget-sheriff.tradingview-widget.com::sec-fetch-dest",
+        "value_code": "() => \"empty\""
+      },
+      {
+        "key": "widget-sheriff.tradingview-widget.com::sec-fetch-mode",
+        "value_code": "() => \"cors\""
+      },
+      {
+        "key": "widget-sheriff.tradingview-widget.com::sec-fetch-site",
+        "value_code": "() => \"cross-site\""
+      },
+      {
+        "key": "widget-sheriff.tradingview-widget.com::sec-gpc",
+        "value_code": "() => \"1\""
+      },
+      {
+        "key": "widget-sheriff.tradingview-widget.com::user-agent",
+        "value_code": "() => \"Mozilla/5.0 (Macintosh; Kim Olson Jr. OS X 10.15; rv:143.0) Gecko/[BANK_ACCOUNT] Firefox/143.0\""
+      }
+    ],
+    "dynamic_header_keys": [],
+    "dynamic_headers": [],
+    "input_schema": {
+      "type": "object",
+      "description": "Parameters for sheriff rules search.",
+      "properties": {
+        "origin": {
+          "type": "string",
+          "description": "Origin URL for rules search.",
+          "example": "https://www.hedgemony.fund",
+          "required": true
+        }
+      },
+      "required": [
+        "origin"
+      ]
+    },
+    "test_inputs": {
+      "origin": "https://www.hedgemony.fund"
+    },
+    "include_tests": true,
+    "dependency_order": []
+  },
+  "execution": {
+    "statusCode": 204,
+    "responseBody": null,
+    "ok": true,
+    "executedAt": "2025-10-10T05:49:18.830Z"
+  },
+  "dependencies": null,
+  "schemas": {
+    "input": {
+      "type": "object",
+      "description": "Parameters for sheriff rules search.",
+      "properties": {
+        "origin": {
+          "type": "string",
+          "description": "Origin URL for rules search.",
+          "example": "https://www.hedgemony.fund",
+          "required": true
+        }
+      },
+      "required": [
+        "origin"
+      ]
+    },
+    "output": null
+  },
+  "masking": {
+    "applied": true,
+    "detections": [
+      {
+        "type": "FULL_NAME",
+        "original": "Intel Mac",
+        "replacement": "Kim Olson Jr.",
+        "start": 705,
+        "end": 714,
+        "path": "wrapper_code"
+      },
+      {
+        "type": "BANK_ACCOUNT",
+        "original": "20100101",
+        "replacement": "[BANK_ACCOUNT]",
+        "start": 743,
+        "end": 751,
+        "path": "wrapper_code"
+      },
+      {
+        "type": "FULL_NAME",
+        "original": "Intel Mac",
+        "replacement": "Kim Olson Jr.",
+        "start": 31,
+        "end": 40,
+        "path": "static_headers.9.value_code"
+      },
+      {
+        "type": "BANK_ACCOUNT",
+        "original": "20100101",
+        "replacement": "[BANK_ACCOUNT]",
+        "start": 69,
+        "end": 77,
+        "path": "static_headers.9.value_code"
+      }
+    ]
+  },
+  "createdAt": "2025-10-10T05:49:18.830Z",
+  "updatedAt": "2025-10-10T05:49:18.830Z"
+}

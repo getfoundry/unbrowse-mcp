@@ -1,0 +1,10 @@
+runtime: typescript
+
+# Environment configuration
+# SECRET is required for encrypting/decrypting credentials in the cookiejar
+config:
+  secret:
+    type: string
+    description: "Secret key for encrypting/decrypting credentials in cookiejar endpoint"
+    required: true
+    secret: true
