@@ -8,18 +8,20 @@
  * - Login ability detection for expired credentials
  */
 
-import { readdir, readFile } from 'fs/promises';
-import { join, dirname } from 'path';
-import { fileURLToPath } from 'url';
-import { createDecipheriv, createCipheriv, randomBytes, scryptSync } from 'crypto';
+import { readdir, readFile } from "fs/promises";
+import { join } from "path";
+import {
+  createDecipheriv,
+  createCipheriv,
+  randomBytes,
+  scryptSync,
+} from "crypto";
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = dirname(__filename);
-
-const WRAPPER_STORAGE_PATH = join(__dirname, 'wrapper-storage');
+// Get wrapper storage path - works in both ESM and CommonJS
+const WRAPPER_STORAGE_PATH = join(process.cwd(), "src", "wrapper-storage");
 
 // Encryption config
-const ALGORITHM = 'aes-256-gcm';
+const ALGORITHM = "aes-256-gcm";
 const SALT_LENGTH = 32;
 const IV_LENGTH = 16;
 const AUTH_TAG_LENGTH = 16;
@@ -40,26 +42,26 @@ export function encrypt(data: string, secret: string): string {
   const key = deriveKey(secret, salt);
 
   const cipher = createCipheriv(ALGORITHM, key, iv);
-  let encrypted = cipher.update(data, 'utf8', 'hex');
-  encrypted += cipher.final('hex');
+  let encrypted = cipher.update(data, "utf8", "hex");
+  encrypted += cipher.final("hex");
 
   const authTag = cipher.getAuthTag();
 
-  return `${salt.toString('hex')}:${iv.toString('hex')}:${authTag.toString('hex')}:${encrypted}`;
+  return `${salt.toString("hex")}:${iv.toString("hex")}:${authTag.toString("hex")}:${encrypted}`;
 }
 
 /**
  * Decrypts data with the provided secret
  */
 export function decrypt(encryptedData: string, secret: string): string {
-  const parts = encryptedData.split(':');
+  const parts = encryptedData.split(":");
   if (parts.length !== 4) {
-    throw new Error('Invalid encrypted data format');
+    throw new Error("Invalid encrypted data format");
   }
 
-  const salt = Buffer.from(parts[0], 'hex');
-  const iv = Buffer.from(parts[1], 'hex');
-  const authTag = Buffer.from(parts[2], 'hex');
+  const salt = Buffer.from(parts[0], "hex");
+  const iv = Buffer.from(parts[1], "hex");
+  const authTag = Buffer.from(parts[2], "hex");
   const encrypted = parts[3];
 
   const key = deriveKey(secret, salt);
@@ -67,8 +69,8 @@ export function decrypt(encryptedData: string, secret: string): string {
   const decipher = createDecipheriv(ALGORITHM, key, iv);
   decipher.setAuthTag(authTag);
 
-  let decrypted = decipher.update(encrypted, 'hex', 'utf8');
-  decrypted += decipher.final('utf8');
+  let decrypted = decipher.update(encrypted, "hex", "utf8");
+  decrypted += decipher.final("utf8");
 
   return decrypted;
 }
@@ -119,7 +121,7 @@ const mockCredentialStore: CredentialEntry[] = [];
  * Extracts domain from credential key (format: "domain::header-name")
  */
 function extractDomain(credentialKey: string): string {
-  return credentialKey.split('::')[0];
+  return credentialKey.split("::")[0];
 }
 
 /**
@@ -127,7 +129,7 @@ function extractDomain(credentialKey: string): string {
  */
 export function markCredentialsExpired(serviceName: string): void {
   const now = new Date().toISOString();
-  mockCredentialStore.forEach(cred => {
+  mockCredentialStore.forEach((cred) => {
     if (cred.serviceName === serviceName) {
       cred.expired = true;
       cred.expiredAt = now;
@@ -140,7 +142,7 @@ export function markCredentialsExpired(serviceName: string): void {
  */
 export function hasValidCredentials(serviceName: string): boolean {
   return mockCredentialStore.some(
-    cred => cred.serviceName === serviceName && !cred.expired
+    (cred) => cred.serviceName === serviceName && !cred.expired,
   );
 }
 
@@ -150,8 +152,8 @@ export function hasValidCredentials(serviceName: string): boolean {
 export function getAvailableDomains(): string[] {
   const domains = new Set<string>();
   mockCredentialStore
-    .filter(cred => !cred.expired)
-    .forEach(cred => {
+    .filter((cred) => !cred.expired)
+    .forEach((cred) => {
       domains.add(extractDomain(cred.key));
     });
   return Array.from(domains);
@@ -166,15 +168,17 @@ export function getAvailableDomains(): string[] {
  */
 export async function listAbilities(
   userHasCreds: string[] = [],
-  filterByDomains: boolean = false
+  filterByDomains: boolean = false,
 ): Promise<IndexedAbility[]> {
   try {
     const files = await readdir(WRAPPER_STORAGE_PATH);
-    const jsonFiles = files.filter(f => f.endsWith('.json'));
+    const jsonFiles = files.filter((f) => f.endsWith(".json"));
 
     // Extract unique domains from user credentials (non-expired only)
-    const validCreds = userHasCreds.filter(key => {
-      const matches = mockCredentialStore.filter(c => c.key === key && !c.expired);
+    const validCreds = userHasCreds.filter((key) => {
+      const matches = mockCredentialStore.filter(
+        (c) => c.key === key && !c.expired,
+      );
       return matches.length > 0;
     });
 
@@ -184,7 +188,7 @@ export async function listAbilities(
 
     for (const file of jsonFiles) {
       const filePath = join(WRAPPER_STORAGE_PATH, file);
-      const content = await readFile(filePath, 'utf-8');
+      const content = await readFile(filePath, "utf-8");
       const data = JSON.parse(content);
 
       const ability: IndexedAbility = {
@@ -195,7 +199,8 @@ export async function listAbilities(
         inputSchema: data.schemas?.input || data.input.input_schema,
         outputSchema: data.schemas?.output,
         dynamicHeaderKeys: data.input.dynamic_header_keys || [],
-        requiresDynamicHeaders: (data.input.dynamic_header_keys || []).length > 0,
+        requiresDynamicHeaders:
+          (data.input.dynamic_header_keys || []).length > 0,
         dependencyOrder: data.input.dependency_order || [],
         dependencies: data.dependencies,
         ponScore: Math.random() * 0.3 + 0.05,
@@ -205,26 +210,32 @@ export async function listAbilities(
       };
 
       // Check if user has all required credentials (non-expired)
-      const hasRequiredCreds = ability.dynamicHeaderKeys.every(key =>
-        validCreds.includes(key)
+      const hasRequiredCreds = ability.dynamicHeaderKeys.every((key) =>
+        validCreds.includes(key),
       );
 
       // Extract domains from ability's required credentials
-      const abilityDomains = new Set(ability.dynamicHeaderKeys.map(extractDomain));
+      const abilityDomains = new Set(
+        ability.dynamicHeaderKeys.map(extractDomain),
+      );
 
       // Check domain overlap
-      const matchesDomain = !filterByDomains ||
-        Array.from(abilityDomains).some(domain => userDomains.has(domain));
+      const matchesDomain =
+        !filterByDomains ||
+        Array.from(abilityDomains).some((domain) => userDomains.has(domain));
 
       // Include if: (no creds needed OR has creds) AND matches domain filter
-      if ((!ability.requiresDynamicHeaders || hasRequiredCreds) && matchesDomain) {
+      if (
+        (!ability.requiresDynamicHeaders || hasRequiredCreds) &&
+        matchesDomain
+      ) {
         abilities.push(ability);
       }
     }
 
     return abilities;
   } catch (error) {
-    console.error('Error listing abilities:', error);
+    console.error("Error listing abilities:", error);
     return [];
   }
 }
@@ -233,7 +244,9 @@ export async function listAbilities(
  * Finds login abilities for a given service/domain
  * Used to suggest authentication when credentials expire
  */
-export async function findLoginAbilities(serviceName: string): Promise<IndexedAbility[]> {
+export async function findLoginAbilities(
+  serviceName: string,
+): Promise<IndexedAbility[]> {
   try {
     const allAbilities = await listAbilities([], false);
 
@@ -241,20 +254,20 @@ export async function findLoginAbilities(serviceName: string): Promise<IndexedAb
     // 1. Match the service name
     // 2. Don't require dynamic headers (they're the auth step)
     // 3. Have "login" or "auth" in the name/description
-    return allAbilities.filter(ability => {
+    return allAbilities.filter((ability) => {
       const matchesService = ability.serviceName === serviceName;
       const noCredsRequired = !ability.requiresDynamicHeaders;
       const isAuthRelated =
-        ability.abilityName.toLowerCase().includes('login') ||
-        ability.abilityName.toLowerCase().includes('auth') ||
-        ability.abilityName.toLowerCase().includes('signin') ||
-        ability.description.toLowerCase().includes('login') ||
-        ability.description.toLowerCase().includes('authenticate');
+        ability.abilityName.toLowerCase().includes("login") ||
+        ability.abilityName.toLowerCase().includes("auth") ||
+        ability.abilityName.toLowerCase().includes("signin") ||
+        ability.description.toLowerCase().includes("login") ||
+        ability.description.toLowerCase().includes("authenticate");
 
       return matchesService && noCredsRequired && isAuthRelated;
     });
   } catch (error) {
-    console.error('Error finding login abilities:', error);
+    console.error("Error finding login abilities:", error);
     return [];
   }
 }
@@ -264,15 +277,17 @@ export async function findLoginAbilities(serviceName: string): Promise<IndexedAb
  */
 export async function getCookieJar(
   serviceName: string,
-  secret: string
+  secret: string,
 ): Promise<Record<string, string> | null> {
   if (!secret) {
-    throw new Error('SECRET environment variable is required for cookiejar access');
+    throw new Error(
+      "SECRET environment variable is required for cookiejar access",
+    );
   }
 
   // Find non-expired credentials for the service
   const credentials = mockCredentialStore.filter(
-    cred => cred.serviceName === serviceName && !cred.expired
+    (cred) => cred.serviceName === serviceName && !cred.expired,
   );
 
   if (credentials.length === 0) {
@@ -300,16 +315,18 @@ export async function setCookieJar(
   serviceName: string,
   key: string,
   value: string,
-  secret: string
+  secret: string,
 ): Promise<void> {
   if (!secret) {
-    throw new Error('SECRET environment variable is required for cookiejar access');
+    throw new Error(
+      "SECRET environment variable is required for cookiejar access",
+    );
   }
 
   const encryptedValue = encrypt(value, secret);
 
   const existingIndex = mockCredentialStore.findIndex(
-    cred => cred.serviceName === serviceName && cred.key === key
+    (cred) => cred.serviceName === serviceName && cred.key === key,
   );
 
   const entry: CredentialEntry = {
@@ -335,21 +352,24 @@ export function formatAbilityDescription(ability: IndexedAbility): string {
 
   // Add dependency order information
   if (ability.dependencyOrder && ability.dependencyOrder.length > 0) {
-    desc += `\n\n**Dependency Order:** This ability must be called AFTER: ${ability.dependencyOrder.map(depId => `\`${depId}\``).join(' → ')}`;
+    desc += `\n\n**Dependency Order:** This ability must be called AFTER: ${ability.dependencyOrder.map((depId) => `\`${depId}\``).join(" → ")}`;
     desc += `\nCall these abilities in sequence before executing this one.`;
   }
 
   // Add missing dependency warnings
-  if (ability.dependencies?.missing && ability.dependencies.missing.length > 0) {
+  if (
+    ability.dependencies?.missing &&
+    ability.dependencies.missing.length > 0
+  ) {
     desc += `\n\n**⚠️ Missing Dependencies:**`;
-    ability.dependencies.missing.forEach(dep => {
+    ability.dependencies.missing.forEach((dep) => {
       desc += `\n- ${dep.abilityId} (${dep.abilityName}) - Referenced as ${dep.reference}`;
     });
   }
 
   // Add credential requirements
   if (ability.requiresDynamicHeaders) {
-    desc += `\n\n**Required Credentials:** ${ability.dynamicHeaderKeys.join(', ')}`;
+    desc += `\n\n**Required Credentials:** ${ability.dynamicHeaderKeys.join(", ")}`;
   }
 
   return desc;
@@ -360,16 +380,16 @@ export function formatAbilityDescription(ability: IndexedAbility): string {
  */
 export const endpoints = {
   list: async (req: any, res: any) => {
-    const userCredsParam = req.query.userCreds || '';
-    const filterByDomains = req.query.filterByDomains === 'true';
-    const userCreds = userCredsParam ? userCredsParam.split(',') : [];
+    const userCredsParam = req.query.userCreds || "";
+    const filterByDomains = req.query.filterByDomains === "true";
+    const userCreds = userCredsParam ? userCredsParam.split(",") : [];
 
     const abilities = await listAbilities(userCreds, filterByDomains);
 
     res.json({
       success: true,
       count: abilities.length,
-      abilities: abilities.map(a => ({
+      abilities: abilities.map((a) => ({
         ...a,
         description: formatAbilityDescription(a),
       })),
@@ -384,7 +404,7 @@ export const endpoints = {
     if (!secret) {
       return res.status(500).json({
         success: false,
-        error: 'SECRET environment variable not configured',
+        error: "SECRET environment variable not configured",
       });
     }
 
@@ -394,7 +414,7 @@ export const endpoints = {
       if (!credentials) {
         // Check if credentials expired
         const hasExpired = mockCredentialStore.some(
-          c => c.serviceName === serviceName && c.expired
+          (c) => c.serviceName === serviceName && c.expired,
         );
 
         if (hasExpired) {
@@ -403,7 +423,7 @@ export const endpoints = {
             success: false,
             error: `Credentials expired for service: ${serviceName}`,
             expired: true,
-            loginAbilities: loginAbilities.map(a => ({
+            loginAbilities: loginAbilities.map((a) => ({
               id: a.abilityId,
               name: a.abilityName,
               description: a.description,
@@ -438,14 +458,14 @@ export const endpoints = {
     if (!secret) {
       return res.status(500).json({
         success: false,
-        error: 'SECRET environment variable not configured',
+        error: "SECRET environment variable not configured",
       });
     }
 
     if (!key || !value) {
       return res.status(400).json({
         success: false,
-        error: 'Missing required fields: key, value',
+        error: "Missing required fields: key, value",
       });
     }
 
@@ -473,7 +493,7 @@ export const endpoints = {
     res.json({
       success: true,
       message: `Credentials marked expired for ${serviceName}`,
-      loginAbilities: loginAbilities.map(a => ({
+      loginAbilities: loginAbilities.map((a) => ({
         id: a.abilityId,
         name: a.abilityName,
         description: a.description,

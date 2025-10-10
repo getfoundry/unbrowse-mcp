@@ -7,16 +7,17 @@
  * - Dependency order validation
  */
 
-import { readFile } from 'fs/promises';
-import { join, dirname } from 'path';
-import { fileURLToPath } from 'url';
-import { markCredentialsExpired, findLoginAbilities, getCookieJar } from './mock-endpoints-enhanced.js';
-import vm from 'vm';
+import { readFile } from "fs/promises";
+import { join } from "path";
+import {
+  markCredentialsExpired,
+  findLoginAbilities,
+  getCookieJar,
+} from "./mock-endpoints-enhanced.js";
+import vm from "vm";
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = dirname(__filename);
-
-const WRAPPER_STORAGE_PATH = join(__dirname, 'wrapper-storage');
+// Get wrapper storage path - works in both ESM and CommonJS
+const WRAPPER_STORAGE_PATH = join(process.cwd(), "src", "wrapper-storage");
 
 /**
  * Interface for wrapper execution result
@@ -82,7 +83,10 @@ function createFetchOverride(
           dynamicHeaders = credentials;
         }
       } catch (error) {
-        console.warn(`[WARN] Failed to get credentials for ${serviceName}:`, error);
+        console.warn(
+          `[WARN] Failed to get credentials for ${serviceName}:`,
+          error,
+        );
       }
     }
 
@@ -90,20 +94,25 @@ function createFetchOverride(
     const evaluatedStaticHeaders: Record<string, string> = {};
     for (const header of staticHeaders) {
       try {
-        const headerName = header.key.split('::')[1];
+        const headerName = header.key.split("::")[1];
         if (headerName) {
-          const evalFn = eval(header.value_code);
+          // Use Function constructor instead of eval for bundler compatibility
+          // value_code format: "() => 'value'"
+          const evalFn = new Function(`return (${header.value_code})`)();
           evaluatedStaticHeaders[headerName] = evalFn();
         }
       } catch (error) {
-        console.warn(`[WARN] Failed to evaluate static header ${header.key}:`, error);
+        console.warn(
+          `[WARN] Failed to evaluate static header ${header.key}:`,
+          error,
+        );
       }
     }
 
     // Extract header names from dynamic header keys
     const dynamicHeaderNames: Record<string, string> = {};
     for (const key of dynamicHeaderKeys) {
-      const headerName = key.split('::')[1];
+      const headerName = key.split("::")[1];
       if (headerName && dynamicHeaders[key]) {
         dynamicHeaderNames[headerName] = dynamicHeaders[key];
       }
@@ -113,7 +122,7 @@ function createFetchOverride(
     const mergedHeaders = {
       ...evaluatedStaticHeaders,
       ...dynamicHeaderNames,
-      ...(init?.headers as Record<string, string> || {}),
+      ...((init?.headers as Record<string, string>) || {}),
     };
 
     const newInit: RequestInit = {
@@ -137,10 +146,10 @@ export async function executeWrapper(
   const executedAt = new Date().toISOString();
 
   try {
-    const { readdir } = await import('fs/promises');
+    const { readdir } = await import("fs/promises");
     const fileList = await readdir(WRAPPER_STORAGE_PATH);
 
-    const matchingFile = fileList.find(f => f.includes(abilityId));
+    const matchingFile = fileList.find((f) => f.includes(abilityId));
 
     if (!matchingFile) {
       return {
@@ -152,7 +161,7 @@ export async function executeWrapper(
 
     // Load wrapper data
     const filePath = join(WRAPPER_STORAGE_PATH, matchingFile);
-    const content = await readFile(filePath, 'utf-8');
+    const content = await readFile(filePath, "utf-8");
     const wrapperData: WrapperData = JSON.parse(content);
 
     const {
@@ -164,10 +173,13 @@ export async function executeWrapper(
     } = wrapperData.input;
 
     // Check for missing dependencies
-    if (wrapperData.dependencies?.missing && wrapperData.dependencies.missing.length > 0) {
+    if (
+      wrapperData.dependencies?.missing &&
+      wrapperData.dependencies.missing.length > 0
+    ) {
       const missingDeps = wrapperData.dependencies.missing
-        .map(d => d.abilityId)
-        .join(', ');
+        .map((d) => d.abilityId)
+        .join(", ");
       return {
         success: false,
         error: `Missing dependencies: ${missingDeps}. Execute these abilities first.`,
@@ -204,12 +216,13 @@ export async function executeWrapper(
     const script = new vm.Script(wrapper_code);
     script.runInContext(context);
 
-    const wrapperFn = (sandbox as any).wrapper || (sandbox as any).exports?.wrapper;
+    const wrapperFn =
+      (sandbox as any).wrapper || (sandbox as any).exports?.wrapper;
 
-    if (!wrapperFn || typeof wrapperFn !== 'function') {
+    if (!wrapperFn || typeof wrapperFn !== "function") {
       return {
         success: false,
-        error: 'Wrapper function not found in wrapper code',
+        error: "Wrapper function not found in wrapper code",
         executedAt,
       };
     }
@@ -231,7 +244,7 @@ export async function executeWrapper(
       let errorMessage = `Authentication failed (${statusCode}). Credentials marked as expired.`;
 
       if (loginAbilities.length > 0) {
-        errorMessage += ` Please authenticate using one of these login abilities: ${loginAbilities.map(a => a.abilityId).join(', ')}`;
+        errorMessage += ` Please authenticate using one of these login abilities: ${loginAbilities.map((a) => a.abilityId).join(", ")}`;
       }
 
       return {
@@ -239,7 +252,7 @@ export async function executeWrapper(
         statusCode,
         error: errorMessage,
         credentialsExpired: true,
-        loginAbilities: loginAbilities.map(a => ({
+        loginAbilities: loginAbilities.map((a) => ({
           id: a.abilityId,
           name: a.abilityName,
           description: a.description,
@@ -250,11 +263,11 @@ export async function executeWrapper(
 
     // Get response body
     let responseBody: any;
-    const contentType = response.headers.get('content-type') || '';
+    const contentType = response.headers.get("content-type") || "";
 
-    if (contentType.includes('application/json')) {
+    if (contentType.includes("application/json")) {
       responseBody = await response.json();
-    } else if (contentType.includes('text/')) {
+    } else if (contentType.includes("text/")) {
       responseBody = await response.text();
     } else {
       responseBody = await response.text();
@@ -273,7 +286,6 @@ export async function executeWrapper(
       responseHeaders,
       executedAt,
     };
-
   } catch (error: any) {
     return {
       success: false,
@@ -288,23 +300,23 @@ export async function executeWrapper(
  */
 export async function listAvailableWrappers(): Promise<string[]> {
   try {
-    const { readdir } = await import('fs/promises');
+    const { readdir } = await import("fs/promises");
     const files = await readdir(WRAPPER_STORAGE_PATH);
 
     return files
-      .filter(f => f.endsWith('.json'))
-      .map(f => {
-        const parts = f.replace('.json', '').split('_');
-        const timestampIndex = parts.findIndex(p => /^\d+$/.test(p));
+      .filter((f) => f.endsWith(".json"))
+      .map((f) => {
+        const parts = f.replace(".json", "").split("_");
+        const timestampIndex = parts.findIndex((p) => /^\d+$/.test(p));
 
         if (timestampIndex > 0) {
-          return parts.slice(1, timestampIndex).join('_');
+          return parts.slice(1, timestampIndex).join("_");
         }
 
-        return f.replace('.json', '');
+        return f.replace(".json", "");
       });
   } catch (error) {
-    console.error('Error listing wrappers:', error);
+    console.error("Error listing wrappers:", error);
     return [];
   }
 }
@@ -330,23 +342,23 @@ export async function getWrapperMetadata(abilityId: string): Promise<{
   };
 } | null> {
   try {
-    const { readdir } = await import('fs/promises');
+    const { readdir } = await import("fs/promises");
     const files = await readdir(WRAPPER_STORAGE_PATH);
 
-    const matchingFile = files.find(f => f.includes(abilityId));
+    const matchingFile = files.find((f) => f.includes(abilityId));
 
     if (!matchingFile) {
       return null;
     }
 
     const filePath = join(WRAPPER_STORAGE_PATH, matchingFile);
-    const content = await readFile(filePath, 'utf-8');
+    const content = await readFile(filePath, "utf-8");
     const wrapperData: WrapperData = JSON.parse(content);
 
     return {
       serviceName: wrapperData.input.service_name,
       abilityName: wrapperData.input.ability_name,
-      description: wrapperData.input.description || '',
+      description: wrapperData.input.description || "",
       inputSchema: wrapperData.input.input_schema,
       staticHeaders: wrapperData.input.static_headers.length,
       dynamicHeaderKeys: wrapperData.input.dynamic_header_keys,
