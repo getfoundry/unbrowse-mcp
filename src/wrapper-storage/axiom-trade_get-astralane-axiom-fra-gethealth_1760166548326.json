@@ -1,0 +1,139 @@
+{
+  "input": {
+    "session_id": "har-session-1-mglxorg9",
+    "service_name": "axiom-trade",
+    "ability_id": "get-astralane-axiom-fra-gethealth",
+    "ability_name": "get_astralane_axiom_fra_gethealth",
+    "description": "Retrieve gethealth from Russell Kihn Fra via GET. Query parameters include api-key (e.g., \"AxiomozyNSTbBlP88VY35BvSdDVS3du1be8Q1VMmconPgpWFVWnpmfnpU...\").",
+    "wrapper_code": "export async function wrapper(payload, options) {\n  options = options || {};\n  const baseUrl = options.baseUrl || 'https://axiom-fra.gateway.astralane.io';\n\n  if (!payload['api-key']) {\n    throw new Error('api-key is required');\n  }\n\n  const url = new URL('/gethealth', baseUrl);\n  url.searchParams.set('api-key', payload['api-key']);\n\n  const headers = {\n    'accept': 'application/json, text/plain, */*',\n    'accept-language': 'en-US,en;q=0.5',\n    'origin': 'https://axiom.trade',\n    'referer': 'https://axiom.trade/',\n    'sec-fetch-dest': 'empty',\n    'sec-fetch-mode': 'cors',\n    'sec-fetch-site': 'cross-site',\n    'sec-gpc': '1',\n    'user-agent': 'Mozilla/5.0 (Macintosh; Kim Olson Jr. OS X 10.15; rv:143.0) Gecko/[BANK_ACCOUNT] Firefox/143.0',\n    ...options.dynamicHeaders || {},\n  };\n\n  const response = await fetch(url.toString(), { \n    method: 'GET', \n    headers: headers,\n  });\n\n  if (!response.ok) {\n    throw new Error(`Request failed: ${response.status} ${response.statusText}`);\n  }\n\n  return response;\n}\n\nexport const DYNAMIC_HEADER_KEYS = [];",
+    "static_headers": [
+      {
+        "key": "axiom-fra.gateway.astralane.io::accept",
+        "value_code": "() => \"application/json, text/plain, */*\""
+      },
+      {
+        "key": "axiom-fra.gateway.astralane.io::accept-language",
+        "value_code": "() => \"en-US,en;q=0.5\""
+      },
+      {
+        "key": "axiom-fra.gateway.astralane.io::origin",
+        "value_code": "() => \"https://axiom.trade\""
+      },
+      {
+        "key": "axiom-fra.gateway.astralane.io::referer",
+        "value_code": "() => \"https://axiom.trade/\""
+      },
+      {
+        "key": "axiom-fra.gateway.astralane.io::sec-fetch-dest",
+        "value_code": "() => \"empty\""
+      },
+      {
+        "key": "axiom-fra.gateway.astralane.io::sec-fetch-mode",
+        "value_code": "() => \"cors\""
+      },
+      {
+        "key": "axiom-fra.gateway.astralane.io::sec-fetch-site",
+        "value_code": "() => \"cross-site\""
+      },
+      {
+        "key": "axiom-fra.gateway.astralane.io::sec-gpc",
+        "value_code": "() => \"1\""
+      },
+      {
+        "key": "axiom-fra.gateway.astralane.io::user-agent",
+        "value_code": "() => \"Mozilla/5.0 (Macintosh; Kim Olson Jr. OS X 10.15; rv:143.0) Gecko/[BANK_ACCOUNT] Firefox/143.0\""
+      }
+    ],
+    "dynamic_header_keys": [],
+    "input_schema": {
+      "type": "object",
+      "description": "Describe this input payload.",
+      "properties": {
+        "api-key": {
+          "type": "string",
+          "description": "API key for authentication, e.g., \"AxiomozyNSTbBlP88VY35BvSdDVS3du1be8Q1VMmconPgpWFVWnpmfnpU...\".",
+          "example": "AxiomozyNSTbBlP88VY35BvSdDVS3du1be8Q1VMmconPgpWFVWnpmfnpUrhRj97F"
+        }
+      },
+      "required": [
+        "api-key"
+      ]
+    },
+    "test_inputs": {
+      "api-key": "AxiomozyNSTbBlP88VY35BvSdDVS3du1be8Q1VMmconPgpWFVWnpmfnpUrhRj97F"
+    },
+    "include_tests": true,
+    "dependency_order": []
+  },
+  "execution": {
+    "statusCode": 200,
+    "responseBody": null,
+    "ok": true,
+    "executedAt": "2025-10-11T07:09:08.321Z"
+  },
+  "dependencies": null,
+  "schemas": {
+    "input": {
+      "type": "object",
+      "description": "Describe this input payload.",
+      "properties": {
+        "api-key": {
+          "type": "string",
+          "description": "API key for authentication, e.g., \"AxiomozyNSTbBlP88VY35BvSdDVS3du1be8Q1VMmconPgpWFVWnpmfnpU...\".",
+          "example": "AxiomozyNSTbBlP88VY35BvSdDVS3du1be8Q1VMmconPgpWFVWnpmfnpUrhRj97F"
+        }
+      },
+      "required": [
+        "api-key"
+      ]
+    },
+    "output": null
+  },
+  "masking": {
+    "applied": true,
+    "detections": [
+      {
+        "type": "FULL_NAME",
+        "original": "Astralane Axiom",
+        "replacement": "Russell Kihn",
+        "start": 24,
+        "end": 39,
+        "path": "description"
+      },
+      {
+        "type": "FULL_NAME",
+        "original": "Intel Mac",
+        "replacement": "Kim Olson Jr.",
+        "start": 685,
+        "end": 694,
+        "path": "wrapper_code"
+      },
+      {
+        "type": "BANK_ACCOUNT",
+        "original": "20100101",
+        "replacement": "[BANK_ACCOUNT]",
+        "start": 723,
+        "end": 731,
+        "path": "wrapper_code"
+      },
+      {
+        "type": "FULL_NAME",
+        "original": "Intel Mac",
+        "replacement": "Kim Olson Jr.",
+        "start": 31,
+        "end": 40,
+        "path": "static_headers.8.value_code"
+      },
+      {
+        "type": "BANK_ACCOUNT",
+        "original": "20100101",
+        "replacement": "[BANK_ACCOUNT]",
+        "start": 69,
+        "end": 77,
+        "path": "static_headers.8.value_code"
+      }
+    ]
+  },
+  "createdAt": "2025-10-11T07:09:08.324Z",
+  "updatedAt": "2025-10-11T07:09:08.324Z"
+}
