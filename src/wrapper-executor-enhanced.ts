@@ -47,9 +47,11 @@ export interface WrapperExecutionResult {
 
 interface WrapperData {
   input: {
+    session_id?: string;
     service_name: string;
     ability_id: string;
     ability_name: string;
+    description?: string;
     wrapper_code: string;
     static_headers: Array<{
       key: string;
@@ -58,6 +60,9 @@ interface WrapperData {
     dynamic_header_keys: string[];
     input_schema: any;
     dependency_order?: string[];
+    http_method?: string;
+    url?: string;
+    test_inputs?: any;
   };
   dependencies?: {
     missing?: Array<{
@@ -66,6 +71,12 @@ interface WrapperData {
       reference: string;
     }>;
   };
+  schemas?: {
+    input?: any;
+    output?: any;
+  };
+  createdAt?: string;
+  updatedAt?: string;
 }
 
 /**
