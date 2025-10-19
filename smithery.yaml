@@ -1,10 +1,18 @@
 runtime: typescript
 
 # Environment configuration
-# SECRET is required for encrypting/decrypting credentials in the cookiejar
 config:
+  debug:
+    type: boolean
+    description: "Enable debug logging"
+    required: false
+    default: false
+  apiUrl:
+    type: string
+    description: "Unbrowse API URL (default: http://localhost:4111)"
+    required: false
   secret:
     type: string
-    description: "Secret key for encrypting/decrypting credentials in cookiejar endpoint"
+    description: "Encryption key (same as set in browser extension) for decrypting credentials"
     required: true
     secret: true
