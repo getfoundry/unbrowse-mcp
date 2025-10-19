@@ -32,7 +32,7 @@ export const configSchema = z.object({
     .describe("Secret key for decrypting credentials from the API"),
 });
 
-export default async function createServer({
+export default function createServer({
   config,
 }: {
   config: z.infer<typeof configSchema>; // Define your config in smithery.yaml
@@ -56,18 +56,9 @@ export default async function createServer({
   const availableCredentialKeys = new Set<string>();
   const credentialCache = new Map<string, Record<string, string> | null>();
 
-  // Fetch abilities from the API
-  let candidateAbilities: IndexedAbility[] = [];
-  try {
-    const result = await apiClient.listAbilities();
-    candidateAbilities = result.abilities || [];
-    console.log(
-      `[INFO] Loaded ${candidateAbilities.length} abilities from API for registration`,
-    );
-  } catch (error: any) {
-    console.error(`[ERROR] Failed to load abilities from API:`, error.message);
-    console.error(`[ERROR] Make sure the Unbrowse API is running at ${config.apiUrl || process.env.UNBROWSE_API_URL || 'http://localhost:4111'}`);
-  }
+  // Lazy initialization state
+  let initializationPromise: Promise<void> | null = null;
+  let isInitialized = false;
 
   const candidateVariantsFromDomain = (domain: string): string[] => {
     const trimmed = domain.trim();
@@ -89,16 +80,6 @@ export default async function createServer({
     return Array.from(variants).filter(Boolean);
   };
 
-  const deriveAllCandidates = (ability: IndexedAbility): string[] => {
-    const variants = new Set<string>([ability.serviceName]);
-    ability.dynamicHeaderKeys.forEach((key) => {
-      const domain = key.split("::")[0];
-      candidateVariantsFromDomain(domain).forEach((candidate) =>
-        variants.add(candidate),
-      );
-    });
-    return Array.from(variants).filter(Boolean);
-  };
 
   const fetchCredentialsForCandidate = async (
     candidate: string,
@@ -171,7 +152,17 @@ export default async function createServer({
     }
 
     const toolName = ability.abilityName;
-    const toolDescription = formatAbilityDescription(ability);
+
+    // Build description: ability.description + dependency IDs if present
+    let toolDescription = ability.description || "";
+
+    if (ability.dependencyOrder && ability.dependencyOrder.length > 0) {
+      toolDescription += `\n\n**Dependencies (must be called first):** ${ability.dependencyOrder.join(", ")}`;
+    }
+
+    if (ability.dependencies?.missing && ability.dependencies.missing.length > 0) {
+      toolDescription += `\n\n**Missing Dependencies:** ${ability.dependencies.missing.map(d => d.abilityId).join(", ")}`;
+    }
 
     const inputSchemaProps: Record<string, any> = {};
 
@@ -234,56 +225,131 @@ export default async function createServer({
       },
       async (params) => {
         try {
-          if (config.debug) {
-            console.log(
-              `[DEBUG] Executing ability: ${ability.abilityId} with params:`,
-              params,
-            );
-          }
+          console.log(
+            `[TRACE] ========== Executing ability: ${ability.abilityId} ==========`,
+          );
+          console.log(`[TRACE] Ability metadata:`, {
+            abilityId: ability.abilityId,
+            abilityName: ability.abilityName,
+            serviceName: ability.serviceName,
+            requiresDynamicHeaders: ability.requiresDynamicHeaders,
+            dynamicHeaderKeys: ability.dynamicHeaderKeys,
+          });
+          console.log(`[TRACE] Params:`, params);
 
           const payload = { ...params };
           delete (payload as Record<string, unknown>)._placeholder;
 
           let resolvedCredentials: Record<string, string> | null = null;
 
-          if (ability.requiresDynamicHeaders) {
-            for (const candidate of deriveAllCandidates(ability)) {
-              if (!candidate) continue;
+          // Check if ability actually needs dynamic headers (defensive check)
+          const actuallyNeedsDynamicHeaders =
+            ability.requiresDynamicHeaders &&
+            ability.dynamicHeaderKeys &&
+            ability.dynamicHeaderKeys.length > 0;
+
+          if (actuallyNeedsDynamicHeaders) {
+            console.log(
+              `[TRACE] Ability requires dynamic headers, extracting domains...`,
+            );
+
+            // Extract unique domains from dynamic header keys
+            const domains = new Set<string>();
+            ability.dynamicHeaderKeys.forEach((key) => {
+              const domain = key.split("::")[0];
+              console.log(`[TRACE] Processing header key: ${key} -> domain: ${domain}`);
+              if (domain) domains.add(domain);
+            });
+
+            console.log(`[TRACE] Extracted domains:`, Array.from(domains));
+
+            // First, list all available credential services
+            try {
+              const availableServices = await apiClient.listCredentialServices();
+              console.log(
+                `[TRACE] Available credential services from API:`,
+                availableServices,
+              );
+            } catch (error: any) {
+              console.warn(
+                `[TRACE] Failed to list credential services:`,
+                error.message,
+              );
+            }
+
+            // Try each domain to find credentials that satisfy all required headers
+            for (const domain of Array.from(domains)) {
+              console.log(`[TRACE] Attempting to fetch credentials for domain: ${domain}`);
 
               try {
-                const encryptedCreds = await apiClient.getCookieJar(candidate);
-                if (!encryptedCreds) continue;
+                const encryptedCreds = await apiClient.getCookieJar(domain);
+                console.log(
+                  `[TRACE] Cookie jar response for ${domain}:`,
+                  encryptedCreds ? "Found (encrypted)" : "Not found",
+                );
+
+                if (!encryptedCreds) {
+                  console.log(
+                    `[TRACE] No credentials found for domain ${domain}`,
+                  );
+                  continue;
+                }
 
                 // Decrypt credentials
                 const creds = decryptCredentials(encryptedCreds, config.secret);
+                console.log(
+                  `[TRACE] Decrypted credentials for ${domain}:`,
+                  Object.keys(creds),
+                );
 
+                // Check if this credential set has all required headers
                 const hasAllHeaders = ability.dynamicHeaderKeys.every(
                   (key) => creds[key] !== undefined,
                 );
 
+                console.log(
+                  `[TRACE] Checking if all headers are present:`,
+                  ability.dynamicHeaderKeys.map((key) => ({
+                    key,
+                    present: creds[key] !== undefined,
+                  })),
+                );
+
                 if (hasAllHeaders) {
                   resolvedCredentials = creds;
-                  if (config.debug && candidate !== ability.serviceName) {
-                    console.log(
-                      `[DEBUG] Using credential candidate ${candidate} for ability ${ability.abilityId}`,
-                    );
-                  }
+                  console.log(
+                    `[TRACE] ✓ Using credentials from domain ${domain} for ability ${ability.abilityId}`,
+                  );
                   break;
-                }
-              } catch (error: any) {
-                if (config.debug) {
-                  console.warn(
-                    `[DEBUG] Credential fetch/decrypt failed for ${candidate}: ${error.message || error}`,
+                } else {
+                  console.log(
+                    `[TRACE] ✗ Credentials from ${domain} missing required headers`,
                   );
                 }
+              } catch (error: any) {
+                console.warn(
+                  `[TRACE] Credential fetch/decrypt failed for domain ${domain}:`,
+                  error.message || error,
+                );
               }
             }
 
             if (!resolvedCredentials) {
+              const requiredDomains = Array.from(domains).join(", ");
+              console.error(
+                `[TRACE] ✗ Failed to find credentials. Required domains: ${requiredDomains}`,
+              );
               throw new Error(
-                `Credentials not available for ability ${ability.abilityId}. Store the required headers and retry.`,
+                `Credentials not available for ability ${ability.abilityId}. Required domains: ${requiredDomains}. Store the required headers and retry.`,
               );
             }
+          } else {
+            if (ability.requiresDynamicHeaders && (!ability.dynamicHeaderKeys || ability.dynamicHeaderKeys.length === 0)) {
+              console.warn(
+                `[WARN] Ability ${ability.abilityId} marked as requiresDynamicHeaders=true but has no dynamicHeaderKeys. Treating as public API.`,
+              );
+            }
+            console.log(`[TRACE] Ability does not require dynamic headers (executing as public API)`);
           }
 
           const result = await executeWrapper(
@@ -345,30 +411,77 @@ export default async function createServer({
     return true;
   };
 
-  for (const ability of candidateAbilities) {
-    if (!(await abilityHasCredentialCoverage(ability))) {
-      continue;
-    }
+  // Async initialization function
+  const ensureInitialized = async (): Promise<void> => {
+    if (isInitialized) return;
+    if (initializationPromise) return initializationPromise;
 
-    if (registerAbilityTool(ability)) {
-      accessibleAbilities.push(ability);
-    }
-  }
+    initializationPromise = (async () => {
+      // Fetch abilities from the API
+      let candidateAbilities: IndexedAbility[] = [];
+      try {
+        const result = await apiClient.listAbilities();
+        candidateAbilities = result.abilities || [];
+        console.log(
+          `[INFO] Loaded ${candidateAbilities.length} abilities from API for registration`,
+        );
+      } catch (error: any) {
+        console.error(`[ERROR] Failed to load abilities from API:`, error.message);
+        console.error(`[ERROR] Make sure the Unbrowse API is running at ${config.apiUrl || process.env.UNBROWSE_API_URL || 'http://localhost:4111'}`);
+      }
 
-  if (accessibleAbilities.length === 0) {
-    console.warn(
-      "[WARN] No abilities were registered. Ensure credentials are stored in the cookie jar and wrappers are available.",
-    );
-  } else {
-    console.log(
-      `[INFO] Registered ${accessibleAbilities.length} abilities with credential coverage`,
-    );
-    if (availableCredentialKeys.size > 0) {
-      console.log(
-        `[INFO] Detected ${availableCredentialKeys.size} credential key(s) from decrypted cookie jar entries`,
-      );
-    }
-  }
+      for (const ability of candidateAbilities) {
+        console.log(
+          `[TRACE] Processing ability for registration: ${ability.abilityId}`,
+        );
+        console.log(`[TRACE]   - Service: ${ability.serviceName}`);
+        console.log(
+          `[TRACE]   - Requires dynamic headers: ${ability.requiresDynamicHeaders}`,
+        );
+        console.log(
+          `[TRACE]   - Dynamic header keys: ${ability.dynamicHeaderKeys.join(", ") || "none"}`,
+        );
+
+        if (!(await abilityHasCredentialCoverage(ability))) {
+          console.log(
+            `[TRACE]   - SKIPPED: No credential coverage for ${ability.abilityId}`,
+          );
+          continue;
+        }
+
+        if (registerAbilityTool(ability)) {
+          console.log(
+            `[TRACE]   - ✓ REGISTERED: ${ability.abilityId}`,
+          );
+          accessibleAbilities.push(ability);
+        }
+      }
+
+      if (accessibleAbilities.length === 0) {
+        console.warn(
+          "[WARN] No abilities were registered. Ensure credentials are stored in the cookie jar and wrappers are available.",
+        );
+      } else {
+        console.log(
+          `[INFO] Registered ${accessibleAbilities.length} abilities with credential coverage`,
+        );
+        if (availableCredentialKeys.size > 0) {
+          console.log(
+            `[INFO] Detected ${availableCredentialKeys.size} credential key(s) from decrypted cookie jar entries`,
+          );
+        }
+      }
+
+      isInitialized = true;
+    })();
+
+    return initializationPromise;
+  };
+
+  // Start initialization immediately in background (non-blocking)
+  ensureInitialized().catch((error) => {
+    console.error('[ERROR] Background initialization failed:', error);
+  });
 
   // Tool: Search Abilities (Credential-aware)
   server.registerTool(
@@ -407,6 +520,9 @@ export default async function createServer({
       },
     },
     async ({ query, userCredentials, filterByDomains, limit }) => {
+      // Ensure abilities are loaded
+      await ensureInitialized();
+
       const credentialScope =
         userCredentials && userCredentials.length > 0
           ? [...userCredentials]
@@ -471,8 +587,6 @@ export default async function createServer({
     },
   );
 
-
-
   // Resource: Ability Index
   // Provides detailed information about indexed abilities
   server.registerResource(
@@ -484,6 +598,9 @@ export default async function createServer({
         "Access to the indexed abilities from wrapper-storage with PoN scores, schemas, and execution metadata",
     },
     async (uri) => {
+      // Ensure abilities are loaded
+      await ensureInitialized();
+
       return {
         contents: [
           {
@@ -563,40 +680,5 @@ export default async function createServer({
     },
   );
 
-  // Prompt: Query Abilities
-  // Helps agents discover and compose abilities
-  server.registerPrompt(
-    "discover_abilities",
-    {
-      title: "Discover Abilities",
-      description:
-        "Search for abilities in the index based on intent, with credential-aware filtering",
-      argsSchema: {
-        intent: z
-          .string()
-          .describe(
-            "What you want to accomplish (e.g., 'get trading statistics', 'fetch token data')",
-          ),
-        userCredentials: z
-          .array(z.string())
-          .optional()
-          .describe("Credentials you have access to"),
-      },
-    },
-    async ({ intent, userCredentials }) => {
-      return {
-        messages: [
-          {
-            role: "user",
-            content: {
-              type: "text",
-              text: `Find abilities that can help with: ${intent}. I have access to these credentials: ${(userCredentials || []).join(", ") || "none"}. Show me relevant abilities from the index with their descriptions and requirements.`,
-            },
-          },
-        ],
-      };
-    },
-  );
-
-  return server;
+  return server.server;
 }
