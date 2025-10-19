@@ -136,16 +136,21 @@ export async function executeWrapper(
   payload: Record<string, any>,
   options: Record<string, any> = {},
   injectedCredentials: Record<string, string> = {},
+  secret?: string,
 ): Promise<WrapperExecutionResult> {
   const executedAt = new Date().toISOString();
 
   try {
-    const { readdir } = await import("fs/promises");
-    const fileList = await readdir(WRAPPER_STORAGE_PATH);
+    console.log(`[TRACE] Fetching wrapper data from API for: ${abilityId}`);
 
-    const matchingFile = fileList.find((f) => f.includes(abilityId));
+    // Fetch wrapper data from API instead of local storage
+    const apiResponse = await apiClient.getAbility(abilityId);
 
-    if (!matchingFile) {
+    console.log(`[TRACE] ========== FULL API RESPONSE ==========`);
+    console.log(JSON.stringify(apiResponse, null, 2));
+    console.log(`[TRACE] ==========================================`);
+
+    if (!apiResponse.success || !apiResponse.wrapper) {
       return {
         success: false,
         error: `Ability not found: ${abilityId}`,
@@ -153,10 +158,11 @@ export async function executeWrapper(
       };
     }
 
-    // Load wrapper data
-    const filePath = join(WRAPPER_STORAGE_PATH, matchingFile);
-    const content = await readFile(filePath, "utf-8");
-    const wrapperData: WrapperData = JSON.parse(content);
+    const wrapperData: WrapperData = apiResponse.wrapper;
+
+    console.log(`[TRACE] ========== WRAPPER DATA STRUCTURE ==========`);
+    console.log(JSON.stringify(wrapperData, null, 2));
+    console.log(`[TRACE] ===============================================`);
 
     const {
       service_name,
@@ -165,6 +171,8 @@ export async function executeWrapper(
       dynamic_header_keys,
       dependency_order,
     } = wrapperData.input;
+
+    console.log(`[TRACE] Extracted wrapper code starts with:`, wrapper_code.substring(0, 100));
 
     // Check for missing dependencies
     if (
@@ -189,7 +197,7 @@ export async function executeWrapper(
       injectedCredentials,
     );
 
-    // Create sandbox context
+    // Create sandbox context with access to process.env and secret
     const sandbox = {
       fetch: fetchOverride,
       console,
@@ -200,18 +208,37 @@ export async function executeWrapper(
       Request,
       Buffer,
       process: {
-        env: process.env,
+        env: {
+          ...process.env,
+          ...(secret ? { SECRET: secret } : {}),
+        },
       },
     };
 
     const context = vm.createContext(sandbox);
 
-    // Execute wrapper code
-    const script = new vm.Script(wrapper_code);
-    script.runInContext(context);
+    // Strip ES6 export keywords since we're executing in a VM context
+    // The wrapper function will be available in the sandbox scope
+    let cleanedCode = wrapper_code
+      .replace(/export\s+async\s+function/g, 'async function')
+      .replace(/export\s+function/g, 'function')
+      .replace(/export\s+const/g, 'const')
+      .replace(/export\s+let/g, 'let')
+      .replace(/export\s+var/g, 'var');
 
-    const wrapperFn =
-      (sandbox as any).wrapper || (sandbox as any).exports?.wrapper;
+    // Wrap in IIFE to execute and capture the wrapper function
+    const moduleWrapper = `
+      (function() {
+        ${cleanedCode}
+        return wrapper;
+      })()
+    `;
+
+    console.log(`[TRACE] Executing wrapper code (exports stripped)`);
+
+    // Execute wrapper code
+    const script = new vm.Script(moduleWrapper);
+    const wrapperFn = script.runInContext(context);
 
     if (!wrapperFn || typeof wrapperFn !== "function") {
       return {
@@ -308,21 +335,9 @@ export async function executeWrapper(
  */
 export async function listAvailableWrappers(): Promise<string[]> {
   try {
-    const { readdir } = await import("fs/promises");
-    const files = await readdir(WRAPPER_STORAGE_PATH);
-
-    return files
-      .filter((f) => f.endsWith(".json"))
-      .map((f) => {
-        const parts = f.replace(".json", "").split("_");
-        const timestampIndex = parts.findIndex((p) => /^\d+$/.test(p));
-
-        if (timestampIndex > 0) {
-          return parts.slice(1, timestampIndex).join("_");
-        }
-
-        return f.replace(".json", "");
-      });
+    // Fetch from API instead of local storage
+    const result = await apiClient.listAbilities();
+    return result.abilities.map((a) => a.abilityId);
   } catch (error) {
     console.error("Error listing wrappers:", error);
     return [];
@@ -350,18 +365,14 @@ export async function getWrapperMetadata(abilityId: string): Promise<{
   };
 } | null> {
   try {
-    const { readdir } = await import("fs/promises");
-    const files = await readdir(WRAPPER_STORAGE_PATH);
+    // Fetch from API instead of local storage
+    const apiResponse = await apiClient.getAbility(abilityId);
 
-    const matchingFile = files.find((f) => f.includes(abilityId));
-
-    if (!matchingFile) {
+    if (!apiResponse.success || !apiResponse.wrapper) {
       return null;
     }
 
-    const filePath = join(WRAPPER_STORAGE_PATH, matchingFile);
-    const content = await readFile(filePath, "utf-8");
-    const wrapperData: WrapperData = JSON.parse(content);
+    const wrapperData: WrapperData = apiResponse.wrapper;
 
     return {
       serviceName: wrapperData.input.service_name,
