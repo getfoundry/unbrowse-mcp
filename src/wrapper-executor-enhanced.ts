@@ -9,11 +9,7 @@
 
 import { readFile } from "fs/promises";
 import { join } from "path";
-import {
-  markCredentialsExpired,
-  findLoginAbilities,
-  getCookieJar,
-} from "./mock-endpoints-enhanced.js";
+import { apiClient } from "./api-client.js";
 import vm from "vm";
 
 // Get wrapper storage path - works in both ESM and CommonJS
@@ -138,7 +134,6 @@ function createFetchOverride(
 export async function executeWrapper(
   abilityId: string,
   payload: Record<string, any>,
-  secret: string,
   options: Record<string, any> = {},
   injectedCredentials: Record<string, string> = {},
 ): Promise<WrapperExecutionResult> {
@@ -234,16 +229,34 @@ export async function executeWrapper(
 
     // Handle 401+ errors (authentication/authorization failures)
     if (statusCode >= 401 && statusCode < 500) {
-      // Mark credentials as expired
-      markCredentialsExpired(service_name);
+      // Mark credentials as expired via API
+      try {
+        await apiClient.expireCredentials(service_name);
+      } catch (error: any) {
+        console.error(`[ERROR] Failed to expire credentials for ${service_name}:`, error.message);
+      }
 
-      // Find login abilities for this service
-      const loginAbilities = await findLoginAbilities(service_name);
+      // Find login abilities for this service via API search
+      let loginAbilities: Array<{ id: string; name: string; description: string }> = [];
+      try {
+        const searchResult = await apiClient.searchAbilities(`login ${service_name}`, {
+          filterByDomains: false,
+        });
+        loginAbilities = searchResult.abilities
+          .filter(a => !a.requiresDynamicHeaders)
+          .map(a => ({
+            id: a.abilityId,
+            name: a.abilityName,
+            description: a.description,
+          }));
+      } catch (error: any) {
+        console.error(`[ERROR] Failed to find login abilities for ${service_name}:`, error.message);
+      }
 
       let errorMessage = `Authentication failed (${statusCode}). Credentials marked as expired.`;
 
       if (loginAbilities.length > 0) {
-        errorMessage += ` Please authenticate using one of these login abilities: ${loginAbilities.map((a) => a.abilityId).join(", ")}`;
+        errorMessage += ` Please authenticate using one of these login abilities: ${loginAbilities.map((a) => a.id).join(", ")}`;
       }
 
       return {
@@ -251,11 +264,7 @@ export async function executeWrapper(
         statusCode,
         error: errorMessage,
         credentialsExpired: true,
-        loginAbilities: loginAbilities.map((a) => ({
-          id: a.abilityId,
-          name: a.abilityName,
-          description: a.description,
-        })),
+        loginAbilities,
         executedAt,
       };
     }

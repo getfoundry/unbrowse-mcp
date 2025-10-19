@@ -10,32 +10,39 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import {
-  listAllAbilities,
-  getCookieJar,
-  getCookieJarSync,
+  apiClient,
   formatAbilityDescription,
-  searchAbilities,
-} from "./mock-endpoints-enhanced.js";
-import type { IndexedAbility } from "./mock-endpoints-enhanced.js";
+  type IndexedAbility,
+} from "./api-client.js";
 import {
   executeWrapper,
   getWrapperMetadata,
 } from "./wrapper-executor-enhanced.js";
+import { decryptCredentials } from "./crypto-utils.js";
 
 // User-level config from smithery.yaml
 export const configSchema = z.object({
   debug: z.boolean().default(false).describe("Enable debug logging"),
+  apiUrl: z
+    .string()
+    .optional()
+    .describe("Unbrowse API URL (default: http://localhost:4111)"),
   secret: z
     .string()
-    .describe("Secret key for encrypting/decrypting credentials"),
+    .describe("Secret key for decrypting credentials from the API"),
 });
 
-export default function createServer({
+export default async function createServer({
   config,
 }: {
   config: z.infer<typeof configSchema>; // Define your config in smithery.yaml
 }) {
   console.log("[INFO] createServer called - starting initialization");
+
+  // Configure API client with custom URL if provided
+  if (config.apiUrl) {
+    process.env.UNBROWSE_API_URL = config.apiUrl;
+  }
 
   const server = new McpServer({
     name: "Unbrowse MCP",
@@ -49,10 +56,18 @@ export default function createServer({
   const availableCredentialKeys = new Set<string>();
   const credentialCache = new Map<string, Record<string, string> | null>();
 
-  const candidateAbilities = listAllAbilities();
-  console.log(
-    `[INFO] Loaded ${candidateAbilities.length} abilities from wrapper storage for registration`,
-  );
+  // Fetch abilities from the API
+  let candidateAbilities: IndexedAbility[] = [];
+  try {
+    const result = await apiClient.listAbilities();
+    candidateAbilities = result.abilities || [];
+    console.log(
+      `[INFO] Loaded ${candidateAbilities.length} abilities from API for registration`,
+    );
+  } catch (error: any) {
+    console.error(`[ERROR] Failed to load abilities from API:`, error.message);
+    console.error(`[ERROR] Make sure the Unbrowse API is running at ${config.apiUrl || process.env.UNBROWSE_API_URL || 'http://localhost:4111'}`);
+  }
 
   const candidateVariantsFromDomain = (domain: string): string[] => {
     const trimmed = domain.trim();
@@ -85,26 +100,34 @@ export default function createServer({
     return Array.from(variants).filter(Boolean);
   };
 
-  const fetchCredentialsForCandidate = (
+  const fetchCredentialsForCandidate = async (
     candidate: string,
-  ): Record<string, string> | null => {
+  ): Promise<Record<string, string> | null> => {
     if (credentialCache.has(candidate)) {
       return credentialCache.get(candidate) || null;
     }
 
     try {
-      const credentials = getCookieJarSync(candidate, config.secret);
-      credentialCache.set(candidate, credentials);
+      const encryptedCredentials = await apiClient.getCookieJar(candidate);
+      if (!encryptedCredentials) {
+        credentialCache.set(candidate, null);
+        return null;
+      }
+
+      // Decrypt credentials using the secret
+      const decryptedCredentials = decryptCredentials(encryptedCredentials, config.secret);
+      credentialCache.set(candidate, decryptedCredentials);
+
       if (config.debug) {
         console.log(
-          `[DEBUG] Credential lookup for ${candidate}: ${credentials ? "FOUND" : "missing"}`,
+          `[DEBUG] Credential lookup for ${candidate}: FOUND (${Object.keys(decryptedCredentials).length} keys)`,
         );
       }
-      return credentials;
+      return decryptedCredentials;
     } catch (error: any) {
       if (config.debug) {
         console.warn(
-          `[DEBUG] Failed to read credentials for ${candidate}: ${error.message || error}`,
+          `[DEBUG] Failed to read/decrypt credentials for ${candidate}: ${error.message || error}`,
         );
       }
       credentialCache.set(candidate, null);
@@ -112,7 +135,7 @@ export default function createServer({
     }
   };
 
-  const abilityHasCredentialCoverage = (ability: IndexedAbility): boolean => {
+  const abilityHasCredentialCoverage = async (ability: IndexedAbility): Promise<boolean> => {
     if (!ability.requiresDynamicHeaders) {
       return true;
     }
@@ -121,7 +144,7 @@ export default function createServer({
       let keySatisfied = false;
       for (const candidate of deriveCandidatesForKey(ability, key)) {
         if (!candidate) continue;
-        const credentials = fetchCredentialsForCandidate(candidate);
+        const credentials = await fetchCredentialsForCandidate(candidate);
         if (credentials && credentials[key] !== undefined) {
           keySatisfied = true;
           break;
@@ -228,8 +251,11 @@ export default function createServer({
               if (!candidate) continue;
 
               try {
-                const creds = await getCookieJar(candidate, config.secret);
-                if (!creds) continue;
+                const encryptedCreds = await apiClient.getCookieJar(candidate);
+                if (!encryptedCreds) continue;
+
+                // Decrypt credentials
+                const creds = decryptCredentials(encryptedCreds, config.secret);
 
                 const hasAllHeaders = ability.dynamicHeaderKeys.every(
                   (key) => creds[key] !== undefined,
@@ -247,7 +273,7 @@ export default function createServer({
               } catch (error: any) {
                 if (config.debug) {
                   console.warn(
-                    `[DEBUG] Credential fetch failed for ${candidate}: ${error.message || error}`,
+                    `[DEBUG] Credential fetch/decrypt failed for ${candidate}: ${error.message || error}`,
                   );
                 }
               }
@@ -263,7 +289,6 @@ export default function createServer({
           const result = await executeWrapper(
             ability.abilityId,
             payload,
-            config.secret,
             {},
             resolvedCredentials || {},
           );
@@ -321,7 +346,7 @@ export default function createServer({
   };
 
   for (const ability of candidateAbilities) {
-    if (!abilityHasCredentialCoverage(ability)) {
+    if (!(await abilityHasCredentialCoverage(ability))) {
       continue;
     }
 
@@ -391,14 +416,12 @@ export default function createServer({
       const resultLimit =
         typeof limit === "number" ? Math.min(Math.max(limit, 1), 50) : 20;
 
-      const matches = await searchAbilities(
-        query,
-        credentialScope,
-        domainFilter,
-        resultLimit,
-        true,
-        accessibleAbilities,
-      );
+      const result = await apiClient.searchAbilities(query, {
+        userCreds: credentialScope,
+        filterByDomains: domainFilter,
+        trustProvidedCreds: true,
+      });
+      const matches = result.abilities.slice(0, resultLimit);
       const domainCandidates = new Set<string>(
         Array.from(availableCredentialKeys).map((key) => key.split("::")[0]),
       );
@@ -575,5 +598,5 @@ export default function createServer({
     },
   );
 
-  return server.server;
+  return server;
 }

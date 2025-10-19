@@ -9,8 +9,8 @@ importers:
   .:
     dependencies:
       '@modelcontextprotocol/sdk':
-        specifier: ^1.18.2
-        version: 1.20.0
+        specifier: ^1.20.1
+        version: 1.20.1
       '@smithery/sdk':
         specifier: ^1.6.4
         version: 1.6.8
@@ -198,8 +198,8 @@ packages:
       '@types/node':
         optional: true
 
-  '@modelcontextprotocol/sdk@1.20.0':
-    resolution: {integrity: sha512-kOQ4+fHuT4KbR2iq2IjeV32HiihueuOf1vJkq18z08CLZ1UQrTc8BXJpVfxZkq45+inLLD+D4xx4nBjUelJa4Q==}
+  '@modelcontextprotocol/sdk@1.20.1':
+    resolution: {integrity: sha512-j/P+yuxXfgxb+mW7OEoRCM3G47zCTDqUPivJo/VzpjbG8I9csTXtOprCf5FfOfHK4whOJny0aHuBEON+kS7CCA==}
     engines: {node: '>=18'}
 
   '@ngrok/ngrok-android-arm64@1.5.2':
@@ -1210,7 +1210,7 @@ snapshots:
       chardet: 2.1.0
       iconv-lite: 0.7.0
 
-  '@modelcontextprotocol/sdk@1.20.0':
+  '@modelcontextprotocol/sdk@1.20.1':
     dependencies:
       ajv: 6.12.6
       content-type: 1.0.5
@@ -1296,7 +1296,7 @@ snapshots:
 
   '@smithery/cli@1.4.6':
     dependencies:
-      '@modelcontextprotocol/sdk': 1.20.0
+      '@modelcontextprotocol/sdk': 1.20.1
       '@ngrok/ngrok': 1.5.2
       '@smithery/registry': 0.4.4
       '@smithery/sdk': 1.6.8
@@ -1327,7 +1327,7 @@ snapshots:
 
   '@smithery/sdk@1.6.8':
     dependencies:
-      '@modelcontextprotocol/sdk': 1.20.0
+      '@modelcontextprotocol/sdk': 1.20.1
       chalk: 5.6.2
       express: 5.1.0
       jose: 6.1.0
