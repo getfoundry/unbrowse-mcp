@@ -547,6 +547,126 @@ The code is executed in a safe sandbox and must be a valid arrow function or fun
     },
   );
 
+  // Tool: Ingest API Endpoint
+  server.registerTool(
+    "ingest_api_endpoint",
+    {
+      title: "Ingest API Endpoint",
+      description:
+        "Index a single API endpoint without needing a HAR file. Provide a URL or curl command, and the system will automatically generate schemas and create a wrapper function. The endpoint will be stored in the vector database and immediately available for execution.",
+      inputSchema: {
+        input: z
+          .string()
+          .describe("API URL or complete curl command. Examples:\n- 'https://api.github.com/users/octocat'\n- 'curl -X POST https://api.example.com/users -H \"Content-Type: application/json\" -d {\"name\":\"John\"}'"),
+        service_name: z
+          .string()
+          .describe("Service name for grouping (e.g., 'github', 'stripe', 'openai')"),
+        ability_name: z
+          .string()
+          .optional()
+          .describe("Custom ability name (auto-generated from URL if not provided)"),
+        description: z
+          .string()
+          .optional()
+          .describe("Description of what this endpoint does (auto-generated if not provided)"),
+      },
+    },
+    async ({ input, service_name, ability_name, description }) => {
+      try {
+        console.log(`[TRACE] Ingesting API endpoint: ${input}`);
+
+        // Call the ingest API endpoint
+        const response = await fetch(`${apiClient['baseUrl']}/ingest/api`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            input,
+            service_name,
+            ability_name,
+            description,
+          }),
+        });
+
+        if (!response.ok) {
+          const errorData = await response.json().catch(() => ({ error: response.statusText }));
+          return {
+            content: [
+              {
+                type: "text",
+                text: JSON.stringify(
+                  {
+                    success: false,
+                    error: errorData.error || `API ingestion failed: ${response.status} ${response.statusText}`,
+                  },
+                  null,
+                  2
+                ),
+              },
+            ],
+          };
+        }
+
+        const result = await response.json();
+
+        console.log(`[INFO] Successfully ingested API endpoint: ${result.ability_id}`);
+
+        // Add the newly ingested ability to the cache
+        if (result.success && result.ability_id) {
+          // Fetch the full ability data and add to cache
+          try {
+            const abilityResponse = await apiClient.getAbility(result.ability_id);
+            if (abilityResponse.success && abilityResponse.ability) {
+              abilityCache.set(result.ability_id, abilityResponse.ability);
+              console.log(`[INFO] Cached newly ingested ability: ${result.ability_id}`);
+            }
+          } catch (error: any) {
+            console.warn(`[WARN] Failed to cache ingested ability: ${error.message}`);
+          }
+        }
+
+        return {
+          content: [
+            {
+              type: "text",
+              text: JSON.stringify(
+                {
+                  success: result.success,
+                  message: result.message,
+                  ability_id: result.ability_id,
+                  ability_name: result.ability_name,
+                  input_schema: result.input_schema,
+                  output_schema: result.output_schema,
+                  note: "This ability is now available for execution via execute_ability tool",
+                },
+                null,
+                2
+              ),
+            },
+          ],
+        };
+      } catch (error: any) {
+        console.error(`[ERROR] API ingestion failed:`, error);
+        return {
+          content: [
+            {
+              type: "text",
+              text: JSON.stringify(
+                {
+                  success: false,
+                  error: error.message || String(error),
+                },
+                null,
+                2
+              ),
+            },
+          ],
+        };
+      }
+    },
+  );
+
   // Tool: Search Abilities (Credential-aware)
   server.registerTool(
     "search_abilities",
