@@ -7,3 +7,8 @@ config:
     description: "Enable debug logging"
     required: false
     default: false
+  enableIndexTool:
+    type: boolean
+    description: "Enable the ingest_api_endpoint tool for indexing new APIs"
+    required: false
+    default: false
