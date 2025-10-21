@@ -570,9 +570,9 @@ The code is executed in a safe sandbox and must be a valid arrow function or fun
   server.registerTool(
     "ingest_api_endpoint",
     {
-      title: "Ingest API Endpoint",
+      title: "Index API",
       description:
-        "Index a single API endpoint without needing a HAR file. Provide a URL or curl command, and the system will automatically generate schemas and create a wrapper function. The endpoint will be stored in the vector database and immediately available for execution.",
+        "Index any url or cURL request for future usage.",
       inputSchema: {
         input: z
           .string()
