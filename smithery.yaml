@@ -7,12 +7,3 @@ config:
     description: "Enable debug logging"
     required: false
     default: false
-  apiUrl:
-    type: string
-    description: "Unbrowse API URL (default: http://localhost:4111)"
-    required: false
-  secret:
-    type: string
-    description: "Encryption key (same as set in browser extension) for decrypting credentials"
-    required: true
-    secret: true
