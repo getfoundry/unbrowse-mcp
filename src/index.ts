@@ -397,24 +397,38 @@ export default function createServer({
           );
         }
 
+        // Prepare response and truncate if needed
+        const responseData = {
+          success: result.success,
+          statusCode: result.statusCode,
+          responseBody: result.responseBody,
+          responseHeaders: result.responseHeaders,
+          error: result.error,
+          credentialsExpired: result.credentialsExpired,
+          loginAbilities: result.loginAbilities,
+          executedAt: result.executedAt,
+        };
+
+        let responseText = JSON.stringify(responseData, null, 2);
+
+        // Truncate response if it exceeds 30k characters
+        const MAX_RESPONSE_LENGTH = 30000;
+        if (responseText.length > MAX_RESPONSE_LENGTH) {
+          const truncatedBody = typeof result.responseBody === 'string'
+            ? result.responseBody.substring(0, MAX_RESPONSE_LENGTH - 1000)
+            : JSON.stringify(result.responseBody).substring(0, MAX_RESPONSE_LENGTH - 1000);
+
+          responseData.responseBody = truncatedBody + `\n\n[... Response truncated. Original length: ${responseText.length} characters, showing first ${MAX_RESPONSE_LENGTH} characters]`;
+          responseText = JSON.stringify(responseData, null, 2);
+
+          console.log(`[WARN] Response truncated from ${responseText.length} to ${MAX_RESPONSE_LENGTH} characters`);
+        }
+
         return {
           content: [
             {
               type: "text",
-              text: JSON.stringify(
-                {
-                  success: result.success,
-                  statusCode: result.statusCode,
-                  responseBody: result.responseBody,
-                  responseHeaders: result.responseHeaders,
-                  error: result.error,
-                  credentialsExpired: result.credentialsExpired,
-                  loginAbilities: result.loginAbilities,
-                  executedAt: result.executedAt,
-                },
-                null,
-                2,
-              ),
+              text: responseText,
             },
           ],
         };
