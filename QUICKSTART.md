@@ -32,7 +32,8 @@ This means:
    - Push your code to GitHub
    - Go to [smithery.ai](https://smithery.ai)
    - Connect your repository
-   - Set the `SECRET` environment variable (e.g., `my-super-secret-key-123`)
+   - Set the `password` config variable (e.g., `my-secure-encryption-password-123`)
+   - This password will be used to encrypt/decrypt your stored credentials
    - Deploy!
 
 2. **Add to Claude Desktop:**
@@ -47,17 +48,15 @@ This means:
      "mcpServers": {
        "unbrowse": {
          "url": "https://your-smithery-url.smithery.ai",
-         "env": {
-           "SECRET": "my-super-secret-key-123",
-           "userCredentials": "www.hedgemony.fund::cookie,www.wom.fun::api-key",
-           "filterByDomains": "true"
+         "config": {
+           "password": "my-secure-encryption-password-123"
          }
        }
      }
    }
    ```
 
-   **Note:** Start with empty `userCredentials` to see public tools only. Add credentials later to unlock more tools!
+   **Note:** The password is used to encrypt/decrypt your stored credentials. Choose a strong, unique password.
 
 3. **Restart Claude Desktop**
 
@@ -68,18 +67,13 @@ This means:
    pnpm install
    ```
 
-2. **Set your SECRET:**
-   ```bash
-   export SECRET="my-super-secret-key-123"
-   ```
-
-3. **Run the dev server:**
+2. **Run the dev server:**
    ```bash
    pnpm dev
    ```
 
-4. **Add to Claude Desktop config:**
-   
+3. **Add to Claude Desktop config:**
+
    ```json
    {
      "mcpServers": {
@@ -87,19 +81,17 @@ This means:
          "command": "pnpm",
          "args": ["dev"],
          "cwd": "/full/path/to/unbrowse-mcp/unbrowse",
-         "env": {
-           "SECRET": "my-super-secret-key-123",
-           "userCredentials": "",
-           "filterByDomains": "true"
+         "config": {
+           "password": "my-secure-encryption-password-123"
          }
        }
      }
    }
    ```
 
-   **Tip:** Leave `userCredentials` empty initially to start with public tools only!
+   **Tip:** The password is used to encrypt/decrypt your stored credentials. Choose a strong password.
 
-5. **Restart Claude Desktop**
+4. **Restart Claude Desktop**
 
 ## Understanding Tool Registration
 
@@ -128,10 +120,6 @@ This means:
 
 **Example workflow:**
 ```json
-// Start with no credentials in config
-"userCredentials": ""
-// Only public tools available
-
 // Store hedgemony credentials
 store_credentials({
   serviceName: "hedgemony-fund",
@@ -139,11 +127,8 @@ store_credentials({
   credentialValue: "your-cookie-here"
 })
 
-// Update config
-"userCredentials": "www.hedgemony.fund::cookie"
-
-// Restart Claude Desktop
-// Now 10+ hedgemony tools are registered!
+// Credentials are encrypted with your password
+// Now you can use hedgemony tools!
 ```
 
 ## Using the MCP Tools
@@ -390,19 +375,17 @@ The path uses `process.cwd()` which should point to your project root. If this f
 - You're running from the project directory
 - `src/wrapper-storage/` exists and has JSON files
 
-### "SECRET environment variable is required"
+### "Password is required"
 
-Set the SECRET before running:
-```bash
-export SECRET="your-secret-key"
-pnpm dev
-```
-
-Or in Claude Desktop config:
+Set the password in your Claude Desktop config:
 ```json
 {
-  "env": {
-    "SECRET": "your-secret-key"
+  "mcpServers": {
+    "unbrowse": {
+      "config": {
+        "password": "your-secure-password"
+      }
+    }
   }
 }
 ```
@@ -426,10 +409,11 @@ If an ability shows missing dependencies:
 ## Security Notes
 
 - ✅ Credentials are encrypted with AES-256-GCM
-- ✅ SECRET key is required for all encryption/decryption
-- ✅ Credentials stored in-memory (not persisted to disk in this stub)
+- ✅ Password is required for all encryption/decryption
+- ✅ Your password only encrypts/decrypts YOUR credentials
+- ✅ Choose a strong, unique password (32+ characters recommended)
 - ⚠️ Wrapper code makes REAL API calls to actual services
-- ⚠️ Store your SECRET securely (environment variable, not in code)
+- ⚠️ Store your password securely in MCP config, never in code
 
 ## Next Steps
 

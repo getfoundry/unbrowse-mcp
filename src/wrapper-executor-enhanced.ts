@@ -66,8 +66,8 @@ interface WrapperData {
   };
   dependencies?: {
     missing?: Array<{
-      abilityId: string;
-      abilityName: string;
+      ability_id: string;
+      ability_name: string;
       reference: string;
     }>;
   };
@@ -147,29 +147,38 @@ export async function executeWrapper(
   payload: Record<string, any>,
   options: Record<string, any> = {},
   injectedCredentials: Record<string, string> = {},
+  providedWrapperData?: WrapperData,
   secret?: string,
 ): Promise<WrapperExecutionResult> {
   const executedAt = new Date().toISOString();
 
   try {
-    console.log(`[TRACE] Fetching wrapper data from API for: ${abilityId}`);
+    let wrapperData: WrapperData;
 
-    // Fetch wrapper data from API instead of local storage
-    const apiResponse = await apiClient.getAbility(abilityId);
+    // Use provided wrapper data if available (from cache), otherwise fetch from API
+    if (providedWrapperData) {
+      console.log(`[TRACE] Using provided wrapper data for: ${abilityId}`);
+      wrapperData = providedWrapperData;
+    } else {
+      console.log(`[TRACE] Fetching wrapper data from API for: ${abilityId}`);
 
-    console.log(`[TRACE] ========== FULL API RESPONSE ==========`);
-    console.log(JSON.stringify(apiResponse, null, 2));
-    console.log(`[TRACE] ==========================================`);
+      // Fetch wrapper data from API instead of local storage
+      const apiResponse = await apiClient.getAbility(abilityId);
 
-    if (!apiResponse.success || !apiResponse.wrapper) {
-      return {
-        success: false,
-        error: `Ability not found: ${abilityId}`,
-        executedAt,
-      };
+      console.log(`[TRACE] ========== FULL API RESPONSE ==========`);
+      console.log(JSON.stringify(apiResponse, null, 2));
+      console.log(`[TRACE] ==========================================`);
+
+      if (!apiResponse.success || !apiResponse.wrapper) {
+        return {
+          success: false,
+          error: `Ability not found: ${abilityId}`,
+          executedAt,
+        };
+      }
+
+      wrapperData = apiResponse.wrapper;
     }
-
-    const wrapperData: WrapperData = apiResponse.wrapper;
 
     console.log(`[TRACE] ========== WRAPPER DATA STRUCTURE ==========`);
     console.log(JSON.stringify(wrapperData, null, 2));
@@ -191,7 +200,7 @@ export async function executeWrapper(
       wrapperData.dependencies.missing.length > 0
     ) {
       const missingDeps = wrapperData.dependencies.missing
-        .map((d) => d.abilityId)
+        .map((d) => d.ability_id)
         .join(", ");
       return {
         success: false,
@@ -281,10 +290,10 @@ export async function executeWrapper(
           filterByDomains: false,
         });
         loginAbilities = searchResult.abilities
-          .filter(a => !a.requiresDynamicHeaders)
+          .filter(a => !a.requires_dynamic_headers)
           .map(a => ({
-            id: a.abilityId,
-            name: a.abilityName,
+            id: a.ability_id,
+            name: a.ability_name,
             description: a.description,
           }));
       } catch (error: any) {
@@ -369,8 +378,8 @@ export async function getWrapperMetadata(abilityId: string): Promise<{
   dependencyOrder: string[];
   dependencies?: {
     missing?: Array<{
-      abilityId: string;
-      abilityName: string;
+      ability_id: string;
+      ability_name: string;
       reference: string;
     }>;
   };

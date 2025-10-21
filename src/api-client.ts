@@ -7,37 +7,41 @@
 
 /**
  * Interface for indexed abilities from the API
+ * Fields match the server response structure (snake_case)
  */
 export interface IndexedAbility {
-  abilityId: string;
-  abilityName: string;
-  serviceName: string;
+  ability_id: string;
+  ability_name: string;
+  service_name: string;
   description: string;
-  inputSchema: any;
-  outputSchema?: any;
-  dynamicHeaderKeys: string[];
-  requiresDynamicHeaders: boolean;
-  ponScore?: number;
-  successRate?: number;
-  dependencyOrder: string[];
+  input_schema: any;
+  output_schema?: any;
+  request_method: string;
+  request_url: string;
+  dependency_order: string[];
+  requires_dynamic_headers: boolean;
+  dynamic_header_keys: string[];
+  static_headers?: Record<string, string>;
+  wrapper_code: string;
+  generated_at: string;
+  // Optional fields that may be added by processing
   dependencies?: {
     resolved?: any[];
     missing?: Array<{
-      abilityId: string;
-      abilityName: string;
+      ability_id: string;
+      ability_name: string;
       reference: string;
     }>;
     unresolved?: any[];
   };
-  createdAt: string;
-  updatedAt: string;
+  pon_score?: number;
+  success_rate?: number;
 }
 
 /**
  * Configuration for the API client
  */
 export interface ApiClientConfig {
-  baseUrl?: string;
   timeout?: number;
 }
 
@@ -45,11 +49,10 @@ export interface ApiClientConfig {
  * Unbrowse API Client
  */
 export class UnbrowseApiClient {
-  private baseUrl: string;
+  private readonly baseUrl: string = "https://agent.unbrowse.ai";
   private timeout: number;
 
   constructor(config: ApiClientConfig = {}) {
-    this.baseUrl = config.baseUrl || process.env.UNBROWSE_API_URL || "http://localhost:4111";
     this.timeout = config.timeout || 10000; // 10 second default timeout
   }
 
@@ -179,21 +182,21 @@ export class UnbrowseApiClient {
   }
 
   /**
-   * Get ability metadata
-   * GET /abilities/:abilityId/metadata
+   * Get ability wrapper code
+   * GET /abilities/:abilityId/wrapper
    */
-  async getAbilityMetadata(abilityId: string): Promise<{
+  async getAbilityWrapper(abilityId: string): Promise<{
     success: boolean;
-    metadata: any;
+    wrapper: any;
   }> {
-    const url = `${this.baseUrl}/abilities/${encodeURIComponent(abilityId)}/metadata`;
+    const url = `${this.baseUrl}/abilities/${encodeURIComponent(abilityId)}/wrapper`;
     const response = await this.fetchWithTimeout(url);
 
     if (!response.ok) {
       if (response.status === 404) {
         throw new Error(`Ability not found: ${abilityId}`);
       }
-      throw new Error(`Failed to get ability metadata: ${response.status} ${response.statusText}`);
+      throw new Error(`Failed to get ability wrapper: ${response.status} ${response.statusText}`);
     }
 
     return response.json();
@@ -333,8 +336,8 @@ export function formatAbilityDescription(ability: IndexedAbility): string {
   let desc = ability.description;
 
   // Add dependency order information
-  if (ability.dependencyOrder && ability.dependencyOrder.length > 0) {
-    desc += `\n\n**Dependency Order:** This ability must be called AFTER: ${ability.dependencyOrder.map((depId) => `\`${depId}\``).join(" → ")}`;
+  if (ability.dependency_order && ability.dependency_order.length > 0) {
+    desc += `\n\n**Dependency Order:** This ability must be called AFTER: ${ability.dependency_order.map((depId: string) => `\`${depId}\``).join(" → ")}`;
     desc += `\nCall these abilities in sequence before executing this one.`;
   }
 
@@ -345,13 +348,13 @@ export function formatAbilityDescription(ability: IndexedAbility): string {
   ) {
     desc += `\n\n**⚠️ Missing Dependencies:**`;
     ability.dependencies.missing.forEach((dep) => {
-      desc += `\n- ${dep.abilityId} (${dep.abilityName}) - Referenced as ${dep.reference}`;
+      desc += `\n- ${dep.ability_id} (${dep.ability_name}) - Referenced as ${dep.reference}`;
     });
   }
 
   // Add credential requirements
-  if (ability.requiresDynamicHeaders) {
-    desc += `\n\n**Required Credentials:** ${ability.dynamicHeaderKeys.join(", ")}`;
+  if (ability.requires_dynamic_headers) {
+    desc += `\n\n**Required Credentials:** ${ability.dynamic_header_keys.join(", ")}`;
   }
 
   return desc;

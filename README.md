@@ -54,7 +54,7 @@ This MCP server implements the private registry capabilities described in `maste
 
 - Node.js 18+
 - pnpm (or npm)
-- A SECRET environment variable for credential encryption
+- A PASSWORD for encrypting your stored credentials
 
 ### Installation
 
@@ -65,11 +65,9 @@ This MCP server implements the private registry capabilities described in `maste
 pnpm install
 ```
 
-3. Configure your secret in `smithery.yaml` or set the `SECRET` environment variable:
+3. Configure your password in `smithery.yaml`:
 
-```bash
-export SECRET="your-secret-key-here"
-```
+The password is used to encrypt and decrypt your stored credentials for security. Choose a strong password that only you know.
 
 ### Installing via Smithery
 
@@ -478,14 +476,15 @@ Wrapper code runs in a VM context with:
 - Controlled environment variables
 - Isolated from main process
 
-### Environment Variables
+### Password Security
 
-The `SECRET` should be:
+The `PASSWORD` should be:
 
-- At least 32 characters long
-- Stored securely (e.g., environment variable, secrets manager)
+- At least 32 characters long for strong encryption
+- Stored securely in your MCP configuration
 - Never committed to version control
-- Rotated periodically
+- Unique to your Unbrowse MCP installation
+- Used only to encrypt/decrypt your own stored credentials
 
 ## Integration with master.md
 
