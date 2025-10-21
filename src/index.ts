@@ -9,6 +9,7 @@
 
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
+import vm from "vm";
 import {
   apiClient,
   formatAbilityDescription,
@@ -204,9 +205,32 @@ export default function createServer({
           .string()
           .optional()
           .describe("JSON string of parameters to pass to the ability (based on its input schema). Example: '{\"token_symbol\":\"$fdry\"}'"),
+        transform_code: z
+          .string()
+          .optional()
+          .describe(`Optional JavaScript code to transform/process the API response. The code receives 'data' (parsed response body) and should return the processed result.
+
+Examples:
+
+1. Filter array to specific fields:
+(data) => data.map(item => ({ name: item.user_name, image: item.profile_image_url }))
+
+2. Aggregate/summarize data:
+(data) => ({ total: data.length, avgPrice: data.reduce((sum, item) => sum + item.price, 0) / data.length })
+
+3. Search/filter results:
+(data) => data.filter(item => item.status === 'active' && item.price > 100)
+
+4. Extract nested fields:
+(data) => data.results.map(r => r.metadata.id)
+
+5. Transform to different structure:
+(data) => ({ tokens: data.map(t => t.symbol), count: data.length })
+
+The code is executed in a safe sandbox and must be a valid arrow function or function expression.`),
       },
     },
-    async ({ ability_id, params }) => {
+    async ({ ability_id, params, transform_code }) => {
       try {
         await ensureInitialized();
 
@@ -420,16 +444,63 @@ export default function createServer({
           );
         }
 
+        // Apply transformation if provided
+        let processedResponseBody = result.responseBody;
+        if (transform_code && result.success && result.responseBody) {
+          try {
+            console.log(`[TRACE] Applying transformation code to response`);
+
+            // Create a safe sandbox for transformation
+            const transformSandbox = {
+              console,
+              JSON,
+              Object,
+              Array,
+              Math,
+              String,
+              Number,
+              Boolean,
+            };
+
+            const transformContext = vm.createContext(transformSandbox);
+
+            // Wrap the transform code to make it executable
+            const wrappedTransform = `
+              const transformFn = ${transform_code};
+              transformFn;
+            `;
+
+            const transformScript = new vm.Script(wrappedTransform);
+            const transformFn = transformScript.runInContext(transformContext);
+
+            if (typeof transformFn !== 'function') {
+              throw new Error('Transform code must be a function');
+            }
+
+            // Execute transformation
+            processedResponseBody = transformFn(result.responseBody);
+            console.log(`[TRACE] Transformation applied successfully`);
+          } catch (error: any) {
+            console.error(`[ERROR] Transformation failed:`, error.message);
+            // Add transformation error to response
+            processedResponseBody = {
+              _transform_error: error.message,
+              _original_data: result.responseBody,
+            };
+          }
+        }
+
         // Prepare response and truncate if needed
         const responseData = {
           success: result.success,
           statusCode: result.statusCode,
-          responseBody: result.responseBody,
+          responseBody: processedResponseBody,
           responseHeaders: result.responseHeaders,
           error: result.error,
           credentialsExpired: result.credentialsExpired,
           loginAbilities: result.loginAbilities,
           executedAt: result.executedAt,
+          transformed: transform_code ? true : false,
         };
 
         let responseText = JSON.stringify(responseData, null, 2);
