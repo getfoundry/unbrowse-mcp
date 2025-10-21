@@ -11,6 +11,7 @@ import { readFile } from "fs/promises";
 import { join } from "path";
 import { apiClient } from "./api-client.js";
 import vm from "vm";
+import { ProxyAgent } from "undici";
 
 // Get wrapper storage path - works in both ESM and CommonJS
 // Try multiple possible paths for wrapper-storage
@@ -81,6 +82,7 @@ interface WrapperData {
 
 /**
  * Creates a fetch override function that injects headers from provided credentials
+ * and optionally uses a proxy from environment variables
  */
 function createFetchOverride(
   serviceName: string,
@@ -88,6 +90,14 @@ function createFetchOverride(
   dynamicHeaderKeys: string[],
   injectedCredentials: Record<string, string>,
 ) {
+  // Create ProxyAgent if proxy URL is configured in environment
+  const proxyUrl = process.env['PROXY_URL'];
+  const proxyAgent = proxyUrl ? new ProxyAgent(proxyUrl) : undefined;
+
+  if (proxyAgent) {
+    console.log(`[INFO] Using proxy: ${proxyUrl.replace(/:[^:@]+@/, ':****@')}`);
+  }
+
   return async function overriddenFetch(
     url: string | URL | Request,
     init?: RequestInit,
@@ -133,6 +143,8 @@ function createFetchOverride(
     const newInit: RequestInit = {
       ...init,
       headers: mergedHeaders,
+      // Add proxy dispatcher if configured
+      ...(proxyAgent ? { dispatcher: proxyAgent } : {}),
     };
 
     return fetch(url, newInit);
