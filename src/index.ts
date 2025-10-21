@@ -201,9 +201,9 @@ export default function createServer({
           .string()
           .describe("The ability ID to execute (from search results)"),
         params: z
-          .record(z.any())
+          .string()
           .optional()
-          .describe("Parameters to pass to the ability (based on its input schema)"),
+          .describe("JSON string of parameters to pass to the ability (based on its input schema). Example: '{\"token_symbol\":\"$fdry\"}'"),
       },
     },
     async ({ ability_id, params }) => {
@@ -254,9 +254,32 @@ export default function createServer({
           requiresDynamicHeaders: ability.requires_dynamic_headers,
           dynamicHeaderKeys: ability.dynamic_header_keys,
         });
-        console.log(`[TRACE] Params:`, params);
-
-        const payload = params || {};
+        // Parse params from JSON string
+        let payload: Record<string, any> = {};
+        if (params) {
+          try {
+            payload = JSON.parse(params);
+            console.log(`[TRACE] Parsed params:`, payload);
+          } catch (error: any) {
+            return {
+              content: [
+                {
+                  type: "text",
+                  text: JSON.stringify(
+                    {
+                      success: false,
+                      error: `Invalid params JSON: ${error.message}. Expected JSON string like '{"key":"value"}'`,
+                    },
+                    null,
+                    2
+                  ),
+                },
+              ],
+            };
+          }
+        } else {
+          console.log(`[TRACE] No params provided, using empty object`);
+        }
 
         let resolvedCredentials: Record<string, string> | null = null;
 
