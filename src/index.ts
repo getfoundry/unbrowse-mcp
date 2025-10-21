@@ -196,7 +196,7 @@ export default function createServer({
     {
       title: "Execute Ability",
       description:
-        "Executes a specific ability by ID with the provided parameters. Use this after searching for abilities with search_abilities.",
+        "Executes a specific ability by ID with the provided parameters. The ability is always fetched fresh from the API to ensure you have the latest version.",
       inputSchema: {
         ability_id: z
           .string()
@@ -234,39 +234,14 @@ The code is executed in a safe sandbox and must be a valid arrow function or fun
       try {
         await ensureInitialized();
 
-        // Try to get ability from cache first (populated by search_abilities)
-        let ability = abilityCache.get(ability_id);
+        // Always fetch ability from API to get the most up-to-date version
+        console.log(`[TRACE] Fetching ability ${ability_id} from API...`);
 
-        // If not in cache, fetch from API
-        if (!ability) {
-          console.log(`[TRACE] Ability ${ability_id} not in cache, fetching from API...`);
+        let ability: IndexedAbility;
+        try {
+          const apiResponse = await apiClient.getAbility(ability_id);
 
-          try {
-            const apiResponse = await apiClient.getAbility(ability_id);
-
-            if (!apiResponse.success || !apiResponse.ability) {
-              return {
-                content: [
-                  {
-                    type: "text",
-                    text: JSON.stringify(
-                      {
-                        success: false,
-                        error: `Ability not found in database: ${ability_id}`,
-                      },
-                      null,
-                      2
-                    ),
-                  },
-                ],
-              };
-            }
-
-            ability = apiResponse.ability;
-            // Cache it for next time
-            abilityCache.set(ability_id, ability);
-            console.log(`[TRACE] Fetched and cached ability ${ability_id} from API`);
-          } catch (error: any) {
+          if (!apiResponse.success || !apiResponse.ability) {
             return {
               content: [
                 {
@@ -274,7 +249,7 @@ The code is executed in a safe sandbox and must be a valid arrow function or fun
                   text: JSON.stringify(
                     {
                       success: false,
-                      error: error.message || `Failed to fetch ability: ${ability_id}`,
+                      error: `Ability not found in database: ${ability_id}`,
                     },
                     null,
                     2
@@ -283,8 +258,27 @@ The code is executed in a safe sandbox and must be a valid arrow function or fun
               ],
             };
           }
-        } else {
-          console.log(`[TRACE] Using cached ability ${ability_id}`);
+
+          ability = apiResponse.ability;
+          // Update cache for potential future use
+          abilityCache.set(ability_id, ability);
+          console.log(`[TRACE] Fetched and cached ability ${ability_id} from API`);
+        } catch (error: any) {
+          return {
+            content: [
+              {
+                type: "text",
+                text: JSON.stringify(
+                  {
+                    success: false,
+                    error: error.message || `Failed to fetch ability: ${ability_id}`,
+                  },
+                  null,
+                  2
+                ),
+              },
+            ],
+          };
         }
 
         console.log(
