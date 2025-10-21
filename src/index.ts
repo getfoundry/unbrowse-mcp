@@ -208,7 +208,7 @@ export default function createServer({
         transform_code: z
           .string()
           .optional()
-          .describe(`Optional JavaScript code to transform/process the API response. The code receives 'data' (parsed response body) and should return the processed result.
+          .describe(`Optional JavaScript code to transform/process the API response. You can make use of your previous knowledge of tool results for an ability to transform it after the first one, or rely on the outputSchema if provided. The code receives 'data' (parsed response body) and should return the processed result.
 
 Examples:
 
