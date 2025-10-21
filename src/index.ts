@@ -234,14 +234,34 @@ The code is executed in a safe sandbox and must be a valid arrow function or fun
       try {
         await ensureInitialized();
 
-        // Always fetch ability from API to get the most up-to-date version
+        // Try to fetch ability from API first for most up-to-date version
         console.log(`[TRACE] Fetching ability ${ability_id} from API...`);
 
-        let ability: IndexedAbility;
+        let ability: IndexedAbility | undefined;
         try {
           const apiResponse = await apiClient.getAbility(ability_id);
 
-          if (!apiResponse.success || !apiResponse.ability) {
+          if (apiResponse.success && apiResponse.ability) {
+            ability = apiResponse.ability;
+            // Update cache with fresh data
+            abilityCache.set(ability_id, ability);
+            console.log(`[TRACE] Fetched and cached ability ${ability_id} from API`);
+          }
+        } catch (error: any) {
+          console.log(`[TRACE] API fetch failed: ${error.message}, checking cache...`);
+        }
+
+        // Fallback to cache if API fetch failed (ability might only exist in vector search results)
+        if (!ability) {
+          ability = abilityCache.get(ability_id);
+          if (!ability) {
+            // Also check accessibleAbilities array
+            ability = accessibleAbilities.find((a) => a.ability_id === ability_id);
+          }
+
+          if (ability) {
+            console.log(`[TRACE] Using cached ability ${ability_id} (not found in API)`);
+          } else {
             return {
               content: [
                 {
@@ -249,7 +269,7 @@ The code is executed in a safe sandbox and must be a valid arrow function or fun
                   text: JSON.stringify(
                     {
                       success: false,
-                      error: `Ability not found in database: ${ability_id}`,
+                      error: `Ability not found: ${ability_id}. Please run search_abilities first to cache it.`,
                     },
                     null,
                     2
@@ -258,27 +278,6 @@ The code is executed in a safe sandbox and must be a valid arrow function or fun
               ],
             };
           }
-
-          ability = apiResponse.ability;
-          // Update cache for potential future use
-          abilityCache.set(ability_id, ability);
-          console.log(`[TRACE] Fetched and cached ability ${ability_id} from API`);
-        } catch (error: any) {
-          return {
-            content: [
-              {
-                type: "text",
-                text: JSON.stringify(
-                  {
-                    success: false,
-                    error: error.message || `Failed to fetch ability: ${ability_id}`,
-                  },
-                  null,
-                  2
-                ),
-              },
-            ],
-          };
         }
 
         console.log(
@@ -625,14 +624,27 @@ The code is executed in a safe sandbox and must be a valid arrow function or fun
 
         console.log(`[INFO] Successfully ingested API endpoint: ${result.ability_id}`);
 
-        // Add the newly ingested ability to the cache
+        // Add the newly ingested ability to the cache and permanent storage
         if (result.success && result.ability_id) {
           // Fetch the full ability data and add to cache
           try {
             const abilityResponse = await apiClient.getAbility(result.ability_id);
             if (abilityResponse.success && abilityResponse.ability) {
-              abilityCache.set(result.ability_id, abilityResponse.ability);
+              const ability = abilityResponse.ability;
+              abilityCache.set(result.ability_id, ability);
+
+              // Also add to accessibleAbilities array (permanent storage)
+              const existingIndex = accessibleAbilities.findIndex(
+                (a) => a.ability_id === ability.ability_id
+              );
+              if (existingIndex === -1) {
+                accessibleAbilities.push(ability);
+              } else {
+                accessibleAbilities[existingIndex] = ability;
+              }
+
               console.log(`[INFO] Cached newly ingested ability: ${result.ability_id}`);
+              console.log(`[INFO] Total accessible abilities: ${accessibleAbilities.length}`);
             }
           } catch (error: any) {
             console.warn(`[WARN] Failed to cache ingested ability: ${error.message}`);
@@ -754,8 +766,20 @@ The code is executed in a safe sandbox and must be a valid arrow function or fun
       // Populate the ability cache with search results
       for (const ability of matches) {
         abilityCache.set(ability.ability_id, ability);
+
+        // Also add to accessibleAbilities array if not already present (permanent storage)
+        const existingIndex = accessibleAbilities.findIndex(
+          (a) => a.ability_id === ability.ability_id
+        );
+        if (existingIndex === -1) {
+          accessibleAbilities.push(ability);
+        } else {
+          // Update existing ability with latest data
+          accessibleAbilities[existingIndex] = ability;
+        }
       }
       console.log(`[INFO] Cached ${matches.length} abilities from search results`);
+      console.log(`[INFO] Total accessible abilities: ${accessibleAbilities.length}`);
 
       return {
         content: [
