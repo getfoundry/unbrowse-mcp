@@ -240,9 +240,33 @@ The code is executed in a safe sandbox and must be a valid arrow function or fun
         // If not in cache, fetch from API
         if (!ability) {
           console.log(`[TRACE] Ability ${ability_id} not in cache, fetching from API...`);
-          const apiResponse = await apiClient.getAbility(ability_id);
 
-          if (!apiResponse.success || !apiResponse.ability) {
+          try {
+            const apiResponse = await apiClient.getAbility(ability_id);
+
+            if (!apiResponse.success || !apiResponse.ability) {
+              return {
+                content: [
+                  {
+                    type: "text",
+                    text: JSON.stringify(
+                      {
+                        success: false,
+                        error: `Ability not found in database: ${ability_id}`,
+                      },
+                      null,
+                      2
+                    ),
+                  },
+                ],
+              };
+            }
+
+            ability = apiResponse.ability;
+            // Cache it for next time
+            abilityCache.set(ability_id, ability);
+            console.log(`[TRACE] Fetched and cached ability ${ability_id} from API`);
+          } catch (error: any) {
             return {
               content: [
                 {
@@ -250,7 +274,7 @@ The code is executed in a safe sandbox and must be a valid arrow function or fun
                   text: JSON.stringify(
                     {
                       success: false,
-                      error: `Ability not found: ${ability_id}. Try searching for it first with search_abilities.`,
+                      error: error.message || `Failed to fetch ability: ${ability_id}`,
                     },
                     null,
                     2
@@ -259,11 +283,6 @@ The code is executed in a safe sandbox and must be a valid arrow function or fun
               ],
             };
           }
-
-          ability = apiResponse.ability;
-          // Cache it for next time
-          abilityCache.set(ability_id, ability);
-          console.log(`[TRACE] Cached ability ${ability_id} for future use`);
         } else {
           console.log(`[TRACE] Using cached ability ${ability_id}`);
         }
