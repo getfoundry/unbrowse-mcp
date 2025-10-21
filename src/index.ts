@@ -26,6 +26,7 @@ export const configSchema = z.object({
   password: z
     .string()
     .describe("Password to encrypt/decrypt your stored credentials"),
+  enableIndexTool: z.boolean().default(false).describe("Enable the ingest_api_endpoint tool for indexing new APIs"),
 });
 
 export default function createServer({
@@ -559,31 +560,33 @@ The code is executed in a safe sandbox and must be a valid arrow function or fun
     },
   );
 
-  // Tool: Ingest API Endpoint
-  server.registerTool(
-    "ingest_api_endpoint",
-    {
-      title: "Index API",
-      description:
-        "Index any url or cURL request for future usage.",
-      inputSchema: {
-        input: z
-          .string()
-          .describe("API URL or complete curl command. Examples:\n- 'https://api.github.com/users/octocat'\n- 'curl -X POST https://api.example.com/users -H \"Content-Type: application/json\" -d {\"name\":\"John\"}'"),
-        service_name: z
-          .string()
-          .describe("Service name for grouping (e.g., 'github', 'stripe', 'openai')"),
-        ability_name: z
-          .string()
-          .optional()
-          .describe("Custom ability name (auto-generated from URL if not provided)"),
-        description: z
-          .string()
-          .optional()
-          .describe("Description of what this endpoint does (auto-generated if not provided)"),
+  // Tool: Ingest API Endpoint (conditionally registered based on config)
+  if (config.enableIndexTool) {
+    console.log("[INFO] Index tool enabled via config.enableIndexTool");
+    server.registerTool(
+      "ingest_api_endpoint",
+      {
+        title: "Index API",
+        description:
+          "Index any url or cURL request for future usage.",
+        inputSchema: {
+          input: z
+            .string()
+            .describe("API URL or complete curl command. Examples:\n- 'https://api.github.com/users/octocat'\n- 'curl -X POST https://api.example.com/users -H \"Content-Type: application/json\" -d {\"name\":\"John\"}'"),
+          service_name: z
+            .string()
+            .describe("Service name for grouping (e.g., 'github', 'stripe', 'openai')"),
+          ability_name: z
+            .string()
+            .optional()
+            .describe("Custom ability name (auto-generated from URL if not provided)"),
+          description: z
+            .string()
+            .optional()
+            .describe("Description of what this endpoint does (auto-generated if not provided)"),
+        },
       },
-    },
-    async ({ input, service_name, ability_name, description }) => {
+      async ({ input, service_name, ability_name, description }) => {
       try {
         console.log(`[TRACE] Ingesting API endpoint: ${input}`);
 
@@ -690,7 +693,10 @@ The code is executed in a safe sandbox and must be a valid arrow function or fun
         };
       }
     },
-  );
+    );
+  } else {
+    console.log("[INFO] Index tool disabled (set enableIndexTool=true in smithery.yaml to enable)");
+  }
 
   // Tool: Search Abilities (Credential-aware)
   server.registerTool(
