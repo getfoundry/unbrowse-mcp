@@ -7,26 +7,9 @@
  * - Dependency order validation
  */
 
-import { readFile } from "fs/promises";
-import { join } from "path";
 import { apiClient } from "./api-client.js";
 import vm from "vm";
 import { ProxyAgent } from "undici";
-
-// Get wrapper storage path - works in both ESM and CommonJS
-// Try multiple possible paths for wrapper-storage
-function getWrapperStoragePath(): string {
-  const possiblePaths = [
-    join(process.cwd(), "src", "wrapper-storage"),
-    join(process.cwd(), "wrapper-storage"),
-    join(process.cwd(), "dist", "wrapper-storage"),
-  ];
-
-  // Return first path (will be validated when actually used)
-  return possiblePaths[0];
-}
-
-const WRAPPER_STORAGE_PATH = getWrapperStoragePath();
 
 /**
  * Interface for wrapper execution result
