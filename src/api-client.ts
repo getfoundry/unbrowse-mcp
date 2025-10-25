@@ -71,10 +71,9 @@ export class UnbrowseApiClient {
 
     try {
       const response = await fetch(url, {
-        ...options,
         headers: {
-          'Authorization': `Bearer ${this.apiKey}`,
           ...options.headers,
+          'Authorization': `Bearer ${this.apiKey}`,
         },
         signal: controller.signal,
       });
@@ -139,9 +138,9 @@ export class UnbrowseApiClient {
     // Filter client-side by query
     const lowerQuery = query.toLowerCase();
     const filteredAbilities = result.abilities.filter(ability =>
-      ability.ability_name.toLowerCase().includes(lowerQuery) ||
-      ability.description.toLowerCase().includes(lowerQuery) ||
-      ability.service_name.toLowerCase().includes(lowerQuery)
+      ability.ability_name?.toLowerCase().includes(lowerQuery) ||
+      ability.description?.toLowerCase().includes(lowerQuery) ||
+      ability.service_name?.toLowerCase().includes(lowerQuery)
     );
 
     return {
