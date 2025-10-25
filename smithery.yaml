@@ -4,11 +4,11 @@ runtime: typescript
 config:
   apiKey:
     type: string
-    description: "Your Unbrowse API key (create via POST /my/api-keys after login)"
+    description: "Your Unbrowse API key"
     required: true
   password:
     type: string
-    description: "Your encryption password for decrypting stored credentials (client-side only)"
+    description: "Your encryption password you previously set"
     required: true
   debug:
     type: boolean
