@@ -853,6 +853,14 @@ The code is executed in a safe sandbox and must be a valid arrow function or fun
           }
         }
 
+        // Transform static_headers from object to array format for executeWrapper
+        const staticHeadersArray = ability.static_headers
+          ? Object.entries(ability.static_headers).map(([key, value]) => ({
+              key: `${ability.service_name}::${key}`,
+              value_code: `() => '${value.replace(/'/g, "\\'")}'`
+            }))
+          : [];
+
         // Create a wrapper data object in the format executeWrapper expects
         const wrapperData = {
           input: {
@@ -861,7 +869,7 @@ The code is executed in a safe sandbox and must be a valid arrow function or fun
             ability_name: ability.ability_name,
             description: ability.description,
             wrapper_code: ability.wrapper_code,
-            static_headers: ability.static_headers,
+            static_headers: staticHeadersArray,
             dynamic_header_keys: ability.dynamic_header_keys,
             input_schema: ability.input_schema,
             dependency_order: ability.dependency_order,
