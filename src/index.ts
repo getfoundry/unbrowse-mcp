@@ -1151,21 +1151,13 @@ The code is executed in a safe sandbox and must be a valid arrow function or fun
           .describe(
             "Describe what you want to do (e.g., 'create trade', 'fetch token prices').",
           ),
-        limit: z
-          .number()
-          .optional()
-          .default(20)
-          .describe(
-            "Maximum number of results to return (1-50, default: 20).",
-          ),
       },
     },
-    async ({ query, limit }) => {
+    async ({ query }) => {
       // Ensure abilities are loaded
       await ensureInitialized();
 
-      const resultLimit =
-        typeof limit === "number" ? Math.min(Math.max(limit, 1), 50) : 20;
+      const resultLimit = 40;
 
       // Search abilities (now searches both personal /my/abilities and global /public/abilities)
       const result = await apiClient.searchAbilities(query, {}, resultLimit);

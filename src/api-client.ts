@@ -204,15 +204,14 @@ export class UnbrowseApiClient {
       seenIds.add(ability.ability_id);
 
       // Base score: higher for earlier results (relevance)
-      // PON score and success rate as additional factors
+      // Success rate as additional factor
       const baseScore = (personalAbilities.length - i) / personalAbilities.length;
-      const ponBoost = (ability.pon_score || 0) * 0.1;
       const successBoost = (ability.success_rate || 0) * 0.1;
       const personalBoost = 0.1; // 10% boost for personal abilities
 
       scoredAbilities.push({
         ability,
-        score: baseScore + ponBoost + successBoost + personalBoost,
+        score: baseScore + successBoost + personalBoost,
         isPersonal: true,
       });
     }
@@ -228,12 +227,11 @@ export class UnbrowseApiClient {
       seenIds.add(ability.ability_id);
 
       const baseScore = (publicAbilities.length - i) / publicAbilities.length;
-      const ponBoost = (ability.pon_score || 0) * 0.1;
       const successBoost = (ability.success_rate || 0) * 0.1;
 
       scoredAbilities.push({
         ability,
-        score: baseScore + ponBoost + successBoost,
+        score: baseScore + successBoost,
         isPersonal: false,
       });
     }
