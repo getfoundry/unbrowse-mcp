@@ -24,8 +24,8 @@ import { decryptCredentials } from "./crypto-utils.js";
 
 // User-level config from smithery.yaml
 export const configSchema = z.object({
-  apiKey: z.string().describe("Your Unbrowse API key (create via POST /my/api-keys after login)"),
-  password: z.string().describe("Your encryption password for decrypting stored credentials (client-side only)"),
+  apiKey: z.string().describe("Your Unbrowse API key from the dashboard"),
+  password: z.string().describe("Your encryption password for that you set in the dashboard"),
   debug: z.boolean().default(false).describe("Enable debug logging"),
   enableIndexTool: z.boolean().default(false).describe("Enable the ingest_api_endpoint tool for indexing new APIs"),
 });
@@ -44,6 +44,11 @@ export default function createServer({
   const server = new McpServer({
     name: "Unbrowse MCP",
     version: "1.0.0",
+    capabilities: {
+      tools: {
+        listChanged: true, // Enable dynamic tool registration
+      },
+    },
   });
 
   console.log("[INFO] McpServer instance created");
@@ -259,6 +264,110 @@ export default function createServer({
   let initializationPromise: Promise<void> | null = null;
   let isInitialized = false;
 
+  // Helper function to register an ability as an MCP tool (simplified version)
+  const registerAbilityAsTool = (ability: IndexedAbility): void => {
+    const toolName = ability.ability_name;
+
+    // Build description with dependency information
+    let toolDescription = ability.description || "";
+    if (ability.dependency_order && ability.dependency_order.length > 0) {
+      toolDescription += `\n\n**Dependencies (must be called first):** ${ability.dependency_order.join(", ")}`;
+    }
+
+    // Parse input schema to create zod schema
+    const inputSchemaProps: Record<string, any> = {};
+    if (ability.input_schema?.properties) {
+      for (const [key, prop] of Object.entries(ability.input_schema.properties as Record<string, any>)) {
+        let zodType: any;
+        switch ((prop as any).type) {
+          case 'string': zodType = z.string(); break;
+          case 'number': zodType = z.number(); break;
+          case 'integer': zodType = z.number().int(); break;
+          case 'boolean': zodType = z.boolean(); break;
+          case 'array': zodType = z.array(z.any()); break;
+          case 'object': zodType = z.record(z.any()); break;
+          default: zodType = z.any();
+        }
+
+        if (!ability.input_schema.required?.includes(key)) {
+          zodType = zodType.optional();
+        }
+        if ((prop as any).description) {
+          zodType = zodType.describe((prop as any).description);
+        }
+        inputSchemaProps[key] = zodType;
+      }
+    }
+
+    // Register the tool - execution will use execute_ability internally
+    server.registerTool(
+      toolName,
+      {
+        title: ability.ability_name.replace(/_/g, " ").replace(/\b\w/g, (l) => l.toUpperCase()),
+        description: toolDescription,
+        inputSchema: Object.keys(inputSchemaProps).length > 0 ? inputSchemaProps : { _placeholder: z.any().optional().describe("No parameters required") },
+      },
+      async (params) => {
+        // Forward to execute_ability logic
+        const payload = { ...params };
+        delete (payload as Record<string, unknown>)._placeholder;
+
+        const cachedAbility = abilityCache.get(ability.ability_id);
+        if (!cachedAbility) {
+          return {
+            content: [{
+              type: "text",
+              text: JSON.stringify({ success: false, error: `Ability not found: ${ability.ability_id}` }, null, 2),
+            }],
+          };
+        }
+
+        // Use the existing execute_ability logic by creating wrapper data
+        const staticHeadersArray = cachedAbility.static_headers
+          ? Object.entries(cachedAbility.static_headers).map(([key, value]) => ({
+              key: `${cachedAbility.service_name}::${key}`,
+              value_code: `() => '${value.replace(/'/g, "\\'")}'`
+            }))
+          : [];
+
+        const wrapperData = {
+          input: {
+            service_name: cachedAbility.service_name,
+            ability_id: cachedAbility.ability_id,
+            ability_name: cachedAbility.ability_name,
+            description: cachedAbility.description,
+            wrapper_code: cachedAbility.wrapper_code,
+            static_headers: staticHeadersArray,
+            dynamic_header_keys: cachedAbility.dynamic_header_keys,
+            input_schema: cachedAbility.input_schema,
+            dependency_order: cachedAbility.dependency_order,
+            http_method: cachedAbility.request_method,
+            url: cachedAbility.request_url,
+          },
+          dependencies: cachedAbility.dependencies,
+        };
+
+        const result = await executeWrapper(cachedAbility.ability_id, payload, {}, {}, wrapperData, undefined, apiClient);
+
+        return {
+          content: [{
+            type: "text",
+            text: JSON.stringify({
+              success: result.success,
+              statusCode: result.statusCode,
+              responseBody: result.responseBody,
+              responseHeaders: result.responseHeaders,
+              error: result.error,
+              executedAt: result.executedAt,
+            }, null, 2),
+          }],
+        };
+      },
+    );
+
+    console.log(`[INFO] Registered favorite ability as tool: ${toolName}`);
+  };
+
   const candidateVariantsFromDomain = (domain: string): string[] => {
     const trimmed = domain.trim();
     if (!trimmed) return [];
@@ -368,7 +477,72 @@ export default function createServer({
     if (initializationPromise) return initializationPromise;
 
     initializationPromise = (async () => {
-      // Fetch abilities from the API to populate the accessible abilities list
+      // Step 1: Load favorites and register them as tools
+      try {
+        console.log('[INFO] Loading favorited abilities...');
+        const favoritesResult = await apiClient.listAbilities({ favorites: true });
+        const favoriteAbilities = favoritesResult.abilities || [];
+        console.log(`[INFO] Found ${favoriteAbilities.length} favorited abilities`);
+
+        const registeredAbilityIds = new Set<string>();
+        let registeredCount = 0;
+
+        for (const ability of favoriteAbilities) {
+          // Skip duplicates
+          if (registeredAbilityIds.has(ability.ability_id)) {
+            console.log(`[DEBUG] Skipping duplicate favorite: ${ability.ability_id}`);
+            continue;
+          }
+
+          if (await abilityHasCredentialCoverage(ability)) {
+            accessibleAbilities.push(ability);
+            abilityCache.set(ability.ability_id, ability);
+
+            // Register as individual MCP tool
+            try {
+              registerAbilityAsTool(ability);
+              registeredAbilityIds.add(ability.ability_id);
+              registeredCount++;
+            } catch (error: any) {
+              console.error(`[ERROR] Failed to register ${ability.ability_id}:`, error.message);
+            }
+          }
+        }
+
+        console.log(`[INFO] Registered ${registeredCount} favorite abilities as tools`);
+
+        // Notify MCP client that tools have been added
+        // We need to wait for the client to connect before sending the notification
+        if (registeredCount > 0) {
+          // Poll until client is connected, then send notification
+          const waitForConnection = async () => {
+            const maxWaitTime = 30000; // 30 seconds max
+            const pollInterval = 100; // Check every 100ms
+            const startTime = Date.now();
+
+            while (!server.isConnected()) {
+              if (Date.now() - startTime > maxWaitTime) {
+                console.warn('[WARN] Client did not connect within 30 seconds, notification not sent');
+                return;
+              }
+              await new Promise(resolve => setTimeout(resolve, pollInterval));
+            }
+
+            // Client is now connected, send notification
+            server.sendToolListChanged();
+            console.log('[INFO] Client connected, sent tools/list_changed notification');
+          };
+
+          // Don't await - let this run in background
+          waitForConnection().catch(error => {
+            console.error('[ERROR] Failed to send tool list changed notification:', error);
+          });
+        }
+      } catch (error: any) {
+        console.error(`[ERROR] Failed to load favorites:`, error.message);
+      }
+
+      // Step 2: Fetch all abilities from the API to populate the accessible abilities list
       // Pre-populate the cache with all abilities that have credential coverage
       try {
         const result = await apiClient.listAbilities();
@@ -378,7 +552,13 @@ export default function createServer({
         );
 
         // Store them for credential coverage checking AND cache them
+        // Skip abilities already added from favorites
         for (const ability of candidateAbilities) {
+          // Skip if already cached (from favorites)
+          if (abilityCache.has(ability.ability_id)) {
+            continue;
+          }
+
           if (await abilityHasCredentialCoverage(ability)) {
             accessibleAbilities.push(ability);
             abilityCache.set(ability.ability_id, ability);
@@ -407,11 +587,6 @@ export default function createServer({
 
     return initializationPromise;
   };
-
-  // Start initialization immediately in background (non-blocking)
-  ensureInitialized().catch((error) => {
-    console.error('[ERROR] Background initialization failed:', error);
-  });
 
   // Tool: Execute Ability
   server.registerTool(
@@ -678,15 +853,6 @@ The code is executed in a safe sandbox and must be a valid arrow function or fun
           }
         }
 
-        // Transform IndexedAbility to the format executeWrapper expects
-        // Convert static_headers from object to array format for executeWrapper
-        const staticHeadersArray = ability.static_headers
-          ? Object.entries(ability.static_headers).map(([key, value]) => ({
-              key: `${ability.service_name}::${key}`,
-              value_code: `() => '${value.replace(/'/g, "\\'")}'`
-            }))
-          : [];
-
         // Create a wrapper data object in the format executeWrapper expects
         const wrapperData = {
           input: {
@@ -695,7 +861,7 @@ The code is executed in a safe sandbox and must be a valid arrow function or fun
             ability_name: ability.ability_name,
             description: ability.description,
             wrapper_code: ability.wrapper_code,
-            static_headers: staticHeadersArray,
+            static_headers: ability.static_headers,
             dynamic_header_keys: ability.dynamic_header_keys,
             input_schema: ability.input_schema,
             dependency_order: ability.dependency_order,
@@ -969,13 +1135,20 @@ The code is executed in a safe sandbox and must be a valid arrow function or fun
     {
       title: "Search Abilities",
       description:
-        "Searches for abilities to register into tool context. Use this when user requests for something that you do not have capabilities of doing.",
+        "Searches for abilities across both your personal abilities and the global published index. Use this when user requests for something that you do not have capabilities of doing.",
       inputSchema: {
         query: z
           .string()
           .min(1)
           .describe(
             "Describe what you want to do (e.g., 'create trade', 'fetch token prices').",
+          ),
+        limit: z
+          .number()
+          .optional()
+          .default(20)
+          .describe(
+            "Maximum number of results to return (1-50, default: 20).",
           ),
         userCredentials: z
           .array(z.string())
@@ -999,9 +1172,9 @@ The code is executed in a safe sandbox and must be a valid arrow function or fun
       const resultLimit =
         typeof limit === "number" ? Math.min(Math.max(limit, 1), 50) : 20;
 
-      // Search abilities (now uses /my/abilities with client-side filtering)
-      const result = await apiClient.searchAbilities(query);
-      const matches = result.abilities.slice(0, resultLimit);
+      // Search abilities (now searches both personal /my/abilities and global /public/abilities)
+      const result = await apiClient.searchAbilities(query, {}, resultLimit);
+      const matches = result.abilities;
       const domainCandidates = new Set<string>(
         Array.from(availableCredentialKeys).map((key) => key.split("::")[0]),
       );
@@ -1070,6 +1243,13 @@ The code is executed in a safe sandbox and must be a valid arrow function or fun
       };
     },
   );
+
+  // Start background initialization - loads abilities for search/execute
+  // Note: autoRegisterFavorites is deprecated and removed since we can't block synchronously
+  // Users should use search_abilities to discover abilities, then execute_ability to run them
+  ensureInitialized().catch((error) => {
+    console.error('[ERROR] Background initialization failed:', error);
+  });
 
   return server.server;
 }
