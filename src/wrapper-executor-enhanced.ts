@@ -116,17 +116,44 @@ function createFetchOverride(
       }
     }
 
-    // Merge headers
-    const mergedHeaders = {
+    // Merge headers with special handling for Cookie headers
+    const originalHeaders = (init?.headers as Record<string, string>) || {};
+    const mergedHeaders: Record<string, string> = {
       ...evaluatedStaticHeaders,
       ...dynamicHeaderNames,
-      ...((init?.headers as Record<string, string>) || {}),
+      ...originalHeaders,
     };
 
-    // Remove Content-Length header if present, let fetch recalculate it
-    // This prevents RequestContentLengthMismatchError with undici
-    delete mergedHeaders['Content-Length'];
-    delete mergedHeaders['content-length'];
+    // Special case: Merge Cookie headers instead of overriding
+    const cookieHeaders: string[] = [];
+    if (evaluatedStaticHeaders['Cookie']) cookieHeaders.push(evaluatedStaticHeaders['Cookie']);
+    if (dynamicHeaderNames['Cookie']) cookieHeaders.push(dynamicHeaderNames['Cookie']);
+    if (originalHeaders['Cookie']) cookieHeaders.push(originalHeaders['Cookie']);
+    if (cookieHeaders.length > 1) {
+      // Merge multiple cookie headers with semicolon separator
+      mergedHeaders['Cookie'] = cookieHeaders.join('; ');
+    }
+
+    // Remove forbidden/problematic headers that should be auto-calculated by fetch
+    // These headers cause errors if manually set or modified
+    const forbiddenHeaders = [
+      'Content-Length',    // Causes UND_ERR_REQ_CONTENT_LENGTH_MISMATCH
+      'content-length',
+      'Transfer-Encoding', // Can cause chunking issues
+      'transfer-encoding',
+      'Host',              // Should match the URL automatically
+      'host',
+      'Connection',        // Forbidden in fetch API
+      'connection',
+      'Keep-Alive',        // Forbidden in fetch API
+      'keep-alive',
+      'Upgrade',           // Forbidden in fetch API
+      'upgrade',
+    ];
+
+    for (const header of forbiddenHeaders) {
+      delete mergedHeaders[header];
+    }
 
     const newInit: RequestInit = {
       ...init,
