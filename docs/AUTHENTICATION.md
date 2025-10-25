@@ -2,10 +2,11 @@
 
 Complete guide to authentication in the Reverse Engineer API, covering both session-based and API key authentication.
 
-**Version**: 4.0.0
-**Authentication Methods**: Better Auth Sessions + Unkey API Keys
+**Version**: 4.1.0
+**Authentication Methods**: Better Auth Sessions + Unkey API Keys (Dual Auth on All Routes)
 **Backend**: Better Auth 1.3.29 with Bearer Plugin + Unkey API Key Service
 **Framework**: Mastra 0.21.1
+**Architecture**: Modular routes with middleware-based authentication
 
 ---
 
@@ -48,6 +49,25 @@ Both methods use the same `Authorization: Bearer <token>` header format, and the
 - ✅ **Multi-tenant isolation** - Users only see their own data
 - ✅ **Official client library** - Use `better-auth/client` for frontend
 - ✅ **Usage tracking** - Track last used timestamp for API keys
+
+### What Changed in v4.1.0
+
+**Refactored**:
+- ✅ Routes organized into modular files by domain
+- ✅ Main routes.ts reduced from 2543 lines to 167 lines (93% reduction)
+- ✅ All protected routes now support dual authentication (API keys + sessions)
+- ✅ Middleware-based authentication using `apiKeyAuth` middleware
+- ✅ Shared `getUserId()` utility for seamless auth fallback
+
+**Route Modules**:
+- ✅ `routes/public.ts` - Public routes (no auth)
+- ✅ `routes/abilities.ts` - User ability management
+- ✅ `routes/analytics.ts` - Analytics & rewards
+- ✅ `routes/tokens.ts` - Token management
+- ✅ `routes/domains.ts` - Domain verification
+- ✅ `routes/api-keys.ts` - API key management
+- ✅ `routes/credentials.ts` - Credential management
+- ✅ `routes/ingestion.ts` - HAR & URL ingestion
 
 ### What Changed in v4.0.0
 
@@ -118,28 +138,33 @@ Choose the right authentication method for your use case:
 ┌─────────────────────────────────────────────────────────────────────────┐
 │                      Mastra Server (Port 4111)                           │
 │  ┌──────────────────────────────────────────────────────────────────┐  │
-│  │         Authentication Middleware (middleware.ts)                 │  │
+│  │    Route Middleware (apiKeyAuth from api-key-auth.ts)            │  │
+│  │    Applied to all protected routes via middleware: [apiKeyAuth]  │  │
 │  │                                                                   │  │
-│  │  Step 1: Try API Key Auth (api-key-auth.ts)                      │  │
+│  │  Step 1: Try API Key Auth                                        │  │
 │  │  ├─ Extract Bearer token from Authorization header               │  │
 │  │  ├─ If starts with "re_": verify with Unkey service              │  │
 │  │  ├─ Look up user in local database (api_keys table)              │  │
-│  │  └─ Set userId, authMethod='api_key' in context                  │  │
+│  │  └─ Set userId, authMethod='api_key' in context → call next()    │  │
 │  │                                                                   │  │
-│  │  Step 2: If no API key, try Session Auth                         │  │
-│  │  ├─ Call Better Auth: auth.api.getSession()                      │  │
-│  │  ├─ Verify session token in PostgreSQL                           │  │
-│  │  └─ Set userId, authMethod='session' in context                  │  │
-│  │                                                                   │  │
-│  │  Step 3: Pass to route handler with userId in context            │  │
+│  │  Step 2: Route Handler gets userId from context                  │  │
+│  │  ├─ Call getUserId(c) helper function                            │  │
+│  │  ├─ If userId in context (from middleware): use it               │  │
+│  │  ├─ Else: try Better Auth session with getSession()              │  │
+│  │  └─ Return userId or null                                        │  │
 │  └──────────────────────────────────────────────────────────────────┘  │
 │                                                                          │
 │  ┌──────────────────────────────────────────────────────────────────┐  │
-│  │         Route Handlers (routes.ts)                                │  │
-│  │  • /better-auth/*  → Better Auth (login, register, etc.)         │  │
-│  │  • /my/*           → Protected routes (requires auth)            │  │
-│  │  • /my/api-keys    → API key management                          │  │
-│  │  • /public/*       → Public routes (optional auth)               │  │
+│  │         Route Modules (src/server/routes/)                        │  │
+│  │  • routes/public.ts      → Public routes (no auth)               │  │
+│  │  • routes/abilities.ts   → User ability management               │  │
+│  │  • routes/analytics.ts   → Analytics & rewards                   │  │
+│  │  • routes/tokens.ts      → Token balance & purchases             │  │
+│  │  • routes/domains.ts     → Domain verification                   │  │
+│  │  • routes/api-keys.ts    → API key management                    │  │
+│  │  • routes/credentials.ts → Credential management                 │  │
+│  │  • routes/ingestion.ts   → HAR & URL ingestion                   │  │
+│  │  • routes.ts (main)      → Imports all & exports apiRoutes       │  │
 │  └──────────────────────────────────────────────────────────────────┘  │
 └───────────────────┬──────────────────────────────────────────────────────┘
                     │
