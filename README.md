@@ -138,7 +138,7 @@ pnpm install
 3. Configure your credentials in `smithery.yaml` or MCP settings:
    - `apiKey`: Your Unbrowse API key (from step 3 above)
    - `password`: Your local encryption password for credentials (choose a strong password)
-   - `baseUrl`: API base URL (default: `http://localhost:4111`)
+   - The Unbrowse API base URL is fixed to `https://agent.unbrowse.ai`
 
 The password is used to decrypt credentials stored on the server. The API key authenticates your requests to the Unbrowse API.
 

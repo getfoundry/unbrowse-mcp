@@ -84,8 +84,7 @@ curl -X POST http://localhost:4111/my/api-keys \
       "args": ["/path/to/unbrowse-mcp/build/index.js"],
       "env": {
         "API_KEY": "re_xxxxxxxxxxxx",
-        "PASSWORD": "your-encryption-password",
-        "BASE_URL": "http://localhost:4111"
+        "PASSWORD": "your-encryption-password"
       }
     }
   }
@@ -107,10 +106,11 @@ config:
 config:
   apiKey: "re_xxxxxxxxxxxx"
   password: "your-password"
-  baseUrl: "http://localhost:4111"
   debug: false
   enableIndexTool: false
 ```
+
+> **Note:** The Unbrowse API base URL is now fixed to `https://agent.unbrowse.ai` and does not require configuration.
 
 ### Step 3: Migrate Your Credentials (If Needed)
 
@@ -192,7 +192,7 @@ const apiClient = new UnbrowseApiClient();
 
 **New:**
 ```typescript
-const apiClient = createApiClient(apiKey, baseUrl);
+const apiClient = createApiClient(apiKey);
 ```
 
 ### 2. listAbilities() Parameters
