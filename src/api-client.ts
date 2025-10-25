@@ -49,6 +49,31 @@ export interface ApiClientConfig {
 export const UNBROWSE_API_BASE_URL = "https://agent.unbrowse.ai";
 
 /**
+ * Transform camelCase API response to snake_case IndexedAbility
+ */
+function transformAbilityResponse(apiAbility: any): IndexedAbility {
+  return {
+    ability_id: apiAbility.abilityId,
+    ability_name: apiAbility.abilityName,
+    service_name: apiAbility.serviceName,
+    description: apiAbility.description,
+    input_schema: apiAbility.metadata?.input_schema || apiAbility.inputSchema,
+    output_schema: apiAbility.metadata?.output_schema || apiAbility.outputSchema,
+    request_method: apiAbility.metadata?.request_method || apiAbility.requestMethod,
+    request_url: apiAbility.metadata?.request_url || apiAbility.requestUrl,
+    dependency_order: apiAbility.metadata?.dependency_order || apiAbility.dependencyOrder || [],
+    requires_dynamic_headers: apiAbility.dynamicHeadersRequired || false,
+    dynamic_header_keys: apiAbility.dynamicHeaderKeys || [],
+    static_headers: apiAbility.metadata?.static_headers || apiAbility.staticHeaders,
+    wrapper_code: apiAbility.metadata?.wrapper_code || apiAbility.wrapperCode || '',
+    generated_at: apiAbility.metadata?.generated_at || apiAbility.generatedAt || apiAbility.createdAt,
+    dependencies: apiAbility.dependencies,
+    pon_score: apiAbility.ponScore,
+    success_rate: apiAbility.successRate,
+  };
+}
+
+/**
  * Unbrowse API Client
  */
 export class UnbrowseApiClient {
@@ -116,37 +141,71 @@ export class UnbrowseApiClient {
       throw new Error(`Failed to list abilities: ${response.status} ${response.statusText}`);
     }
 
-    return response.json();
+    const data = await response.json();
+
+    // Transform camelCase API response to snake_case
+    return {
+      success: data.success,
+      count: data.count,
+      abilities: (data.abilities || []).map(transformAbilityResponse),
+    };
   }
 
   /**
-   * Search abilities by query (searches user's abilities)
-   * This internally uses /my/abilities and filters by query client-side
-   * For public search, use searchPublicAbilities()
+   * Search abilities across both user's personal abilities AND the global published index
+   * This searches both /my/abilities (personal) and /public/abilities (global) and merges results
+   *
+   * @param query - Search query string
+   * @param options - Filter options for personal abilities
+   * @param limit - Maximum number of results to return (default: 30)
    */
   async searchAbilities(query: string, options: {
     favorites?: boolean;
     published?: boolean;
-  } = {}): Promise<{
+  } = {}, limit: number = 30): Promise<{
     success: boolean;
     count: number;
     abilities: IndexedAbility[];
   }> {
-    // Fetch all user abilities
-    const result = await this.listAbilities(options);
+    // Search both personal abilities and global published abilities in parallel
+    const [personalResult, publicResult] = await Promise.allSettled([
+      // Search personal abilities (client-side filtering)
+      this.listAbilities(options).then(result => {
+        const lowerQuery = query.toLowerCase();
+        return result.abilities.filter(ability =>
+          ability.ability_name?.toLowerCase().includes(lowerQuery) ||
+          ability.description?.toLowerCase().includes(lowerQuery) ||
+          ability.service_name?.toLowerCase().includes(lowerQuery)
+        );
+      }),
+      // Search global published abilities (server-side vector search)
+      this.searchPublicAbilities(query, limit)
+        .then(result => result.abilities)
+        .catch(() => [] as IndexedAbility[]), // Fallback to empty array if public search fails
+    ]);
 
-    // Filter client-side by query
-    const lowerQuery = query.toLowerCase();
-    const filteredAbilities = result.abilities.filter(ability =>
-      ability.ability_name?.toLowerCase().includes(lowerQuery) ||
-      ability.description?.toLowerCase().includes(lowerQuery) ||
-      ability.service_name?.toLowerCase().includes(lowerQuery)
-    );
+    // Combine results, deduplicating by ability_id (personal abilities take precedence)
+    const personalAbilities = personalResult.status === 'fulfilled' ? personalResult.value : [];
+    const publicAbilities = publicResult.status === 'fulfilled' ? publicResult.value : [];
+
+    const abilityMap = new Map<string, IndexedAbility>();
+
+    // Add public abilities first
+    for (const ability of publicAbilities) {
+      abilityMap.set(ability.ability_id, ability);
+    }
+
+    // Override with personal abilities (they take precedence)
+    for (const ability of personalAbilities) {
+      abilityMap.set(ability.ability_id, ability);
+    }
+
+    const mergedAbilities = Array.from(abilityMap.values()).slice(0, limit);
 
     return {
       success: true,
-      count: filteredAbilities.length,
-      abilities: filteredAbilities
+      count: mergedAbilities.length,
+      abilities: mergedAbilities
     };
   }
 
@@ -168,7 +227,15 @@ export class UnbrowseApiClient {
       throw new Error(`Failed to search public abilities: ${response.status} ${response.statusText}`);
     }
 
-    return response.json();
+    const data = await response.json();
+
+    // Transform camelCase API response to snake_case
+    return {
+      success: data.success,
+      count: data.count,
+      query: data.query,
+      abilities: (data.abilities || []).map(transformAbilityResponse),
+    };
   }
 
   /**
@@ -190,7 +257,14 @@ export class UnbrowseApiClient {
       throw new Error(`Failed to get ability: ${response.status} ${response.statusText}`);
     }
 
-    return response.json();
+    const data = await response.json();
+
+    // Transform camelCase API response to snake_case
+    return {
+      success: data.success,
+      ability: transformAbilityResponse(data.ability),
+      wrapper: data.wrapper,
+    };
   }
 
   /**
