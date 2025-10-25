@@ -1157,7 +1157,7 @@ The code is executed in a safe sandbox and must be a valid arrow function or fun
       // Ensure abilities are loaded
       await ensureInitialized();
 
-      const resultLimit = 40;
+      const resultLimit = 20;
 
       // Search abilities (now searches both personal /my/abilities and global /public/abilities)
       const result = await apiClient.searchAbilities(query, {}, resultLimit);
