@@ -5,8 +5,14 @@
   * [Getting Started](GETTING_STARTED.md)
   * [Status](STATUS.md)
 
+* Rewards & Tokenomics 🆕
+  * [⭐ System Overview](REWARDS_SYSTEM_OVERVIEW.md)
+  * [🚀 Setup Guide](REWARDS_SYSTEM_SETUP.md)
+  * [🔒 Safety Measures](REWARDS_SAFETY.md)
+
 * Feature Requests
   * [Hybrid Search Feature](rach-requests/hybrid-search-feature.md)
+  * [Vector CRUD Operations](rach-requests/vector-crud-operations.md)
 
 * API Documentation
   * [Complete API Guide](API_COMPLETE_GUIDE.md)
@@ -20,10 +26,12 @@
   * [API Ingestion](technical-reference/API_INGESTION.md)
   * [Ability Format](technical-reference/ABILITY_FORMAT.md)
   * [Credentials Storage](technical-reference/CREDENTIALS_STORAGE.md)
+  * [Database Schema](technical-reference/DATABASE.md)
   * [Deployment](technical-reference/DEPLOYMENT.md)
   * [Domain Blacklist](technical-reference/DOMAIN_BLACKLIST.md)
   * [Dual Storage](technical-reference/DUAL_STORAGE.md)
   * [HAR Chunking](technical-reference/HAR_CHUNKING.md)
+  * [Setup Guide](technical-reference/SETUP_GUIDE.md)
   * [User Guide](technical-reference/USER_GUIDE.md)
   * [Vector DB Integration](technical-reference/VECTOR_DB_INTEGRATION.md)
 
