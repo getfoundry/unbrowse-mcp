@@ -123,6 +123,11 @@ function createFetchOverride(
       ...((init?.headers as Record<string, string>) || {}),
     };
 
+    // Remove Content-Length header if present, let fetch recalculate it
+    // This prevents RequestContentLengthMismatchError with undici
+    delete mergedHeaders['Content-Length'];
+    delete mergedHeaders['content-length'];
+
     const newInit: RequestInit = {
       ...init,
       headers: mergedHeaders,
