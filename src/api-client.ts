@@ -43,9 +43,10 @@ export interface IndexedAbility {
  */
 export interface ApiClientConfig {
   apiKey: string;
-  baseUrl?: string;
   timeout?: number;
 }
+
+export const UNBROWSE_API_BASE_URL = "https://agent.unbrowse.ai";
 
 /**
  * Unbrowse API Client
@@ -57,7 +58,7 @@ export class UnbrowseApiClient {
 
   constructor(config: ApiClientConfig) {
     this.apiKey = config.apiKey;
-    this.baseUrl = "https://agent.unbrowse.ai";
+    this.baseUrl = UNBROWSE_API_BASE_URL;
     this.timeout = config.timeout || 10000; // 10 second default timeout
   }
 
@@ -383,10 +384,9 @@ export class UnbrowseApiClient {
 /**
  * Create an API client instance
  * @param apiKey - Your Unbrowse API key
- * @param baseUrl - Optional base URL (defaults to http://localhost:4111)
  */
-export function createApiClient(apiKey: string, baseUrl?: string): UnbrowseApiClient {
-  return new UnbrowseApiClient({ apiKey, baseUrl });
+export function createApiClient(apiKey: string): UnbrowseApiClient {
+  return new UnbrowseApiClient({ apiKey });
 }
 
 /**

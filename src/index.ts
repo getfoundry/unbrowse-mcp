@@ -13,6 +13,7 @@ import vm from "vm";
 import {
   createApiClient,
   formatAbilityDescription,
+  UNBROWSE_API_BASE_URL,
   type IndexedAbility,
   type UnbrowseApiClient,
 } from "./api-client.js";
@@ -25,7 +26,6 @@ import { decryptCredentials } from "./crypto-utils.js";
 export const configSchema = z.object({
   apiKey: z.string().describe("Your Unbrowse API key (create via POST /my/api-keys after login)"),
   password: z.string().describe("Your encryption password for decrypting stored credentials (client-side only)"),
-  baseUrl: z.string().default("http://localhost:4111").describe("Unbrowse API base URL"),
   debug: z.boolean().default(false).describe("Enable debug logging"),
   enableIndexTool: z.boolean().default(false).describe("Enable the ingest_api_endpoint tool for indexing new APIs"),
 });
@@ -38,8 +38,8 @@ export default function createServer({
   console.log("[INFO] createServer called - starting initialization");
 
   // Create authenticated API client
-  const apiClient: UnbrowseApiClient = createApiClient(config.apiKey, config.baseUrl);
-  console.log(`[INFO] API client created with base URL: ${config.baseUrl}`);
+  const apiClient: UnbrowseApiClient = createApiClient(config.apiKey);
+  console.log(`[INFO] API client created with base URL: ${UNBROWSE_API_BASE_URL}`);
 
   const server = new McpServer({
     name: "Unbrowse MCP",
@@ -182,7 +182,7 @@ export default function createServer({
         }
       } catch (error: any) {
         console.error(`[ERROR] Failed to load abilities from API:`, error.message);
-        console.error(`[ERROR] Make sure the Unbrowse API is accessible at ${config.baseUrl}`);
+        console.error(`[ERROR] Make sure the Unbrowse API is accessible at ${UNBROWSE_API_BASE_URL}`);
         console.error(`[ERROR] Verify your API key is valid and not expired`);
       }
 
@@ -599,7 +599,7 @@ The code is executed in a safe sandbox and must be a valid arrow function or fun
         console.log(`[TRACE] Ingesting API endpoint: ${input}`);
 
         // Call the ingest API endpoint with authentication
-        const response = await fetch(`${config.baseUrl}/ingest/api`, {
+        const response = await fetch(`${UNBROWSE_API_BASE_URL}/ingest/api`, {
           method: 'POST',
           headers: {
             'Authorization': `Bearer ${config.apiKey}`,

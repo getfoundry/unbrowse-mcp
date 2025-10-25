@@ -1,5 +1,14 @@
 # Changelog
 
+## [Unreleased]
+
+### Removed
+- Configuration option for the Unbrowse API base URL; requests now always target `https://agent.unbrowse.ai`.
+
+### Changed
+- `createApiClient` now accepts only the API key and handles the base URL internally.
+- `configSchema` no longer exposes `baseUrl`; server logging references the fixed endpoint.
+
 ## [2.0.0] - 2025-10-25
 
 ### Breaking Changes
@@ -13,7 +22,7 @@
 
 #### API Client Changes
 - **BREAKING**: Removed default `apiClient` export
-- **BREAKING**: Must use `createApiClient(apiKey, baseUrl)` factory function
+- **BREAKING**: Must use `createApiClient(apiKey)` factory function
 - **BREAKING**: `listAbilities()` parameters changed - removed `userCreds`, `filterByDomains`, `forToolRegistration`
 - **BREAKING**: `searchAbilities()` now uses client-side filtering instead of server-side
 - **BREAKING**: Credential methods now use domain-based keys instead of service names
@@ -42,13 +51,12 @@
 
 #### Configuration Updates
 - Added `apiKey` (required): Your Unbrowse API key
-- Added `baseUrl` (optional): API base URL (default: `http://localhost:4111`)
 - Renamed `password` field with explicit description
 
 ### Changed
 
 #### API Client (`src/api-client.ts`)
-- Constructor now requires `apiKey` and optional `baseUrl`
+- Constructor now requires `apiKey` and uses the fixed Unbrowse base URL
 - All requests include `Authorization: Bearer ${apiKey}` header
 - `listAbilities()` now fetches from `/my/abilities` with `favorites` and `published` filters
 - `searchAbilities()` performs client-side filtering on user's abilities
@@ -60,8 +68,8 @@
 
 #### Main Server (`src/index.ts`)
 - Creates authenticated `UnbrowseApiClient` instance on startup
-- Passes `apiKey` and `baseUrl` from config to API client
-- Updated error messages to include configured base URL
+- Passes `apiKey` from config to API client
+- Updated error messages to include the fixed base URL
 - `ingest_api_endpoint` tool now sends authenticated requests
 
 #### Wrapper Executor (`src/wrapper-executor-enhanced.ts`)
@@ -89,7 +97,7 @@
 
 #### Updated Files
 - `README.md` - Updated with new authentication flow and setup instructions
-- `smithery.yaml` - Added `apiKey`, `password`, and `baseUrl` configuration
+- `smithery.yaml` - Documented `apiKey` and password configuration requirements
 
 ### Migration Path
 
@@ -117,7 +125,7 @@ To upgrade from v1.x to v2.0.0:
 2. **Update configuration**:
    - Add `apiKey: "re_xxxxxxxxxxxx"` to your config
    - Add `password: "your-encryption-password"` (explicitly)
-   - Optionally set `baseUrl` (defaults to `http://localhost:4111`)
+   - Base URL is fixed to `https://agent.unbrowse.ai`
 
 3. **Rebuild**:
    ```bash
