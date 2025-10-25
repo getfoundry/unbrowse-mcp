@@ -34,8 +34,6 @@ export interface IndexedAbility {
     }>;
     unresolved?: any[];
   };
-  pon_score?: number;
-  success_rate?: number;
 }
 
 /**
@@ -68,8 +66,6 @@ function transformAbilityResponse(apiAbility: any): IndexedAbility {
     wrapper_code: apiAbility.metadata?.wrapper_code || apiAbility.wrapperCode || '',
     generated_at: apiAbility.metadata?.generated_at || apiAbility.generatedAt || apiAbility.createdAt,
     dependencies: apiAbility.dependencies,
-    pon_score: apiAbility.ponScore,
-    success_rate: apiAbility.successRate,
   };
 }
 
@@ -204,14 +200,12 @@ export class UnbrowseApiClient {
       seenIds.add(ability.ability_id);
 
       // Base score: higher for earlier results (relevance)
-      // Success rate as additional factor
       const baseScore = (personalAbilities.length - i) / personalAbilities.length;
-      const successBoost = (ability.success_rate || 0) * 0.1;
       const personalBoost = 0.1; // 10% boost for personal abilities
 
       scoredAbilities.push({
         ability,
-        score: baseScore + successBoost + personalBoost,
+        score: baseScore + personalBoost,
         isPersonal: true,
       });
     }
@@ -227,11 +221,10 @@ export class UnbrowseApiClient {
       seenIds.add(ability.ability_id);
 
       const baseScore = (publicAbilities.length - i) / publicAbilities.length;
-      const successBoost = (ability.success_rate || 0) * 0.1;
 
       scoredAbilities.push({
         ability,
-        score: baseScore + successBoost,
+        score: baseScore,
         isPersonal: false,
       });
     }

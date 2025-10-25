@@ -1218,8 +1218,6 @@ The code is executed in a safe sandbox and must be a valid arrow function or fun
                   dependencyOrder: a.dependency_order,
                   missingDependencies:
                     a.dependencies?.missing?.map((d) => d.ability_id) || [],
-                  ponScore: a.pon_score,
-                  successRate: a.success_rate,
                 })),
               },
               null,
