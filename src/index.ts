@@ -990,13 +990,6 @@ The code is executed in a safe sandbox and must be a valid arrow function or fun
           .describe(
             "Restrict private abilities to those that match credential domains.",
           ),
-        limit: z
-          .number()
-          .int()
-          .min(1)
-          .max(50)
-          .optional()
-          .describe("Maximum number of results to return (default 20)."),
       },
     },
     async ({ query, userCredentials, filterByDomains, limit }) => {
