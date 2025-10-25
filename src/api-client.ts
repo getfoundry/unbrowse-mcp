@@ -234,7 +234,7 @@ export class UnbrowseApiClient {
       // Get all personal abilities (no client-side filtering)
       this.listAbilities(options).then(result => result.abilities),
       // Search global published abilities (server-side vector search)
-      this.searchPublicAbilities(query, limit)
+      this.searchPublicAbilities(query, limit * 3)
         .then(result => result.abilities)
         .catch(() => [] as IndexedAbility[]), // Fallback to empty array if public search fails
     ]);
