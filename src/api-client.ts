@@ -184,23 +184,63 @@ export class UnbrowseApiClient {
         .catch(() => [] as IndexedAbility[]), // Fallback to empty array if public search fails
     ]);
 
-    // Combine results, deduplicating by ability_id (personal abilities take precedence)
+    // Extract results from Promise.allSettled
     const personalAbilities = personalResult.status === 'fulfilled' ? personalResult.value : [];
     const publicAbilities = publicResult.status === 'fulfilled' ? publicResult.value : [];
 
-    const abilityMap = new Map<string, IndexedAbility>();
-
-    // Add public abilities first
-    for (const ability of publicAbilities) {
-      abilityMap.set(ability.ability_id, ability);
+    // Combine and rank abilities with 10% boost for personal abilities
+    interface ScoredAbility {
+      ability: IndexedAbility;
+      score: number;
+      isPersonal: boolean;
     }
 
-    // Override with personal abilities (they take precedence)
-    for (const ability of personalAbilities) {
-      abilityMap.set(ability.ability_id, ability);
+    const scoredAbilities: ScoredAbility[] = [];
+    const seenIds = new Set<string>();
+
+    // Score personal abilities with 10% boost
+    for (let i = 0; i < personalAbilities.length; i++) {
+      const ability = personalAbilities[i];
+      seenIds.add(ability.ability_id);
+
+      // Base score: higher for earlier results (relevance)
+      // PON score and success rate as additional factors
+      const baseScore = (personalAbilities.length - i) / personalAbilities.length;
+      const ponBoost = (ability.pon_score || 0) * 0.1;
+      const successBoost = (ability.success_rate || 0) * 0.1;
+      const personalBoost = 0.1; // 10% boost for personal abilities
+
+      scoredAbilities.push({
+        ability,
+        score: baseScore + ponBoost + successBoost + personalBoost,
+        isPersonal: true,
+      });
     }
 
-    const mergedAbilities = Array.from(abilityMap.values()).slice(0, limit);
+    // Score public abilities (no boost)
+    for (let i = 0; i < publicAbilities.length; i++) {
+      const ability = publicAbilities[i];
+
+      // Skip if already added as personal ability
+      if (seenIds.has(ability.ability_id)) {
+        continue;
+      }
+      seenIds.add(ability.ability_id);
+
+      const baseScore = (publicAbilities.length - i) / publicAbilities.length;
+      const ponBoost = (ability.pon_score || 0) * 0.1;
+      const successBoost = (ability.success_rate || 0) * 0.1;
+
+      scoredAbilities.push({
+        ability,
+        score: baseScore + ponBoost + successBoost,
+        isPersonal: false,
+      });
+    }
+
+    // Sort by score (highest first) and take top results
+    scoredAbilities.sort((a, b) => b.score - a.score);
+    const mergedAbilities = scoredAbilities.slice(0, limit).map(sa => sa.ability);
 
     return {
       success: true,
