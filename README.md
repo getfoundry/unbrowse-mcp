@@ -6,19 +6,21 @@ A Model Context Protocol (MCP) server that provides access to indexed web abilit
 
 ## Overview
 
-This MCP server implements the private registry capabilities described in `master.md`, serving as a stub for the Unbrowse platform's ability indexing and execution system.
+This MCP server connects to the Unbrowse API ([API Documentation](./docs/API_COMPLETE_GUIDE.md)) to provide AI assistants with access to your indexed web API abilities. All abilities are fetched from the cloud API with secure credential management and automatic header injection.
 
 ### Key Features
 
-- **Private Registry** - Lists indexed abilities from `wrapper-storage/` with credential-based filtering
-- **Secure Cookiejar** - AES-256-GCM encrypted credential storage with SECRET-based decryption
+- **Cloud-Based Ability Registry** - Fetches your indexed abilities from the Unbrowse API (GET /my/abilities)
+- **API Key Authentication** - Authenticates to Unbrowse API using long-lived API keys
+- **Client-Side Credential Decryption** - AES-256-GCM encrypted credentials are decrypted locally using your password
+- **Zero-Knowledge Security** - Password never leaves your machine; credentials encrypted on server
 - **Wrapper Execution** - Evaluates wrapper code with fetch override to inject headers automatically
 - **Header Injection** - Automatically injects both static and dynamic headers during execution
-- **Credential Filtering** - Only exposes abilities that match user's available credentials
+- **Credential Filtering** - Only exposes abilities you have credentials for
 - **Dependency Order Tracking** - Each ability shows which other abilities must be called first in sequence
-- **Domain-Based Search** - Filter abilities by cookie domains you have access to
+- **Semantic Search** - Search abilities using natural language queries
+- **API Indexing** - Ingest new API endpoints directly from the MCP (optional tool)
 - **401+ Error Handling** - Automatically marks credentials as expired and suggests login abilities
-- **Login Ability Detection** - Finds authentication endpoints when credentials expire
 
 ## Architecture
 
@@ -45,10 +47,11 @@ This MCP server implements the private registry capabilities described in `maste
 │                           │                                 │
 ├───────────────────────────┼─────────────────────────────────┤
 │                           ▼                                 │
-│                  Unbrowse API (localhost:4111)              │
+│         Unbrowse API (https://agent.unbrowse.ai)            │
 │                  • GET /my/abilities                        │
 │                  • GET /my/credentials/:domain              │
 │                  • POST /ingest/api                         │
+│                  • DELETE /my/credentials/:domain           │
 └─────────────────────────────────────────────────────────────┘
 ```
 
@@ -92,9 +95,11 @@ The MCP server uses a **dual-authentication** model for maximum security:
 
 ### Getting Your API Key
 
+Follow the complete authentication workflow from the [API Complete Guide](./docs/API_COMPLETE_GUIDE.md#quick-start):
+
 1. **Register an account** (if you don't have one):
 ```bash
-curl -X POST http://localhost:4111/auth/register \
+curl -X POST https://agent.unbrowse.ai/auth/register \
   -H "Content-Type: application/json" \
   -d '{
     "email": "your@email.com",
@@ -105,18 +110,18 @@ curl -X POST http://localhost:4111/auth/register \
 
 2. **Login to get a JWT token**:
 ```bash
-curl -X POST http://localhost:4111/auth/login \
+curl -X POST https://agent.unbrowse.ai/auth/login \
   -H "Content-Type: application/json" \
   -d '{
     "email": "your@email.com",
     "password": "YourSecurePassword123"
   }'
 ```
-Save the returned `token` value.
+Save the returned `token` value from the response.
 
 3. **Create an API key** using your JWT token:
 ```bash
-curl -X POST http://localhost:4111/my/api-keys \
+curl -X POST https://agent.unbrowse.ai/my/api-keys \
   -H "Authorization: Bearer YOUR_JWT_TOKEN" \
   -H "Content-Type: application/json" \
   -d '{
@@ -124,7 +129,9 @@ curl -X POST http://localhost:4111/my/api-keys \
     "expiresAt": "2026-12-31T23:59:59Z"
   }'
 ```
-**Important**: Save the returned `key` value - it's only shown once!
+**⚠️ Important**: Save the returned `key` value - it's only shown once! This is your API key for the MCP server.
+
+The API key format is `re_xxxxxxxxxxxx` (managed by Unkey integration).
 
 ### Installation
 
@@ -170,15 +177,15 @@ pnpm build
 
 ### Available Tools
 
-#### 1. `list_abilities`
+#### 1. `search_abilities`
 
-Lists all indexed abilities from wrapper-storage with credential filtering and optional domain-based filtering.
+Searches your indexed abilities from the Unbrowse API. Abilities are cached for execution.
 
 **Input:**
 ```json
 {
-  "userCredentials": ["www.hedgemony.fund::cookie", "www.wom.fun::authorization"],
-  "filterByDomains": true
+  "query": "github user profile",
+  "limit": 20
 }
 ```
 
@@ -186,95 +193,45 @@ Lists all indexed abilities from wrapper-storage with credential filtering and o
 ```json
 {
   "success": true,
-  "count": 17,
-  "availableDomains": ["www.hedgemony.fund", "www.wom.fun"],
+  "query": "github user profile",
+  "count": 3,
+  "message": "Found 3 matching abilities. These are now cached and ready to execute.",
+  "availableDomains": ["api.github.com"],
   "abilities": [
     {
-      "id": "get-hedgemony-stats-simple",
-      "name": "get_hedgemony_stats_simple",
-      "service": "hedgemony-fund",
-      "description": "Get simple statistics from Hedgemony...\n\n**Required Credentials:** www.hedgemony.fund::cookie, www.hedgemony.fund::referer",
+      "id": "get-github-user",
+      "name": "Get GitHub User",
+      "service": "github",
+      "description": "Fetch GitHub user profile by username\n\n**Required Credentials:** api.github.com::Authorization",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "username": { "type": "string", "description": "GitHub username" }
+        }
+      },
       "requiresCreds": true,
-      "neededCreds": ["www.hedgemony.fund::cookie", "www.hedgemony.fund::referer"],
+      "neededCreds": ["api.github.com::Authorization"],
       "dependencyOrder": [],
-      "missingDependencies": [],
-      "ponScore": 0.23,
-      "successRate": 0.95
-    },
-    {
-      "id": "get-hedgemony-plus-news-archive",
-      "name": "get_hedgemony_plus_news_archive",
-      "service": "hedgemony-fund",
-      "description": "Retrieve the news archive page...\n\n**Dependency Order:** This ability must be called AFTER: `get-hedgemony-plus`\nCall these abilities in sequence before executing this one.",
-      "requiresCreds": true,
-      "neededCreds": ["www.hedgemony.fund::cookie"],
-      "dependencyOrder": ["get-hedgemony-plus"],
-      "missingDependencies": [],
-      "ponScore": 0.18,
-      "successRate": 0.95
+      "missingDependencies": []
     }
   ]
 }
 ```
 
-#### 2. `store_credentials`
+#### 2. `execute_ability`
 
-Stores encrypted credentials in the cookiejar.
-
-**Input:**
-```json
-{
-  "serviceName": "hedgemony-fund",
-  "credentialKey": "www.hedgemony.fund::cookie",
-  "credentialValue": "session=abc123; token=xyz789"
-}
-```
-
-**Output:**
-```json
-{
-  "success": true,
-  "message": "Credential www.hedgemony.fund::cookie stored for hedgemony-fund"
-}
-```
-
-#### 3. `get_credentials`
-
-Retrieves and decrypts credentials for a service.
+Executes a cached ability with automatic credential injection. Credentials are decrypted locally and injected into API requests.
 
 **Input:**
 ```json
 {
-  "serviceName": "hedgemony-fund"
+  "ability_id": "get-github-user",
+  "params": "{\"username\":\"octocat\"}",
+  "transform_code": "(data) => ({ login: data.login, name: data.name, bio: data.bio })"
 }
 ```
 
-**Output:**
-```json
-{
-  "success": true,
-  "serviceName": "hedgemony-fund",
-  "credentials": {
-    "www.hedgemony.fund::cookie": "session=abc123; token=xyz789",
-    "www.hedgemony.fund::referer": "https://www.hedgemony.fund/"
-  }
-}
-```
-
-#### 4. `execute_ability`
-
-Executes a wrapper with automatic credential injection via fetch override. On 401+ errors, marks credentials as expired and suggests login abilities.
-
-**Input:**
-```json
-{
-  "abilityId": "get-hedgemony-stats-simple",
-  "payload": {
-    "tier": "plus"
-  },
-  "options": {}
-}
-```
+**Note**: `params` must be a JSON string, not a JSON object.
 
 **Output (Success):**
 ```json
@@ -282,16 +239,15 @@ Executes a wrapper with automatic credential injection via fetch override. On 40
   "success": true,
   "statusCode": 200,
   "responseBody": {
-    "totalPnl": 46.71,
-    "totalTrades": 4,
-    "winRate": 75,
-    "leveragedVolume": 3000000,
-    "activeTrades": 5
+    "login": "octocat",
+    "name": "The Octocat",
+    "bio": "GitHub mascot"
   },
   "responseHeaders": {
-    "content-type": "application/json"
+    "content-type": "application/json; charset=utf-8"
   },
-  "executedAt": "2025-10-10T12:00:00.000Z"
+  "executedAt": "2025-10-25T12:00:00.000Z",
+  "transformed": true
 }
 ```
 
@@ -300,27 +256,32 @@ Executes a wrapper with automatic credential injection via fetch override. On 40
 {
   "success": false,
   "statusCode": 401,
-  "error": "Authentication failed (401). Credentials marked as expired. Please authenticate using one of these login abilities: hedgemony-login",
+  "error": "Authentication failed (401). Credentials marked as expired.",
   "credentialsExpired": true,
-  "loginAbilities": [
-    {
-      "id": "hedgemony-login",
-      "name": "hedgemony_fund_login",
-      "description": "Login to Hedgemony Fund to obtain authentication cookies"
-    }
-  ],
-  "executedAt": "2025-10-10T12:00:00.000Z"
+  "loginAbilities": [],
+  "executedAt": "2025-10-25T12:00:00.000Z"
 }
 ```
 
-#### 5. `get_ability_info`
+**Transform Code Examples:**
 
-Gets metadata about an ability without executing it, including dependency order information.
+The optional `transform_code` parameter allows you to process API responses:
+
+1. **Filter fields**: `(data) => ({ name: data.name, id: data.id })`
+2. **Array operations**: `(data) => data.items.filter(x => x.active)`
+3. **Aggregations**: `(data) => ({ total: data.length, sum: data.reduce((a,b) => a + b.value, 0) })`
+
+#### 3. `ingest_api_endpoint` (Optional)
+
+Index new API endpoints for future use. Requires `enableIndexTool: true` in configuration.
 
 **Input:**
 ```json
 {
-  "abilityId": "get-hedgemony-plus-news-archive"
+  "input": "https://api.github.com/users/octocat",
+  "service_name": "github",
+  "ability_name": "get-github-user",
+  "description": "Fetch GitHub user profile"
 }
 ```
 
@@ -328,54 +289,61 @@ Gets metadata about an ability without executing it, including dependency order 
 ```json
 {
   "success": true,
-  "serviceName": "hedgemony-fund",
-  "abilityName": "get_hedgemony_plus_news_archive",
-  "description": "Retrieve the news archive page from Hedgemony plus section...",
-  "inputSchema": {
-    "type": "object",
-    "properties": {
-      "_rsc": {
-        "type": "string",
-        "description": "React Server Component identifier."
-      }
-    }
-  },
-  "staticHeaders": 14,
-  "dynamicHeaderKeys": ["www.hedgemony.fund::cookie", "www.hedgemony.fund::next-router-state-tree"],
-  "requiresCreds": true,
-  "dependencyOrder": ["get-hedgemony-plus"],
-  "dependencies": {
-    "missing": [
+  "message": "API endpoint ingested successfully",
+  "ability_id": "get-github-user",
+  "ability_name": "Get GitHub User",
+  "input_schema": { "type": "object", "properties": { "username": { "type": "string" } } },
+  "note": "This ability is now available for execution via execute_ability tool"
+}
+```
+
+### Credential Management
+
+Credentials are managed through the Unbrowse API and decrypted locally in the MCP server.
+
+#### Storing Credentials
+
+Use the Unbrowse API to store encrypted credentials (see [Credentials Storage Guide](./docs/CREDENTIALS_STORAGE.md)):
+
+```bash
+# Client-side: Encrypt credentials before uploading
+# (See API documentation for encryption implementation)
+
+curl -X POST https://agent.unbrowse.ai/my/credentials/stream \
+  -H "Authorization: Bearer YOUR_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "domain": "api.github.com",
+    "credentials": [
       {
-        "abilityId": "get-hedgemony-plus",
-        "abilityName": "get_hedgemony_plus",
-        "reference": "get_hedgemony_plus"
+        "type": "header",
+        "key": "Authorization",
+        "encryptedValue": "{\"ciphertext\":\"...\",\"iv\":\"...\"}"
       }
     ]
-  },
-  "dependencyInfo": "\n\nDependency Order: Call these abilities first in sequence:\n  1. get-hedgemony-plus\n\nMissing Dependencies:\n  - get-hedgemony-plus (get_hedgemony_plus)"
-}
+  }'
 ```
 
-### Resources
+#### Listing Credentials
 
-#### `unbrowse://abilities`
-
-Access the full ability index in JSON format.
-
-### Prompts
-
-#### `discover_abilities`
-
-Intent-based ability discovery with credential awareness.
-
-**Arguments:**
-```json
-{
-  "intent": "get trading statistics",
-  "userCredentials": ["www.hedgemony.fund::cookie"]
-}
+```bash
+curl -X GET https://agent.unbrowse.ai/my/credentials?grouped=true \
+  -H "Authorization: Bearer YOUR_API_KEY"
 ```
+
+#### Environment Variable Credentials
+
+For non-sensitive or frequently rotated credentials, you can use environment variables instead of storing in the API:
+
+```bash
+# Option 1: JSON format (recommended)
+export UNBROWSE_TOOL_HEADERS='{"api.github.com::Authorization":"Bearer ghp_..."}'
+
+# Option 2: Sanitized variable names
+export API_GITHUB_COM__AUTHORIZATION="Bearer ghp_..."
+```
+
+See the [Environment Credential Overrides](#environment-based-credential-overrides) section for more details.
 
 ## Enhanced Features
 
@@ -475,24 +443,23 @@ This enables automatic recovery from expired credentials.
 
 ## How It Works
 
-### 1. Wrapper Storage
+### 1. Cloud-Based Ability Registry
 
-Abilities are stored as JSON files in `src/wrapper-storage/` with:
+Abilities are stored on the Unbrowse API and fetched on-demand:
 
-- `wrapper_code` - JavaScript function that makes the API request
-- `static_headers` - Headers defined in wrapper code
-- `dynamic_header_keys` - Credentials needed from cookiejar
-- `input_schema` - JSON schema for input validation
-- `output_schema` - Expected response structure
+- **Initialization**: MCP server fetches all abilities via `GET /my/abilities`
+- **Search**: Client-side filtering on ability name, description, and service
+- **Caching**: Search results are cached locally for immediate execution
+- **Metadata**: Each ability includes wrapper code, schemas, headers, and dependencies
 
 ### 2. Credential Management
 
-Credentials are:
+Credentials follow a zero-knowledge encryption model:
 
-1. Encrypted with AES-256-GCM using the SECRET environment variable
-2. Stored in-memory (ready for Convex DB integration)
-3. Decrypted on-demand during wrapper execution
-4. Injected automatically via fetch override
+1. **Client-side encryption**: Credentials encrypted with AES-256-GCM before upload
+2. **Server storage**: Only encrypted values stored on Unbrowse API
+3. **Local decryption**: MCP server decrypts using your password (never sent to server)
+4. **Automatic injection**: Decrypted credentials injected into API requests via fetch override
 
 ### Environment-Based Credential Overrides
 
@@ -542,12 +509,13 @@ return fetch(url, { method: 'GET', headers: mergedHeaders });
 
 ### 4. Credential Filtering
 
-The `/list` endpoint filters abilities based on:
+Abilities are filtered based on credential availability:
 
-- **No dynamic headers required** → Always shown
-- **Has dynamic headers** → Only shown if user has ALL required credentials
+- **No dynamic headers required** → Always accessible (public APIs)
+- **Has dynamic headers** → Only accessible if you have ALL required credentials (either stored in API or via environment variables)
+- **Favorited abilities** → Always shown regardless of credentials
 
-This implements the "shared graph with credential filtering" described in `master.md`.
+This ensures you only see abilities you can actually execute.
 
 ## Security
 
@@ -577,103 +545,130 @@ The `PASSWORD` should be:
 - Unique to your Unbrowse MCP installation
 - Used only to encrypt/decrypt your own stored credentials
 
-## Integration with master.md
+## API Integration
 
-This implementation provides stubs for:
+This MCP server integrates with the Unbrowse API to provide:
 
-### ✅ Private Registry (`/list` endpoint)
-- Serves indexed abilities from wrapper-storage
-- Filters by user credentials
-- Returns PoN scores and success rates
+### ✅ Ability Registry
+- Fetches abilities from `GET /my/abilities`
+- Supports semantic search and filtering
+- Caches results for immediate execution
+- Automatic credential coverage checking
 
-### ✅ Cookie Jar (`/cookiejar` endpoint)
-- Encrypted credential storage
-- SECRET-based encryption/decryption
-- Per-service credential management
+### ✅ Credential Management
+- Zero-knowledge encryption (password never sent to server)
+- Fetches encrypted credentials from `GET /my/credentials/:domain`
+- Client-side AES-256-GCM decryption
+- Automatic credential expiration on 401+ errors
 
 ### ✅ Wrapper Execution
-- Evaluates wrapper code in sandbox
-- Fetch override with header injection
+- Evaluates wrapper code in VM sandbox
+- Fetch override with automatic header injection
 - Static + dynamic header merging
+- Response transformation support
 
-### ✅ Credential Filtering
-- Shared graph model
-- Access control via `requiresDynamicHeaders`
-- User-specific ability visibility
+### ✅ API Indexing
+- Ingest new endpoints via `POST /ingest/api`
+- Supports URLs and curl commands
+- Optional tool (configurable via `enableIndexTool`)
 
-### 🔄 Ready for Integration
-- **Convex DB** - Replace in-memory store with Convex tables
-- **FalkorDB** - Connect to graph index for advanced retrieval
-- **PoN Scoring** - Currently mock; ready for KGE integration
-- **LAM Recommendations** - Placeholder for transformer-based tool composition
+### 🔗 Related Documentation
+- **[API Complete Guide](./docs/API_COMPLETE_GUIDE.md)** - Full API reference
+- **[Authentication](./docs/AUTHENTICATION.md)** - JWT and API key auth
+- **[Credentials Storage](./docs/CREDENTIALS_STORAGE.md)** - Encryption implementation
 
 ## File Structure
 
 ```
 unbrowse/
 ├── src/
-│   ├── index.ts              # MCP server with tool definitions
-│   ├── mock-endpoints.ts     # /list and /cookiejar implementations
-│   ├── wrapper-executor.ts   # Wrapper eval with fetch override
-│   └── wrapper-storage/      # Indexed abilities (JSON files)
-│       ├── hedgemony-fund_get-hedgemony-stats-simple_*.json
-│       ├── wom-fun_get-supabase-vtnzhqawildiecaasapv-tokens_*.json
-│       └── ...
-├── smithery.yaml             # Config schema with SECRET
+│   ├── index.ts                        # MCP server with tool definitions
+│   ├── api-client.ts                   # Unbrowse API client (authenticated)
+│   ├── wrapper-executor-enhanced.ts    # Wrapper eval with fetch override
+│   ├── crypto-utils.ts                 # AES-256-GCM credential decryption
+│   └── types.ts                        # TypeScript type definitions
+├── docs/
+│   ├── API_COMPLETE_GUIDE.md           # Complete API reference
+│   ├── AUTHENTICATION.md               # Auth implementation details
+│   └── CREDENTIALS_STORAGE.md          # Encryption guide
+├── smithery.yaml                       # Config schema (apiKey, password)
 ├── package.json
+├── tsconfig.json
 └── README.md
 ```
 
 ## Testing
 
-### Test Credential Storage
+### Test API Connection
+
+First, verify your API key works:
 
 ```bash
-# Using MCP client (e.g., Claude Desktop):
-store_credentials({
-  serviceName: "hedgemony-fund",
-  credentialKey: "www.hedgemony.fund::cookie",
-  credentialValue: "your-cookie-value"
+curl -X GET https://agent.unbrowse.ai/my/abilities \
+  -H "Authorization: Bearer YOUR_API_KEY"
+```
+
+### Test Ability Search
+
+Using the MCP client (e.g., Claude Desktop, Cline):
+
+```typescript
+// Search for abilities
+search_abilities({
+  query: "github user",
+  limit: 10
 })
 ```
 
 ### Test Ability Execution
 
-```bash
-# Execute without credentials (should work for public abilities)
+```typescript
+// Execute a public API (no credentials needed)
 execute_ability({
-  abilityId: "get-hedgemony-stats-simple",
-  payload: { tier: "plus" }
+  ability_id: "some-public-api",
+  params: '{"key": "value"}'
 })
 
-# With credentials stored, it will inject them automatically
+// Execute with credentials (automatically decrypted and injected)
+execute_ability({
+  ability_id: "authenticated-api",
+  params: '{"username": "octocat"}'
+})
 ```
 
-### Test Listing
+### Test API Indexing (Optional)
 
-```bash
-# List all abilities
-list_abilities({ userCredentials: [] })
-
-# List with credentials
-list_abilities({ 
-  userCredentials: ["www.hedgemony.fund::cookie"] 
+```typescript
+ingest_api_endpoint({
+  input: "https://api.github.com/users/octocat",
+  service_name: "github",
+  ability_name: "get-github-user",
+  description: "Fetch GitHub user profile"
 })
 ```
 
 ## Roadmap
 
-- [ ] Convex DB integration for persistent credentials
-- [ ] FalkorDB connection for graph-based retrieval
-- [ ] Real PoN scoring with KGE embeddings
-- [ ] LAM integration for intelligent ability composition
-- [ ] Rate limiting and usage tracking
+- [x] API key authentication with Unkey integration
+- [x] Zero-knowledge credential encryption
+- [x] Cloud-based ability registry
+- [x] Semantic search for abilities
+- [x] Automatic credential injection
+- [x] Response transformation support
+- [x] Dependency order tracking
+- [ ] Browser extension for credential capture
 - [ ] Webhook support for async execution
 - [ ] Ability versioning and upgrades
+- [ ] Analytics dashboard
+- [ ] Collaborative ability sharing
 
 ## Contributing
 
-This is a stub implementation for the Unbrowse platform. For questions or contributions, refer to `master.md` for the full technical specification.
+This MCP server is part of the Unbrowse platform. For questions or contributions:
+
+- **API Issues**: Check the [API Complete Guide](./docs/API_COMPLETE_GUIDE.md)
+- **MCP Issues**: Open an issue on GitHub
+- **Feature Requests**: Discuss in GitHub Discussions
 
 ## License
 
