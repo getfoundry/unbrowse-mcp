@@ -42,6 +42,8 @@ export interface IndexedAbility {
  * Configuration for the API client
  */
 export interface ApiClientConfig {
+  apiKey: string;
+  baseUrl?: string;
   timeout?: number;
 }
 
@@ -49,15 +51,18 @@ export interface ApiClientConfig {
  * Unbrowse API Client
  */
 export class UnbrowseApiClient {
-  private readonly baseUrl: string = "https://agent.unbrowse.ai";
+  private readonly baseUrl: string;
+  private readonly apiKey: string;
   private timeout: number;
 
-  constructor(config: ApiClientConfig = {}) {
+  constructor(config: ApiClientConfig) {
+    this.apiKey = config.apiKey;
+    this.baseUrl = "https://agent.unbrowse.ai";
     this.timeout = config.timeout || 10000; // 10 second default timeout
   }
 
   /**
-   * Makes a fetch request with timeout
+   * Makes a fetch request with timeout and authentication
    */
   private async fetchWithTimeout(url: string, options: RequestInit = {}): Promise<Response> {
     const controller = new AbortController();
@@ -66,6 +71,10 @@ export class UnbrowseApiClient {
     try {
       const response = await fetch(url, {
         ...options,
+        headers: {
+          'Authorization': `Bearer ${this.apiKey}`,
+          ...options.headers,
+        },
         signal: controller.signal,
       });
       clearTimeout(timeoutId);
@@ -80,37 +89,27 @@ export class UnbrowseApiClient {
   }
 
   /**
-   * List all abilities from the API
-   * GET /abilities
+   * List all abilities for authenticated user
+   * GET /my/abilities
    */
   async listAbilities(options: {
-    userCreds?: string[];
-    filterByDomains?: boolean;
-    forToolRegistration?: boolean;
-    trustProvidedCreds?: boolean;
+    favorites?: boolean;
+    published?: boolean;
   } = {}): Promise<{
     success: boolean;
     count: number;
     abilities: IndexedAbility[];
-    availableDomains?: string[];
-    credentialHints?: string[];
   }> {
     const params = new URLSearchParams();
 
-    if (options.userCreds && options.userCreds.length > 0) {
-      params.append('userCreds', options.userCreds.join(','));
+    if (options.favorites !== undefined) {
+      params.append('favorites', String(options.favorites));
     }
-    if (options.filterByDomains !== undefined) {
-      params.append('filterByDomains', String(options.filterByDomains));
-    }
-    if (options.forToolRegistration !== undefined) {
-      params.append('forToolRegistration', String(options.forToolRegistration));
-    }
-    if (options.trustProvidedCreds !== undefined) {
-      params.append('trustProvidedCreds', String(options.trustProvidedCreds));
+    if (options.published !== undefined) {
+      params.append('published', String(options.published));
     }
 
-    const url = `${this.baseUrl}/abilities${params.toString() ? `?${params}` : ''}`;
+    const url = `${this.baseUrl}/my/abilities${params.toString() ? `?${params}` : ''}`;
     const response = await this.fetchWithTimeout(url);
 
     if (!response.ok) {
@@ -121,39 +120,52 @@ export class UnbrowseApiClient {
   }
 
   /**
-   * Search abilities by query
-   * GET /abilities/search
+   * Search abilities by query (searches user's abilities)
+   * This internally uses /my/abilities and filters by query client-side
+   * For public search, use searchPublicAbilities()
    */
   async searchAbilities(query: string, options: {
-    userCreds?: string[];
-    filterByDomains?: boolean;
-    forToolRegistration?: boolean;
-    trustProvidedCreds?: boolean;
+    favorites?: boolean;
+    published?: boolean;
   } = {}): Promise<{
     success: boolean;
     count: number;
     abilities: IndexedAbility[];
   }> {
-    const params = new URLSearchParams({ q: query });
+    // Fetch all user abilities
+    const result = await this.listAbilities(options);
 
-    if (options.userCreds && options.userCreds.length > 0) {
-      params.append('userCreds', options.userCreds.join(','));
-    }
-    if (options.filterByDomains !== undefined) {
-      params.append('filterByDomains', String(options.filterByDomains));
-    }
-    if (options.forToolRegistration !== undefined) {
-      params.append('forToolRegistration', String(options.forToolRegistration));
-    }
-    if (options.trustProvidedCreds !== undefined) {
-      params.append('trustProvidedCreds', String(options.trustProvidedCreds));
-    }
+    // Filter client-side by query
+    const lowerQuery = query.toLowerCase();
+    const filteredAbilities = result.abilities.filter(ability =>
+      ability.ability_name.toLowerCase().includes(lowerQuery) ||
+      ability.description.toLowerCase().includes(lowerQuery) ||
+      ability.service_name.toLowerCase().includes(lowerQuery)
+    );
 
-    const url = `${this.baseUrl}/abilities/search?${params}`;
+    return {
+      success: true,
+      count: filteredAbilities.length,
+      abilities: filteredAbilities
+    };
+  }
+
+  /**
+   * Search public published abilities
+   * GET /public/abilities?q=<query>
+   */
+  async searchPublicAbilities(query: string, limit: number = 30): Promise<{
+    success: boolean;
+    count: number;
+    query: string;
+    abilities: IndexedAbility[];
+  }> {
+    const params = new URLSearchParams({ q: query, limit: String(limit) });
+    const url = `${this.baseUrl}/public/abilities?${params}`;
     const response = await this.fetchWithTimeout(url);
 
     if (!response.ok) {
-      throw new Error(`Failed to search abilities: ${response.status} ${response.statusText}`);
+      throw new Error(`Failed to search public abilities: ${response.status} ${response.statusText}`);
     }
 
     return response.json();
@@ -203,14 +215,17 @@ export class UnbrowseApiClient {
   }
 
   /**
-   * List all credential services
-   * GET /credentials
+   * List all credentials (grouped by domain)
+   * GET /my/credentials?grouped=true
    */
-  async listCredentialServices(): Promise<{
+  async listCredentials(grouped: boolean = true): Promise<{
     success: boolean;
-    services: string[];
+    count?: number;
+    grouped?: boolean;
+    credentials: any;
   }> {
-    const url = `${this.baseUrl}/credentials`;
+    const params = grouped ? '?grouped=true' : '';
+    const url = `${this.baseUrl}/my/credentials${params}`;
     const response = await this.fetchWithTimeout(url);
 
     if (!response.ok) {
@@ -221,20 +236,27 @@ export class UnbrowseApiClient {
   }
 
   /**
-   * Get credentials for a service
-   * GET /credentials/:serviceName
+   * Get credentials for a specific domain
+   * GET /my/credentials/:domain
    */
-  async getCredentials(serviceName: string): Promise<{
+  async getCredentialsForDomain(domain: string): Promise<{
     success: boolean;
-    credentials: Record<string, string>;
-    metadata?: any;
+    domain: string;
+    count: number;
+    credentials: Array<{
+      credentialId: string;
+      credentialType: string;
+      credentialKey: string;
+      encryptedValue: string;
+      createdAt: string;
+    }>;
   }> {
-    const url = `${this.baseUrl}/credentials/${encodeURIComponent(serviceName)}`;
+    const url = `${this.baseUrl}/my/credentials/${encodeURIComponent(domain)}`;
     const response = await this.fetchWithTimeout(url);
 
     if (!response.ok) {
       if (response.status === 404) {
-        return { success: false, credentials: {} };
+        return { success: false, domain, count: 0, credentials: [] };
       }
       throw new Error(`Failed to get credentials: ${response.status} ${response.statusText}`);
     }
@@ -243,56 +265,55 @@ export class UnbrowseApiClient {
   }
 
   /**
-   * Get cookie jar for a service
-   * GET /cookie-jar/:serviceName
+   * Get encrypted credentials for a domain (alias for compatibility)
+   * GET /my/credentials/:domain
    */
-  async getCookieJar(serviceName: string): Promise<Record<string, string> | null> {
-    const url = `${this.baseUrl}/cookie-jar/${encodeURIComponent(serviceName)}`;
-
+  async getCookieJar(domain: string): Promise<Record<string, string> | null> {
     try {
-      const response = await this.fetchWithTimeout(url);
+      const result = await this.getCredentialsForDomain(domain);
 
-      if (!response.ok) {
-        if (response.status === 404) {
-          return null;
-        }
-        throw new Error(`Failed to get cookie jar: ${response.status} ${response.statusText}`);
+      if (!result.success || result.credentials.length === 0) {
+        return null;
       }
 
-      const data = await response.json();
-      return data.credentials || null;
+      // Convert array format to legacy cookie jar format
+      const cookieJar: Record<string, string> = {};
+      for (const cred of result.credentials) {
+        cookieJar[cred.credentialKey] = cred.encryptedValue;
+      }
+
+      return cookieJar;
     } catch (error: any) {
-      console.error(`[ERROR] Failed to fetch cookie jar for ${serviceName}:`, error.message);
+      console.error(`[ERROR] Failed to fetch credentials for ${domain}:`, error.message);
       return null;
     }
   }
 
   /**
-   * Store credentials for a service
-   * POST /credentials
+   * Store encrypted credentials for a domain
+   * POST /my/credentials/stream
    */
   async storeCredentials(
-    serviceName: string,
-    credentials: Record<string, string>,
-    metadata?: {
-      authType?: string;
-      expiresAt?: string | null;
-      refreshToken?: string | null;
-    }
+    domain: string,
+    credentials: Array<{
+      type: string;
+      key: string;
+      encryptedValue: string;
+    }>
   ): Promise<{
     success: boolean;
-    message: string;
+    count: number;
+    credentials: any[];
   }> {
-    const url = `${this.baseUrl}/credentials`;
+    const url = `${this.baseUrl}/my/credentials/stream`;
     const response = await this.fetchWithTimeout(url, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        serviceName,
+        domain,
         credentials,
-        ...metadata,
       }),
     });
 
@@ -304,30 +325,69 @@ export class UnbrowseApiClient {
   }
 
   /**
-   * Invalidate credentials for a service
-   * POST /credentials/:serviceName/expire
+   * Delete all credentials for a domain
+   * DELETE /my/credentials/:domain
    */
-  async expireCredentials(serviceName: string): Promise<{
+  async deleteCredentialsForDomain(domain: string): Promise<{
     success: boolean;
-    message: string;
+    domain: string;
+    deletedCount: number;
   }> {
-    const url = `${this.baseUrl}/credentials/${encodeURIComponent(serviceName)}/expire`;
+    const url = `${this.baseUrl}/my/credentials/${encodeURIComponent(domain)}`;
     const response = await this.fetchWithTimeout(url, {
-      method: 'POST',
+      method: 'DELETE',
     });
 
     if (!response.ok) {
-      throw new Error(`Failed to expire credentials: ${response.status} ${response.statusText}`);
+      throw new Error(`Failed to delete credentials: ${response.status} ${response.statusText}`);
     }
 
     return response.json();
   }
+
+  /**
+   * Delete a specific credential by ID
+   * DELETE /my/credentials/by-id/:credentialId
+   */
+  async deleteCredentialById(credentialId: string): Promise<{
+    success: boolean;
+    credentialId: string;
+  }> {
+    const url = `${this.baseUrl}/my/credentials/by-id/${encodeURIComponent(credentialId)}`;
+    const response = await this.fetchWithTimeout(url, {
+      method: 'DELETE',
+    });
+
+    if (!response.ok) {
+      throw new Error(`Failed to delete credential: ${response.status} ${response.statusText}`);
+    }
+
+    return response.json();
+  }
+
+  /**
+   * Invalidate credentials for a domain (alias for deleteCredentialsForDomain)
+   */
+  async expireCredentials(domain: string): Promise<{
+    success: boolean;
+    message: string;
+  }> {
+    const result = await this.deleteCredentialsForDomain(domain);
+    return {
+      success: result.success,
+      message: `Deleted ${result.deletedCount} credentials for ${domain}`
+    };
+  }
 }
 
 /**
- * Default API client instance
+ * Create an API client instance
+ * @param apiKey - Your Unbrowse API key
+ * @param baseUrl - Optional base URL (defaults to http://localhost:4111)
  */
-export const apiClient = new UnbrowseApiClient();
+export function createApiClient(apiKey: string, baseUrl?: string): UnbrowseApiClient {
+  return new UnbrowseApiClient({ apiKey, baseUrl });
+}
 
 /**
  * Helper function to format ability description with dependencies

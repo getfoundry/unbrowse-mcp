@@ -11,9 +11,10 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import vm from "vm";
 import {
-  apiClient,
+  createApiClient,
   formatAbilityDescription,
   type IndexedAbility,
+  type UnbrowseApiClient,
 } from "./api-client.js";
 import {
   executeWrapper,
@@ -22,10 +23,10 @@ import { decryptCredentials } from "./crypto-utils.js";
 
 // User-level config from smithery.yaml
 export const configSchema = z.object({
+  apiKey: z.string().describe("Your Unbrowse API key (create via POST /my/api-keys after login)"),
+  password: z.string().describe("Your encryption password for decrypting stored credentials (client-side only)"),
+  baseUrl: z.string().default("http://localhost:4111").describe("Unbrowse API base URL"),
   debug: z.boolean().default(false).describe("Enable debug logging"),
-  password: z
-    .string()
-    .describe("Password to encrypt/decrypt your stored credentials"),
   enableIndexTool: z.boolean().default(false).describe("Enable the ingest_api_endpoint tool for indexing new APIs"),
 });
 
@@ -35,6 +36,10 @@ export default function createServer({
   config: z.infer<typeof configSchema>; // Define your config in smithery.yaml
 }) {
   console.log("[INFO] createServer called - starting initialization");
+
+  // Create authenticated API client
+  const apiClient: UnbrowseApiClient = createApiClient(config.apiKey, config.baseUrl);
+  console.log(`[INFO] API client created with base URL: ${config.baseUrl}`);
 
   const server = new McpServer({
     name: "Unbrowse MCP",
@@ -177,7 +182,8 @@ export default function createServer({
         }
       } catch (error: any) {
         console.error(`[ERROR] Failed to load abilities from API:`, error.message);
-        console.error(`[ERROR] Make sure the Unbrowse API is accessible at https://agent.unbrowse.ai`);
+        console.error(`[ERROR] Make sure the Unbrowse API is accessible at ${config.baseUrl}`);
+        console.error(`[ERROR] Verify your API key is valid and not expired`);
       }
 
       isInitialized = true;
@@ -449,6 +455,8 @@ The code is executed in a safe sandbox and must be a valid arrow function or fun
           {},
           resolvedCredentials || {},
           wrapperData,
+          undefined, // secret
+          apiClient,
         );
 
         if (config.debug) {
@@ -590,10 +598,11 @@ The code is executed in a safe sandbox and must be a valid arrow function or fun
       try {
         console.log(`[TRACE] Ingesting API endpoint: ${input}`);
 
-        // Call the ingest API endpoint
-        const response = await fetch(`${apiClient['baseUrl']}/ingest/api`, {
+        // Call the ingest API endpoint with authentication
+        const response = await fetch(`${config.baseUrl}/ingest/api`, {
           method: 'POST',
           headers: {
+            'Authorization': `Bearer ${config.apiKey}`,
             'Content-Type': 'application/json',
           },
           body: JSON.stringify({
@@ -738,20 +747,11 @@ The code is executed in a safe sandbox and must be a valid arrow function or fun
       // Ensure abilities are loaded
       await ensureInitialized();
 
-      const credentialScope =
-        userCredentials && userCredentials.length > 0
-          ? [...userCredentials]
-          : Array.from(availableCredentialKeys);
-      const domainFilter =
-        typeof filterByDomains === "boolean" ? filterByDomains : true;
       const resultLimit =
         typeof limit === "number" ? Math.min(Math.max(limit, 1), 50) : 20;
 
-      const result = await apiClient.searchAbilities(query, {
-        userCreds: credentialScope,
-        filterByDomains: domainFilter,
-        trustProvidedCreds: true,
-      });
+      // Search abilities (now uses /my/abilities with client-side filtering)
+      const result = await apiClient.searchAbilities(query);
       const matches = result.abilities.slice(0, resultLimit);
       const domainCandidates = new Set<string>(
         Array.from(availableCredentialKeys).map((key) => key.split("::")[0]),
