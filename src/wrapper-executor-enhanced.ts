@@ -7,7 +7,7 @@
  * - Dependency order validation
  */
 
-import { apiClient } from "./api-client.js";
+import type { UnbrowseApiClient } from "./api-client.js";
 import vm from "vm";
 import { ProxyAgent } from "undici";
 
@@ -144,6 +144,7 @@ export async function executeWrapper(
   injectedCredentials: Record<string, string> = {},
   providedWrapperData?: WrapperData,
   secret?: string,
+  apiClient: UnbrowseApiClient | null = null,
 ): Promise<WrapperExecutionResult> {
   const executedAt = new Date().toISOString();
 
@@ -155,6 +156,14 @@ export async function executeWrapper(
       console.log(`[TRACE] Using provided wrapper data for: ${abilityId}`);
       wrapperData = providedWrapperData;
     } else {
+      if (!apiClient) {
+        return {
+          success: false,
+          error: `API client is required to fetch wrapper data for ${abilityId}`,
+          executedAt,
+        };
+      }
+
       console.log(`[TRACE] Fetching wrapper data from API for: ${abilityId}`);
 
       // Fetch wrapper data from API instead of local storage
@@ -271,28 +280,30 @@ export async function executeWrapper(
 
     // Handle 401+ errors (authentication/authorization failures)
     if (statusCode >= 401 && statusCode < 500) {
-      // Mark credentials as expired via API
-      try {
-        await apiClient.expireCredentials(service_name);
-      } catch (error: any) {
-        console.error(`[ERROR] Failed to expire credentials for ${service_name}:`, error.message);
+      // Mark credentials as expired via API (if apiClient is available)
+      if (apiClient) {
+        try {
+          await apiClient.expireCredentials(service_name);
+        } catch (error: any) {
+          console.error(`[ERROR] Failed to expire credentials for ${service_name}:`, error.message);
+        }
       }
 
       // Find login abilities for this service via API search
       let loginAbilities: Array<{ id: string; name: string; description: string }> = [];
-      try {
-        const searchResult = await apiClient.searchAbilities(`login ${service_name}`, {
-          filterByDomains: false,
-        });
-        loginAbilities = searchResult.abilities
-          .filter(a => !a.requires_dynamic_headers)
-          .map(a => ({
-            id: a.ability_id,
-            name: a.ability_name,
-            description: a.description,
-          }));
-      } catch (error: any) {
-        console.error(`[ERROR] Failed to find login abilities for ${service_name}:`, error.message);
+      if (apiClient) {
+        try {
+          const searchResult = await apiClient.searchAbilities(`login ${service_name}`);
+          loginAbilities = searchResult.abilities
+            .filter(a => !a.requires_dynamic_headers)
+            .map(a => ({
+              id: a.ability_id,
+              name: a.ability_name,
+              description: a.description,
+            }));
+        } catch (error: any) {
+          console.error(`[ERROR] Failed to find login abilities for ${service_name}:`, error.message);
+        }
       }
 
       let errorMessage = `Authentication failed (${statusCode}). Credentials marked as expired.`;
@@ -348,11 +359,11 @@ export async function executeWrapper(
 /**
  * Lists available wrappers
  */
-export async function listAvailableWrappers(): Promise<string[]> {
+export async function listAvailableWrappers(apiClient: UnbrowseApiClient): Promise<string[]> {
   try {
     // Fetch from API instead of local storage
     const result = await apiClient.listAbilities();
-    return result.abilities.map((a) => a.abilityId);
+    return result.abilities.map((a) => a.ability_id);
   } catch (error) {
     console.error("Error listing wrappers:", error);
     return [];
@@ -362,7 +373,10 @@ export async function listAvailableWrappers(): Promise<string[]> {
 /**
  * Gets wrapper metadata including dependency order
  */
-export async function getWrapperMetadata(abilityId: string): Promise<{
+export async function getWrapperMetadata(
+  abilityId: string,
+  apiClient: UnbrowseApiClient
+): Promise<{
   serviceName: string;
   abilityName: string;
   description: string;

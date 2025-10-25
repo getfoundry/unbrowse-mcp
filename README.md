@@ -27,25 +27,58 @@ This MCP server implements the private registry capabilities described in `maste
 │                     Unbrowse MCP Server                      │
 ├─────────────────────────────────────────────────────────────┤
 │  Tools:                                                      │
-│  • list_abilities - Query indexed abilities                 │
-│  • get_credentials - Retrieve decrypted creds               │
-│  • store_credentials - Store encrypted creds                │
-│  • execute_ability - Run wrapper with header injection      │
-│  • get_ability_info - Get metadata without execution        │
+│  • search_abilities - Search your indexed abilities         │
+│  • execute_ability - Run ability with credential injection  │
+│  • ingest_api_endpoint - Index new API endpoints (optional) │
+├─────────────────────────────────────────────────────────────┤
+│  Authentication:                                             │
+│  • API Key → Authenticates to Unbrowse API                  │
+│  • Password → Decrypts credentials (client-side only)       │
 ├─────────────────────────────────────────────────────────────┤
 │  Components:                                                 │
 │  ┌──────────────┐  ┌─────────────┐  ┌─────────────────┐   │
-│  │   Mock       │  │  Wrapper    │  │   Credential    │   │
-│  │  Endpoints   │  │  Executor   │  │   Cookiejar     │   │
+│  │   API Client │  │  Wrapper    │  │   Credential    │   │
+│  │ (Authed)     │  │  Executor   │  │   Decryption    │   │
 │  └──────────────┘  └─────────────┘  └─────────────────┘   │
 │         │                 │                   │             │
 │         └─────────────────┴───────────────────┘             │
 │                           │                                 │
 ├───────────────────────────┼─────────────────────────────────┤
 │                           ▼                                 │
-│                  wrapper-storage/                           │
-│                  (Indexed Abilities)                        │
+│                  Unbrowse API (localhost:4111)              │
+│                  • GET /my/abilities                        │
+│                  • GET /my/credentials/:domain              │
+│                  • POST /ingest/api                         │
 └─────────────────────────────────────────────────────────────┘
+```
+
+### Authentication Flow
+
+The MCP server uses a **dual-authentication** model for maximum security:
+
+1. **API Key Authentication** (Server → Unbrowse API)
+   - All API requests include `Authorization: Bearer <apiKey>` header
+   - API key authenticates you to the Unbrowse platform
+   - Allows access to your personal abilities and credentials
+   - Can be revoked without changing your password
+
+2. **Password-Based Decryption** (Client-side only)
+   - Credentials are stored encrypted on the Unbrowse server
+   - Your password is used to decrypt them locally in the MCP server
+   - Password **never leaves** your machine
+   - Follows zero-knowledge encryption model
+
+```
+┌─────────────┐                    ┌──────────────┐                  ┌─────────────┐
+│  MCP Server │─────API Key────────▶│ Unbrowse API │                  │  Encrypted  │
+│             │                     │              │                  │ Credentials │
+│             │◀────Encrypted Creds─│              │◀─────Stored─────│  (Server)   │
+│             │                     └──────────────┘                  └─────────────┘
+│             │
+│   Password  │─────Decrypt────────▶│  Plaintext   │
+│  (Local)    │                     │  Credentials │
+│             │                     │  (In Memory) │
+└─────────────┘                     └──────────────┘
 ```
 
 ## Setup
@@ -54,7 +87,44 @@ This MCP server implements the private registry capabilities described in `maste
 
 - Node.js 18+
 - pnpm (or npm)
+- An Unbrowse account and API key
 - A PASSWORD for encrypting your stored credentials
+
+### Getting Your API Key
+
+1. **Register an account** (if you don't have one):
+```bash
+curl -X POST http://localhost:4111/auth/register \
+  -H "Content-Type: application/json" \
+  -d '{
+    "email": "your@email.com",
+    "password": "YourSecurePassword123",
+    "name": "Your Name"
+  }'
+```
+
+2. **Login to get a JWT token**:
+```bash
+curl -X POST http://localhost:4111/auth/login \
+  -H "Content-Type: application/json" \
+  -d '{
+    "email": "your@email.com",
+    "password": "YourSecurePassword123"
+  }'
+```
+Save the returned `token` value.
+
+3. **Create an API key** using your JWT token:
+```bash
+curl -X POST http://localhost:4111/my/api-keys \
+  -H "Authorization: Bearer YOUR_JWT_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "MCP Server Key",
+    "expiresAt": "2026-12-31T23:59:59Z"
+  }'
+```
+**Important**: Save the returned `key` value - it's only shown once!
 
 ### Installation
 
@@ -65,9 +135,12 @@ This MCP server implements the private registry capabilities described in `maste
 pnpm install
 ```
 
-3. Configure your password in `smithery.yaml`:
+3. Configure your credentials in `smithery.yaml` or MCP settings:
+   - `apiKey`: Your Unbrowse API key (from step 3 above)
+   - `password`: Your local encryption password for credentials (choose a strong password)
+   - `baseUrl`: API base URL (default: `http://localhost:4111`)
 
-The password is used to encrypt and decrypt your stored credentials for security. Choose a strong password that only you know.
+The password is used to decrypt credentials stored on the server. The API key authenticates your requests to the Unbrowse API.
 
 ### Installing via Smithery
 
