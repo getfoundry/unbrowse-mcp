@@ -1158,22 +1158,9 @@ The code is executed in a safe sandbox and must be a valid arrow function or fun
           .describe(
             "Maximum number of results to return (1-50, default: 20).",
           ),
-        userCredentials: z
-          .array(z.string())
-          .optional()
-          .describe(
-            "Credential keys available to the user (e.g., ['www.hedgemony.fund::cookie']).",
-          ),
-        filterByDomains: z
-          .boolean()
-          .optional()
-          .default(true)
-          .describe(
-            "Restrict private abilities to those that match credential domains.",
-          ),
       },
     },
-    async ({ query, userCredentials, filterByDomains, limit }) => {
+    async ({ query, limit }) => {
       // Ensure abilities are loaded
       await ensureInitialized();
 
@@ -1195,7 +1182,7 @@ The code is executed in a safe sandbox and must be a valid arrow function or fun
 
       if (config.debug) {
         console.log(
-          `[DEBUG] Search "${query}" returned ${matches.length} abilities (limit ${resultLimit}) with ${credentialScope.length} credential hints`,
+          `[DEBUG] Search "${query}" returned ${matches.length} abilities (limit ${resultLimit}), available domains: ${availableDomains.length}`,
         );
       }
 
