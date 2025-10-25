@@ -424,6 +424,16 @@ console.log(decrypted);
 // }
 ```
 
+### Environment Overrides
+
+You can also satisfy `dynamic_header_keys` without storing encrypted credentials by exporting environment variables:
+
+- Set `UNBROWSE_TOOL_HEADERS` (or `UNBROWSE_DYNAMIC_HEADERS`, `TOOL_DYNAMIC_HEADERS`, `MCP_TOOL_HEADERS`) to a JSON object mapping header keys (e.g., `reverse-engineer::x-api-key`) to plaintext values.
+- Or define individual variables in the `DOMAIN__HEADER` format (uppercase, non-alphanumeric → `_`). Example: `reverse-engineer::authorization` → `REVERSE_ENGINEER__AUTHORIZATION=Bearer ...`
+- For `x-api-key` style headers we additionally look for `REVERSE_ENGINEER_API_KEY`, `UNBROWSE_API_KEY`, or a global `API_KEY`.
+
+Environment values are merged with decrypted credentials before execution, so you can combine both approaches. Missing headers are reported back in tool errors to guide configuration.
+
 ---
 
 ## Credential-Based Access Control

@@ -494,6 +494,24 @@ Credentials are:
 3. Decrypted on-demand during wrapper execution
 4. Injected automatically via fetch override
 
+### Environment-Based Credential Overrides
+
+Some tools (especially internal automation endpoints) expect API keys that live in your runtime environment. You can inject these headers without storing them in the encrypted cookie jar:
+
+- **JSON mapping (recommended):** set `UNBROWSE_TOOL_HEADERS` (or `UNBROWSE_DYNAMIC_HEADERS`, `TOOL_DYNAMIC_HEADERS`, `MCP_TOOL_HEADERS`) to a JSON object whose keys match `dynamic_header_keys`. Example:
+
+  ```bash
+  UNBROWSE_TOOL_HEADERS='{"reverse-engineer::x-api-key":"sk_live_123","reverse-engineer::authorization":"Bearer eyJ..."}'
+  ```
+
+- **Sanitized variables:** expose individual headers with the `DOMAIN__HEADER` pattern (uppercase, non-alphanumeric → `_`). Examples:
+  - `reverse-engineer::x-api-key` → `REVERSE_ENGINEER__X_API_KEY=sk_live_123`
+  - `www.wom.fun::authorization` → `WWW_WOM_FUN__AUTHORIZATION=Bearer eyJ...`
+
+- **Convenience keys:** when the header is `x-api-key` / `api-key`, the server also checks `REVERSE_ENGINEER_API_KEY`, `UNBROWSE_API_KEY`, and plain `API_KEY`.
+
+Environment values are merged with stored credentials before execution, so you can mix both approaches. If any required headers are still missing, the MCP response lists the unresolved keys and domains so you know exactly what to provide.
+
 ### 3. Fetch Override
 
 When executing a wrapper, the system:

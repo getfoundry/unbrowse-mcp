@@ -55,6 +55,206 @@ export default function createServer({
   // Ability cache - populated by search_abilities, used by execute_ability
   const abilityCache = new Map<string, IndexedAbility>();
 
+  const sanitizeEnvSegment = (value: string): string =>
+    value
+      .trim()
+      .replace(/[^a-zA-Z0-9]/g, "_")
+      .replace(/_+/g, "_")
+      .replace(/^_|_$/g, "")
+      .toUpperCase();
+
+  const envCredentialOverrides = (() => {
+    const mapping = new Map<string, string>();
+    const candidateVarNames = [
+      "UNBROWSE_TOOL_HEADERS",
+      "UNBROWSE_DYNAMIC_HEADERS",
+      "TOOL_DYNAMIC_HEADERS",
+      "MCP_TOOL_HEADERS",
+    ];
+
+    for (const varName of candidateVarNames) {
+      const raw = process.env[varName];
+      if (!raw) continue;
+
+      try {
+        const parsed = JSON.parse(raw);
+        if (parsed && typeof parsed === "object") {
+          for (const [rawKey, rawValue] of Object.entries(parsed)) {
+            if (typeof rawKey === "string" && typeof rawValue === "string") {
+              mapping.set(rawKey, rawValue);
+            }
+          }
+        }
+      } catch (error) {
+        console.warn(`[WARN] Failed to parse ${varName} as JSON:`, error);
+      }
+    }
+
+    return mapping;
+  })();
+
+  const getEnvCandidatesForKey = (key: string): string[] => {
+    const [rawDomain = "", rawHeader = ""] = key.split("::");
+    const domainSegment = sanitizeEnvSegment(rawDomain);
+    const headerSegment = sanitizeEnvSegment(rawHeader);
+    const combinedSegment = sanitizeEnvSegment(key.replace(/::/g, "__"));
+    const domainNoWww = domainSegment.replace(/^WWW_/, "");
+
+    const baseCandidates = new Set<string>();
+
+    if (combinedSegment) {
+      baseCandidates.add(combinedSegment);
+    }
+
+    if (domainSegment && headerSegment) {
+      baseCandidates.add(`${domainSegment}__${headerSegment}`);
+      baseCandidates.add(`${domainSegment}_${headerSegment}`);
+      baseCandidates.add(`${domainSegment}${headerSegment ? `__${headerSegment}` : ""}`);
+      baseCandidates.add(`${domainSegment}${headerSegment ? `_${headerSegment}` : ""}`);
+    }
+
+    if (domainNoWww && headerSegment) {
+      baseCandidates.add(`${domainNoWww}__${headerSegment}`);
+      baseCandidates.add(`${domainNoWww}_${headerSegment}`);
+    }
+
+    if (headerSegment) {
+      baseCandidates.add(headerSegment);
+    }
+
+    const expanded = new Set<string>();
+    const prefixes = ["UNBROWSE", "ABILITY", "TOOL", "MCP"];
+
+    for (const candidate of baseCandidates) {
+      expanded.add(candidate);
+      for (const prefix of prefixes) {
+        if (candidate && prefix) {
+          expanded.add(`${prefix}_${candidate}`);
+        }
+      }
+    }
+
+    return Array.from(expanded);
+  };
+
+  const envCredentialCache = new Map<string, string | null>();
+
+  const getEnvCredentialForKey = (key: string): string | undefined => {
+    if (envCredentialCache.has(key)) {
+      const cached = envCredentialCache.get(key);
+      return cached === null ? undefined : cached;
+    }
+
+    let value: string | undefined;
+
+    if (envCredentialOverrides.has(key)) {
+      value = envCredentialOverrides.get(key);
+    } else {
+      for (const candidate of getEnvCandidatesForKey(key)) {
+        const envValue = process.env[candidate];
+        if (envValue !== undefined) {
+          value = envValue;
+          break;
+        }
+      }
+
+      if (!value) {
+        const [rawDomain = "", rawHeader = ""] = key.split("::");
+        const domainSegment = sanitizeEnvSegment(rawDomain);
+        const headerSegment = sanitizeEnvSegment(rawHeader);
+
+        if (headerSegment === "X_API_KEY" || headerSegment === "API_KEY") {
+          const apiKeyCandidates = new Set<string>();
+
+          if (domainSegment) {
+            apiKeyCandidates.add(`${domainSegment}_API_KEY`);
+            apiKeyCandidates.add(`${domainSegment}__API_KEY`);
+            apiKeyCandidates.add(`${domainSegment}_KEY`);
+            apiKeyCandidates.add(`${domainSegment}__KEY`);
+          }
+
+          const domainNoWww = domainSegment.replace(/^WWW_/, "");
+          if (domainNoWww) {
+            apiKeyCandidates.add(`${domainNoWww}_API_KEY`);
+            apiKeyCandidates.add(`${domainNoWww}__API_KEY`);
+          }
+
+          apiKeyCandidates.add("UNBROWSE_API_KEY");
+          apiKeyCandidates.add("API_KEY");
+
+          for (const candidate of apiKeyCandidates) {
+            const envValue = process.env[candidate];
+            if (envValue !== undefined) {
+              value = envValue;
+              break;
+            }
+          }
+        }
+      }
+    }
+
+    if (typeof value === "string") {
+      const trimmed = value.trim();
+      if (trimmed.length > 0) {
+        envCredentialCache.set(key, trimmed);
+        return trimmed;
+      }
+    }
+
+    envCredentialCache.set(key, null);
+    return undefined;
+  };
+
+  const getEnvCredentialsForAbility = (ability: IndexedAbility): Record<string, string> => {
+    const credentials: Record<string, string> = {};
+    if (!ability.dynamic_header_keys || ability.dynamic_header_keys.length === 0) {
+      return credentials;
+    }
+
+    for (const key of ability.dynamic_header_keys) {
+      const value = getEnvCredentialForKey(key);
+      if (value !== undefined) {
+        credentials[key] = value;
+      }
+    }
+
+    return credentials;
+  };
+
+  const applyEnvCredentialsToCache = (
+    domain: string,
+    credentials: Record<string, string>,
+  ): void => {
+    const variants = new Set<string>([domain, ...candidateVariantsFromDomain(domain)]);
+    for (const candidate of variants) {
+      const existing = credentialCache.get(candidate) || undefined;
+      credentialCache.set(candidate, { ...(existing || {}), ...credentials });
+    }
+  };
+
+  const groupEnvCredentialsByDomain = (
+    ability: IndexedAbility,
+  ): Map<string, Record<string, string>> => {
+    const map = new Map<string, Record<string, string>>();
+    if (!ability.dynamic_header_keys) return map;
+
+    for (const key of ability.dynamic_header_keys) {
+      const value = getEnvCredentialForKey(key);
+      if (value === undefined) continue;
+
+      const [domainPart] = key.split("::");
+      if (!domainPart) continue;
+
+      if (!map.has(domainPart)) {
+        map.set(domainPart, {});
+      }
+
+      map.get(domainPart)![key] = value;
+    }
+
+    return map;
+  };
+
   // Lazy initialization state
   let initializationPromise: Promise<void> | null = null;
   let isInitialized = false;
@@ -120,14 +320,30 @@ export default function createServer({
       return true;
     }
 
+    if (!ability.dynamic_header_keys || ability.dynamic_header_keys.length === 0) {
+      return true;
+    }
+
+    const envCredentialsByDomain = groupEnvCredentialsByDomain(ability);
+    for (const [domain, creds] of envCredentialsByDomain.entries()) {
+      applyEnvCredentialsToCache(domain, creds);
+    }
+
     for (const key of ability.dynamic_header_keys) {
       let keySatisfied = false;
-      for (const candidate of deriveCandidatesForKey(ability, key)) {
-        if (!candidate) continue;
-        const credentials = await fetchCredentialsForCandidate(candidate);
-        if (credentials && credentials[key] !== undefined) {
-          keySatisfied = true;
-          break;
+
+      if (getEnvCredentialForKey(key) !== undefined) {
+        keySatisfied = true;
+      }
+
+      if (!keySatisfied) {
+        for (const candidate of deriveCandidatesForKey(ability, key)) {
+          if (!candidate) continue;
+          const credentials = await fetchCredentialsForCandidate(candidate);
+          if (credentials && credentials[key] !== undefined) {
+            keySatisfied = true;
+            break;
+          }
         }
       }
 
@@ -325,6 +541,7 @@ The code is executed in a safe sandbox and must be a valid arrow function or fun
         }
 
         let resolvedCredentials: Record<string, string> | null = null;
+        const envCredentials = getEnvCredentialsForAbility(ability);
 
         // Check if ability actually needs dynamic headers (defensive check)
         const actuallyNeedsDynamicHeaders =
@@ -347,8 +564,23 @@ The code is executed in a safe sandbox and must be a valid arrow function or fun
 
           console.log(`[TRACE] Extracted domains:`, Array.from(domains));
 
+          const headersNeedingLookup = ability.dynamic_header_keys.filter(
+            (key: string) => envCredentials[key] === undefined,
+          );
+          let pendingHeaders = new Set(headersNeedingLookup);
+
+          if (headersNeedingLookup.length === 0) {
+            console.log(
+              `[TRACE] All required dynamic headers satisfied via environment variables`,
+            );
+          }
+
           // Try each domain to find credentials that satisfy all required headers
           for (const domain of Array.from(domains)) {
+            if (pendingHeaders.size === 0) {
+              break;
+            }
+
             console.log(`[TRACE] Attempting to fetch credentials for domain: ${domain}`);
 
             try {
@@ -372,29 +604,34 @@ The code is executed in a safe sandbox and must be a valid arrow function or fun
                 Object.keys(creds),
               );
 
-              // Check if this credential set has all required headers
-              const hasAllHeaders = ability.dynamic_header_keys.every(
+              const matchingHeaders = Array.from(pendingHeaders).filter(
                 (key: string) => creds[key] !== undefined,
               );
 
-              console.log(
-                `[TRACE] Checking if all headers are present:`,
-                ability.dynamic_header_keys.map((key: string) => ({
-                  key,
-                  present: creds[key] !== undefined,
-                })),
-              );
+              if (matchingHeaders.length > 0) {
+                if (!resolvedCredentials) {
+                  resolvedCredentials = {};
+                }
 
-              if (hasAllHeaders) {
-                resolvedCredentials = creds;
-                console.log(
-                  `[TRACE] ✓ Using credentials from domain ${domain} for ability ${ability.ability_id}`,
-                );
-                break;
+                for (const key of matchingHeaders) {
+                  resolvedCredentials[key] = creds[key];
+                  pendingHeaders.delete(key);
+                }
+
+                const stillMissing = Array.from(pendingHeaders);
+
+                if (stillMissing.length === 0) {
+                  console.log(
+                    `[TRACE] ✓ Collected all missing headers from domain ${domain} for ability ${ability.ability_id}`,
+                  );
+                  break;
+                } else {
+                  console.log(
+                    `[TRACE] Partial credentials from ${domain}, still missing: ${stillMissing.join(", ")}`,
+                  );
+                }
               } else {
-                console.log(
-                  `[TRACE] ✗ Credentials from ${domain} missing required headers`,
-                );
+                console.log(`[TRACE] ✗ Credentials from ${domain} missing required headers`);
               }
             } catch (error: any) {
               console.warn(
@@ -403,16 +640,6 @@ The code is executed in a safe sandbox and must be a valid arrow function or fun
               );
             }
           }
-
-          if (!resolvedCredentials) {
-            const requiredDomains = Array.from(domains).join(", ");
-            console.error(
-              `[TRACE] ✗ Failed to find credentials. Required domains: ${requiredDomains}`,
-            );
-            throw new Error(
-              `Credentials not available for ability ${ability.ability_id}. Required domains: ${requiredDomains}. Store the required headers and retry.`,
-            );
-          }
         } else {
           if (ability.requires_dynamic_headers && (!ability.dynamic_header_keys || ability.dynamic_header_keys.length === 0)) {
             console.warn(
@@ -420,6 +647,35 @@ The code is executed in a safe sandbox and must be a valid arrow function or fun
             );
           }
           console.log(`[TRACE] Ability does not require dynamic headers (executing as public API)`);
+        }
+
+        const credentialsForExecution = actuallyNeedsDynamicHeaders
+          ? { ...(resolvedCredentials || {}), ...envCredentials }
+          : {};
+
+        if (actuallyNeedsDynamicHeaders) {
+          const missingHeaders = ability.dynamic_header_keys.filter(
+            (key: string) => credentialsForExecution[key] === undefined,
+          );
+
+          if (missingHeaders.length > 0) {
+            const requiredDomains = Array.from(
+              new Set(missingHeaders.map((key: string) => key.split("::")[0]).filter(Boolean)),
+            );
+
+            console.error(
+              `[TRACE] ✗ Failed to resolve credentials. Missing headers: ${missingHeaders.join(
+                ", ",
+              )}`,
+            );
+            throw new Error(
+              `Credentials not available for ability ${ability.ability_id}. Missing headers: ${missingHeaders.join(
+                ", ",
+              )}. Set environment variables for these headers or store credentials for domains: ${requiredDomains.join(
+                ", ",
+              )}.`,
+            );
+          }
         }
 
         // Transform IndexedAbility to the format executeWrapper expects
@@ -453,7 +709,7 @@ The code is executed in a safe sandbox and must be a valid arrow function or fun
           ability.ability_id,
           payload,
           {},
-          resolvedCredentials || {},
+          credentialsForExecution,
           wrapperData,
           undefined, // secret
           apiClient,
