@@ -234,14 +234,23 @@ export class UnbrowseApiClient {
       // Get all personal abilities (no client-side filtering)
       this.listAbilities(options).then(result => result.abilities),
       // Search global published abilities (server-side vector search)
-      this.searchPublicAbilities(query, limit * 3)
-        .then(result => result.abilities)
-        .catch(() => [] as IndexedAbility[]), // Fallback to empty array if public search fails
+      this.searchPublicAbilities(query, limit * 3).then(result => result.abilities),
     ]);
 
-    // Extract results from Promise.allSettled
-    const personalAbilities = personalResult.status === 'fulfilled' ? personalResult.value : [];
-    const publicAbilities = publicResult.status === 'fulfilled' ? publicResult.value : [];
+    // Extract results from Promise.allSettled with error logging
+    const personalAbilities = personalResult.status === 'fulfilled'
+      ? personalResult.value
+      : (() => {
+          console.warn('[WARN] Personal abilities search failed:', personalResult.reason?.message || personalResult.reason);
+          return [] as IndexedAbility[];
+        })();
+
+    const publicAbilities = publicResult.status === 'fulfilled'
+      ? publicResult.value
+      : (() => {
+          console.warn('[WARN] Public abilities search failed:', publicResult.reason?.message || publicResult.reason);
+          return [] as IndexedAbility[];
+        })();
 
     // Combine and rank abilities using BM25 with 10% boost for personal abilities
     interface ScoredAbility {
