@@ -246,9 +246,12 @@ The `metadata` field is a flexible JSON object that can contain:
 
 ## Related Endpoints
 
-- `GET /abilities` - List public published abilities (no auth required)
-- `GET /abilities/search` - Search abilities with token charging (auth required)
+- `GET /public/abilities?q=<query>` - Search all published abilities (no auth required, query required)
+- `GET /abilities/search?q=<query>` - Search your personal abilities with token charging (auth required)
+- `GET /abilities/:id` - Get ability details by ID (no auth, but credential filtering applies)
 - `GET /my/abilities/favorites` - Get only favorite abilities
 - `POST /my/abilities/:abilityId/favorite` - Toggle favorite status
 - `POST /my/abilities/:abilityId/publish` - Publish ability to marketplace
 - `DELETE /my/abilities/:abilityId` - Delete user ability
+
+**Note**: The old `GET /abilities` route (which allowed bulk extraction without query) has been removed. Use `/public/abilities?q=<query>` for searching all published abilities or `/my/abilities` for your personal abilities.
