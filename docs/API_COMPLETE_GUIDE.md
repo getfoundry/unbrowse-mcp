@@ -14,12 +14,79 @@
    - [Health & Documentation](#health--documentation)
    - [Authentication Endpoints](#authentication-endpoints)
    - [User Abilities](#user-abilities)
+   - [Public Abilities](#public-abilities)
+   - [Ability Search (Protected)](#ability-search-protected)
    - [Credentials Storage](#credentials-storage)
    - [API Keys](#api-keys)
+   - [Token & Rewards System](#token--rewards-system)
+   - [Domain Verification](#domain-verification)
    - [Analytics](#analytics)
    - [Ingestion](#ingestion)
 5. [Common Workflows](#common-workflows)
 6. [Error Handling](#error-handling)
+
+---
+
+## Quick Reference: All Endpoints
+
+### Public Routes (No Authentication)
+- `GET /health` - Health check
+- `GET /public/abilities?q=<query>` - Search published abilities
+- `GET /abilities/:id` - Get ability details by ID
+- `GET /analytics/public/popular` - Popular abilities leaderboard
+- `GET /analytics/public/top-earning` - Top-earning abilities
+- `GET /docs/openapi.json` - OpenAPI specification
+
+### Authentication Routes
+- `POST /auth/register` - Register new user
+- `POST /auth/login` - Login and get JWT token
+- `GET /auth/me` - Get current user info
+
+### User Abilities (Protected)
+- `GET /my/abilities` - List your abilities
+- `GET /my/abilities/favorites` - List favorite abilities
+- `POST /my/abilities/:id/favorite` - Toggle favorite status
+- `POST /my/abilities/:id/publish` - Publish ability
+- `DELETE /my/abilities/:id` - Delete ability
+
+### Search (Protected, Token-Charged)
+- `GET /abilities/search?q=<query>` - Search your personal abilities
+
+### Credentials (Protected)
+- `POST /my/credentials/stream` - Upload encrypted credentials
+- `GET /my/credentials` - List all credentials
+- `GET /my/credentials/:domain` - Get credentials by domain
+- `DELETE /my/credentials/:domain` - Delete domain credentials
+- `DELETE /my/credentials/by-id/:id` - Delete specific credential
+
+### API Keys (Protected)
+- `POST /my/api-keys` - Create API key
+- `GET /my/api-keys` - List API keys
+- `DELETE /my/api-keys/:id` - Revoke API key
+
+### Tokens & Rewards (Protected)
+- `GET /my/tokens/balance` - Get token balance
+- `POST /my/tokens/purchase` - Purchase tokens
+- `GET /my/tokens/transactions` - Transaction history
+
+### Domain Verification (Protected)
+- `POST /my/domains/verify` - Request verification
+- `POST /my/domains/:domain/verify` - Verify via DNS
+- `GET /my/domains` - List domains
+- `DELETE /my/domains/:domain` - Delete domain
+
+### Analytics (Protected)
+- `GET /analytics/my/stats` - Your usage stats
+- `GET /analytics/my/abilities/:id` - Ability analytics
+- `GET /analytics/my/earnings` - Your earnings
+- `GET /analytics/my/spending` - Your spending
+- `GET /analytics/my/recent-charges` - Recent charges
+- `GET /analytics/platform/revenue` - Platform revenue (admin)
+
+### Ingestion (Protected)
+- `POST /ingest` - Upload HAR file
+- `POST /ingest/api` - Ingest single API endpoint
+- `POST /ingest/urls` - Batch ingest URLs
 
 ---
 
@@ -30,8 +97,10 @@ The **Reverse Engineer API** is a platform for:
 - 🎯 **Semantic search** across discovered API abilities
 - 🔐 **Secure credential storage** (client-side encrypted, AES-256-GCM)
 - ⭐ **Favorites system** for quick access to frequently used abilities
-- 📊 **Analytics** for tracking ability usage
+- 📊 **Analytics** for tracking ability usage and earnings
 - 🔑 **API key management** with Unkey integration
+- 💰 **Token-based rewards** for ability creators and indexers
+- ✅ **Domain verification** for proving API ownership
 
 ### Technology Stack
 
@@ -44,9 +113,12 @@ The **Reverse Engineer API** is a platform for:
 
 - **JWT-based authentication** (stateless, 7-day expiration)
 - **Zero-knowledge credential storage** (encrypted client-side before upload)
-- **Vector database search** (3072-dimension embeddings via Google Gemini)
+- **Vector database search** (1536-dimension embeddings via OpenAI)
 - **Automatic ability generation** from API traffic
 - **Multi-tenant isolation** (per-user abilities and credentials)
+- **Token-based monetization** (earn from published abilities, pay for searches)
+- **Domain verification** (prove ownership via DNS TXT records)
+- **Comprehensive analytics** (earnings, spending, usage stats)
 
 ---
 
@@ -661,6 +733,63 @@ curl -X GET "http://localhost:4111/analytics/public/popular?limit=25"
 
 ---
 
+### Ability Search (Protected)
+
+#### `GET /abilities/search`
+
+Search your personal abilities with token charging. This endpoint searches only your private and published abilities with credential filtering.
+
+**Authentication**: JWT token or API key required
+
+**Cost**: Variable based on query length (see Token & Rewards System)
+
+**Query Parameters**:
+- `q` (required) - Search query (minimum 1 character)
+- `top_k` (optional) - Number of results (default: 10)
+
+**Response**:
+```json
+{
+  "success": true,
+  "query": "github",
+  "count": 5,
+  "cost": "0.000100",
+  "results": [
+    {
+      "userAbilityId": "uab_123",
+      "abilityId": "get-github-user",
+      "abilityName": "Get GitHub User",
+      "serviceName": "github",
+      "domain": "api.github.com",
+      "description": "Fetch GitHub user profile by username",
+      "isFavorite": true,
+      "isPublished": false
+    }
+  ]
+}
+```
+
+**Error - Insufficient Tokens** (402 Payment Required):
+```json
+{
+  "success": false,
+  "error": "Insufficient tokens. Please purchase tokens to continue.",
+  "balance_required": "0.000100"
+}
+```
+
+**Example**:
+```bash
+curl -X GET "http://localhost:4111/abilities/search?q=github&top_k=10" \
+  -H "Authorization: Bearer $JWT_TOKEN"
+```
+
+**Key Differences from `/public/abilities`**:
+- `/abilities/search` - Searches YOUR personal abilities (private + published), charges tokens
+- `/public/abilities` - Searches ALL published abilities from all users, free but requires query parameter
+
+---
+
 ### Credentials Storage
 
 For complete documentation, see [CREDENTIALS_STORAGE.md](./CREDENTIALS_STORAGE.md).
@@ -982,6 +1111,312 @@ curl -X DELETE http://localhost:4111/my/api-keys/api_abc123 \
 
 ---
 
+### Token & Rewards System
+
+The platform uses a token-based rewards system for monetizing API abilities and searches.
+
+#### `GET /my/tokens/balance`
+
+Get your current token balance and lifetime statistics.
+
+**Authentication**: JWT token or API key required
+
+**Response**:
+```json
+{
+  "success": true,
+  "balance": {
+    "current": "10.50",
+    "lifetimeEarned": "25.00",
+    "lifetimeSpent": "14.50",
+    "lifetimePurchased": "10.00"
+  }
+}
+```
+
+**Example**:
+```bash
+curl -X GET http://localhost:4111/my/tokens/balance \
+  -H "Authorization: Bearer $JWT_TOKEN"
+```
+
+---
+
+#### `POST /my/tokens/purchase`
+
+Purchase tokens to use for searches and accessing paid abilities.
+
+**Authentication**: JWT token or API key required
+
+**Request Body**:
+```json
+{
+  "amount": 10.00,
+  "paymentMethod": "stripe",
+  "paymentDetails": {
+    "paymentMethodId": "pm_123456"
+  }
+}
+```
+
+**Parameters**:
+- `amount` (required) - USD amount to purchase ($1.00 minimum, $10,000 maximum)
+- `paymentMethod` (optional) - Payment method type (default: "simulated")
+- `paymentDetails` (optional) - Payment processor details
+
+**Response**:
+```json
+{
+  "success": true,
+  "message": "Tokens purchased successfully",
+  "purchase": {
+    "amount": "10.00",
+    "newBalance": "20.50",
+    "transactionId": "txn_abc123"
+  }
+}
+```
+
+**Error Responses**:
+
+*400 Bad Request* - Invalid amount:
+```json
+{
+  "success": false,
+  "error": "Minimum purchase amount is $1.00 USD"
+}
+```
+
+**Example**:
+```bash
+curl -X POST http://localhost:4111/my/tokens/purchase \
+  -H "Authorization: Bearer $JWT_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "amount": 10.00,
+    "paymentMethod": "stripe"
+  }'
+```
+
+**Notes**:
+- Tokens are denominated in USD (1 token = $1.00 USD)
+- Minimum purchase: $1.00
+- Maximum purchase: $10,000 per transaction
+- Currently uses simulated payments (Stripe integration pending)
+
+---
+
+#### `GET /my/tokens/transactions`
+
+Get your token transaction history.
+
+**Authentication**: JWT token or API key required
+
+**Query Parameters**:
+- `limit` (optional) - Number of transactions to return (1-100, default: 50)
+
+**Response**:
+```json
+{
+  "success": true,
+  "count": 10,
+  "transactions": [
+    {
+      "transactionId": "txn_abc123",
+      "type": "purchase",
+      "amount": "10.00",
+      "balance": "20.50",
+      "description": "Token purchase",
+      "createdAt": "2025-10-24T10:30:00.000Z"
+    },
+    {
+      "transactionId": "txn_def456",
+      "type": "search_charge",
+      "amount": "-0.000100",
+      "balance": "20.499900",
+      "description": "Search query: github",
+      "createdAt": "2025-10-24T10:35:00.000Z"
+    }
+  ]
+}
+```
+
+**Transaction Types**:
+- `purchase` - Token purchase via payment
+- `search_charge` - Charge for using `/abilities/search`
+- `ability_charge` - Charge for using a paid ability
+- `earning` - Earnings from your published abilities being used
+
+**Example**:
+```bash
+curl -X GET "http://localhost:4111/my/tokens/transactions?limit=20" \
+  -H "Authorization: Bearer $JWT_TOKEN"
+```
+
+---
+
+### Domain Verification
+
+Domain verification allows you to prove ownership of API domains, which can increase trust and earnings for your published abilities.
+
+#### `POST /my/domains/verify`
+
+Request verification for a domain you own.
+
+**Authentication**: JWT token or API key required
+
+**Request Body**:
+```json
+{
+  "domain": "api.example.com"
+}
+```
+
+**Response**:
+```json
+{
+  "success": true,
+  "message": "Verification record created. Add the TXT record to your DNS.",
+  "domain": "api.example.com",
+  "verificationToken": "unbrowse-verify-abc123def456",
+  "txtRecord": {
+    "name": "_unbrowse-verify.api.example.com",
+    "type": "TXT",
+    "value": "unbrowse-verify-abc123def456"
+  },
+  "instructions": "Add this TXT record to your DNS, then call POST /my/domains/:domain/verify"
+}
+```
+
+**Example**:
+```bash
+curl -X POST http://localhost:4111/my/domains/verify \
+  -H "Authorization: Bearer $JWT_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "domain": "api.example.com"
+  }'
+```
+
+---
+
+#### `POST /my/domains/:domain/verify`
+
+Verify domain ownership via DNS TXT record.
+
+**Authentication**: JWT token or API key required
+
+**URL Parameters**:
+- `domain` - The domain to verify (e.g., `api.example.com`)
+
+**Response** (Success):
+```json
+{
+  "success": true,
+  "message": "Domain verified successfully!",
+  "domain": "api.example.com",
+  "verifiedAt": "2025-10-24T10:30:00.000Z"
+}
+```
+
+**Response** (Failed):
+```json
+{
+  "success": false,
+  "error": "DNS verification failed. TXT record not found or incorrect.",
+  "expected": "unbrowse-verify-abc123def456",
+  "found": null
+}
+```
+
+**Example**:
+```bash
+curl -X POST http://localhost:4111/my/domains/api.example.com/verify \
+  -H "Authorization: Bearer $JWT_TOKEN"
+```
+
+**Workflow**:
+1. Call `POST /my/domains/verify` to get verification token
+2. Add TXT record to your DNS: `_unbrowse-verify.api.example.com` = `unbrowse-verify-abc123def456`
+3. Wait for DNS propagation (typically 1-5 minutes)
+4. Call `POST /my/domains/:domain/verify` to complete verification
+5. Once verified, abilities for that domain show "Verified Owner" badge
+
+---
+
+#### `GET /my/domains`
+
+List all your domain verification records.
+
+**Authentication**: JWT token or API key required
+
+**Response**:
+```json
+{
+  "success": true,
+  "count": 2,
+  "domains": [
+    {
+      "domainId": "dom_abc123",
+      "domain": "api.example.com",
+      "verificationToken": "unbrowse-verify-abc123",
+      "verified": true,
+      "verifiedAt": "2025-10-24T10:30:00.000Z",
+      "createdAt": "2025-10-24T10:00:00.000Z"
+    },
+    {
+      "domainId": "dom_def456",
+      "domain": "api.test.com",
+      "verificationToken": "unbrowse-verify-def456",
+      "verified": false,
+      "verifiedAt": null,
+      "createdAt": "2025-10-24T11:00:00.000Z"
+    }
+  ]
+}
+```
+
+**Example**:
+```bash
+curl -X GET http://localhost:4111/my/domains \
+  -H "Authorization: Bearer $JWT_TOKEN"
+```
+
+---
+
+#### `DELETE /my/domains/:domain`
+
+Delete a domain verification record (only unverified domains can be deleted).
+
+**Authentication**: JWT token or API key required
+
+**URL Parameters**:
+- `domain` - The domain to delete
+
+**Response**:
+```json
+{
+  "success": true,
+  "message": "Domain verification deleted successfully"
+}
+```
+
+**Error Response** (Verified domain):
+```json
+{
+  "success": false,
+  "error": "Cannot delete verified domain. Contact support if you need to remove it."
+}
+```
+
+**Example**:
+```bash
+curl -X DELETE http://localhost:4111/my/domains/api.test.com \
+  -H "Authorization: Bearer $JWT_TOKEN"
+```
+
+---
+
 ### Analytics
 
 #### `GET /analytics/my/stats`
@@ -1079,6 +1514,211 @@ curl -X GET "http://localhost:4111/analytics/public/popular?limit=20"
 
 ---
 
+#### `GET /analytics/my/earnings`
+
+Get your earnings as an ability indexer (from users consuming your published abilities).
+
+**Authentication**: JWT token or API key required
+
+**Response**:
+```json
+{
+  "success": true,
+  "earnings": {
+    "totalEarnings": "12.45",
+    "thisMonth": "3.20",
+    "thisWeek": "0.85",
+    "today": "0.15",
+    "topEarningAbilities": [
+      {
+        "abilityId": "get-github-user",
+        "abilityName": "Get GitHub User",
+        "earnings": "5.30",
+        "usageCount": 530
+      }
+    ]
+  }
+}
+```
+
+**Example**:
+```bash
+curl -X GET http://localhost:4111/analytics/my/earnings \
+  -H "Authorization: Bearer $JWT_TOKEN"
+```
+
+---
+
+#### `GET /analytics/my/spending`
+
+Get your spending breakdown (tokens spent on searches and abilities).
+
+**Authentication**: JWT token or API key required
+
+**Response**:
+```json
+{
+  "success": true,
+  "spending": {
+    "totalSpent": "8.75",
+    "thisMonth": "2.40",
+    "thisWeek": "0.60",
+    "today": "0.10",
+    "breakdown": {
+      "searches": "1.25",
+      "abilityUsage": "7.50"
+    },
+    "topSpendingAbilities": [
+      {
+        "abilityId": "premium-data-api",
+        "abilityName": "Premium Data API",
+        "spent": "4.20",
+        "usageCount": 42
+      }
+    ]
+  }
+}
+```
+
+**Example**:
+```bash
+curl -X GET http://localhost:4111/analytics/my/spending \
+  -H "Authorization: Bearer $JWT_TOKEN"
+```
+
+---
+
+#### `GET /analytics/my/recent-charges`
+
+Get your recent token charges with details.
+
+**Authentication**: JWT token or API key required
+
+**Query Parameters**:
+- `limit` (optional) - Number of charges to return (1-100, default: 20)
+
+**Response**:
+```json
+{
+  "success": true,
+  "count": 5,
+  "charges": [
+    {
+      "chargeId": "chg_abc123",
+      "amount": "0.000100",
+      "type": "search",
+      "description": "Search query: github api",
+      "metadata": {
+        "query": "github api",
+        "queryLength": 10
+      },
+      "createdAt": "2025-10-24T10:35:00.000Z"
+    },
+    {
+      "chargeId": "chg_def456",
+      "amount": "0.100000",
+      "type": "ability_usage",
+      "description": "Used ability: Premium Data API",
+      "metadata": {
+        "abilityId": "premium-data-api",
+        "abilityName": "Premium Data API"
+      },
+      "createdAt": "2025-10-24T10:30:00.000Z"
+    }
+  ]
+}
+```
+
+**Example**:
+```bash
+curl -X GET "http://localhost:4111/analytics/my/recent-charges?limit=10" \
+  -H "Authorization: Bearer $JWT_TOKEN"
+```
+
+---
+
+#### `GET /analytics/public/top-earning`
+
+Get leaderboard of top-earning published abilities (public endpoint).
+
+**Authentication**: None required
+
+**Query Parameters**:
+- `limit` (optional) - Number of abilities to return (1-50, default: 10)
+
+**Response**:
+```json
+{
+  "success": true,
+  "count": 10,
+  "abilities": [
+    {
+      "abilityId": "premium-data-api",
+      "abilityName": "Premium Data API",
+      "serviceName": "Data Provider",
+      "domain": "api.dataprovider.com",
+      "totalEarnings": "245.50",
+      "usageCount": 2455,
+      "uniqueUsers": 87,
+      "publishedBy": "user_abc123",
+      "publishedAt": "2025-09-15T10:00:00.000Z"
+    }
+  ]
+}
+```
+
+**Example**:
+```bash
+curl -X GET "http://localhost:4111/analytics/public/top-earning?limit=20"
+```
+
+**Use Cases**:
+- Discover high-value abilities to use or replicate
+- See which API domains are most valuable
+- Understand earning potential for publishing abilities
+
+---
+
+#### `GET /analytics/platform/revenue`
+
+Get platform-wide revenue statistics (admin only).
+
+**Authentication**: JWT token or API key required (admin role)
+
+**Response**:
+```json
+{
+  "success": true,
+  "revenue": {
+    "totalRevenue": "5420.30",
+    "platformFees": "542.03",
+    "indexerEarnings": "4878.27",
+    "thisMonth": {
+      "revenue": "1250.00",
+      "platformFees": "125.00",
+      "indexerEarnings": "1125.00"
+    },
+    "breakdown": {
+      "searchCharges": "150.45",
+      "abilityCharges": "5269.85"
+    }
+  }
+}
+```
+
+**Example**:
+```bash
+curl -X GET http://localhost:4111/analytics/platform/revenue \
+  -H "Authorization: Bearer $JWT_TOKEN"
+```
+
+**Notes**:
+- Currently requires authentication but no admin role check (TODO)
+- Platform takes 10% fee on all transactions
+- Remaining 90% goes to ability indexers/creators
+
+---
+
 ### Ingestion
 
 #### `POST /ingest`
@@ -1131,7 +1771,7 @@ curl -X POST http://localhost:4111/ingest \
 
 Ingest a single API endpoint directly.
 
-**Authentication**: JWT token required
+**Authentication**: JWT token required (API key auth not supported for this endpoint)
 
 **Request Body**:
 ```json
@@ -1187,7 +1827,7 @@ curl -X POST http://localhost:4111/ingest/api \
 
 Batch ingest multiple URLs or curl commands.
 
-**Authentication**: JWT token required
+**Authentication**: JWT token required (API key auth not supported for this endpoint)
 
 **Request Body**:
 ```json
@@ -1604,6 +2244,33 @@ All errors return this format:
 
 ## Changelog
 
+### Version 2.1.0 (2025-10-26)
+
+**New Features**:
+- Token & Rewards System
+  - `GET /my/tokens/balance` - Check token balance and lifetime stats
+  - `POST /my/tokens/purchase` - Purchase tokens ($1-$10,000 per transaction)
+  - `GET /my/tokens/transactions` - Transaction history with filtering
+- Domain Verification
+  - `POST /my/domains/verify` - Request domain verification
+  - `POST /my/domains/:domain/verify` - Verify ownership via DNS TXT record
+  - `GET /my/domains` - List verified domains
+  - `DELETE /my/domains/:domain` - Remove unverified domains
+- Enhanced Analytics
+  - `GET /analytics/my/earnings` - Track earnings as ability indexer
+  - `GET /analytics/my/spending` - Spending breakdown by category
+  - `GET /analytics/my/recent-charges` - Recent charges with metadata
+  - `GET /analytics/public/top-earning` - Top-earning abilities leaderboard
+  - `GET /analytics/platform/revenue` - Platform revenue stats (admin)
+- Protected Search
+  - `GET /abilities/search` - Token-charged personal ability search
+
+**Updated**:
+- Documentation now includes all 40+ API endpoints
+- Fixed embedding dimension documentation (1536 dimensions, not 3072)
+- Added comprehensive examples for all new routes
+- Updated Table of Contents with new sections
+
 ### Version 2.0.0 (2025-10-24)
 
 **⚠️ Breaking Changes**:
@@ -1651,6 +2318,7 @@ All errors return this format:
 
 ---
 
-*Last Updated: 2025-10-24*
-*API Version: 2.0.0*
+*Last Updated: 2025-10-26*
+*API Version: 2.1.0*
 *Framework: Mastra 0.21.1 + BetterAuth 1.3.29 + JWT*
+*Total Endpoints: 40+*
