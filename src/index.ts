@@ -946,7 +946,7 @@ The code is executed in a safe sandbox and must be a valid arrow function or fun
           success: result.success,
           statusCode: result.statusCode,
           responseBody: processedResponseBody,
-          responseHeaders: result.responseHeaders,
+          // responseHeaders: result.responseHeaders,
           error: result.error,
           credentialsExpired: result.credentialsExpired,
           loginAbilities: result.loginAbilities,
