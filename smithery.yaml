@@ -7,7 +7,7 @@ config:
   apiKey:
     type: string
     description: "Your Unbrowse API key (starts with re_). Alternative to sessionToken. Can also be set via UNBROWSE_API_KEY env var."
-    required: false
+    required: true
   sessionToken:
     type: string
     description: "Your session token (alternative to apiKey). Can also be set via UNBROWSE_SESSION_TOKEN env var."
@@ -15,14 +15,4 @@ config:
   password:
     type: string
     description: "Your encryption password for credential decryption. Only required if abilities need credentials. Can also be set via UNBROWSE_PASSWORD env var."
-    required: false
-  debug:
-    type: boolean
-    description: "Enable debug logging"
-    required: false
-    default: false
-  enableIndexTool:
-    type: boolean
-    description: "Enable the ingest_api_endpoint tool for indexing new APIs"
-    required: false
-    default: false
+    required: true
