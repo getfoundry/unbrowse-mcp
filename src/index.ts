@@ -20,11 +20,18 @@ import { decryptCredentials } from "./crypto-utils.js";
 
 // User-level config from smithery.yaml
 export const configSchema = z.object({
-  apiKey: z.string().describe("Your Unbrowse API key from the dashboard"),
-  password: z.string().describe("Your encryption password for that you set in the dashboard"),
+  apiKey: z.string().optional().describe("Your Unbrowse API key from the dashboard (starts with re_). Alternative to sessionToken."),
+  sessionToken: z.string().optional().describe("Your session token (alternative to apiKey)."),
+  password: z.string().optional().describe("Your encryption password for credential decryption. Only required if abilities need credentials."),
   debug: z.boolean().default(false).describe("Enable debug logging"),
   enableIndexTool: z.boolean().default(false).describe("Enable the ingest_api_endpoint tool for indexing new APIs"),
-});
+}).refine(
+  (data) => data.apiKey || data.sessionToken,
+  {
+    message: "Either apiKey or sessionToken must be provided",
+    path: ["apiKey", "sessionToken"],
+  }
+);
 
 export default function createServer({
   config,
@@ -33,8 +40,26 @@ export default function createServer({
 }) {
   console.log("[INFO] createServer called - starting initialization");
 
+  // Apply environment variable fallbacks
+  const apiKey = config.apiKey || process.env.UNBROWSE_API_KEY;
+  const sessionToken = config.sessionToken || process.env.UNBROWSE_SESSION_TOKEN;
+  const password = config.password || process.env.UNBROWSE_PASSWORD || process.env.UNBROWSE_CREDENTIAL_KEY;
+
+  // Validate that at least one auth method is provided
+  const authToken = apiKey || sessionToken;
+  if (!authToken) {
+    throw new Error(
+      "Authentication required: Provide either apiKey or sessionToken via config or environment variables " +
+      "(UNBROWSE_API_KEY or UNBROWSE_SESSION_TOKEN)"
+    );
+  }
+
+  // Detect auth type (API keys start with "re_", session tokens don't)
+  const authType = apiKey && apiKey.startsWith("re_") ? "api_key" : "session_token";
+  console.log(`[INFO] Authentication type: ${authType}`);
+
   // Create authenticated API client
-  const apiClient: UnbrowseApiClient = createApiClient(config.apiKey);
+  const apiClient: UnbrowseApiClient = createApiClient(authToken);
   console.log(`[INFO] API client created with base URL: ${UNBROWSE_API_BASE_URL}`);
 
   const server = new McpServer({
@@ -313,7 +338,7 @@ export default function createServer({
           // Execute ability on the server using abilityId
           console.log(`[DEBUG] Executing ability - ID: ${ability.ability_id}, Name: ${ability.ability_name}`);
           const result = await apiClient.executeAbility(ability.ability_id, payload, {
-            credentialKey: config.password,
+            credentialKey: password,
           });
 
           // Handle error responses
@@ -407,7 +432,12 @@ export default function createServer({
       }
 
       // Decrypt credentials using the password
-      const decryptedCredentials = decryptCredentials(encryptedCredentials, config.password);
+      if (!password) {
+        console.warn(`[WARN] Cannot decrypt credentials for ${candidate}: no password provided`);
+        credentialCache.set(candidate, null);
+        return null;
+      }
+      const decryptedCredentials = decryptCredentials(encryptedCredentials, password);
       credentialCache.set(candidate, decryptedCredentials);
 
       if (config.debug) {
@@ -647,7 +677,7 @@ The code is executed in a safe sandbox and must be a valid arrow function or fun
         // According to MCP_EXECUTION_GUIDE.md, password is the credential key
         const result = await apiClient.executeAbility(ability_id, payload, {
           transformCode: transform_code,
-          credentialKey: config.password,
+          credentialKey: password,
         });
 
         if (config.debug) {
