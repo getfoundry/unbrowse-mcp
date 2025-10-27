@@ -76,8 +76,8 @@ class BM25 {
  * Fields match the server response structure (snake_case)
  */
 export interface IndexedAbility {
-  user_ability_id?: string; // From /my/abilities endpoint - use this for execution
-  ability_id: string;
+  user_ability_id?: string; // From /my/abilities endpoint (deprecated, use ability_id for execution)
+  ability_id: string; // Use this for execution
   ability_name: string;
   service_name: string;
   description: string;
@@ -574,14 +574,14 @@ export class UnbrowseApiClient {
 
   /**
    * Execute an ability on the server
-   * POST /my/abilities/:userAbilityId/execute
+   * POST /my/abilities/:abilityId/execute
    *
-   * @param userAbilityId - The userAbilityId (not abilityId) to execute
+   * @param abilityId - The abilityId to execute
    * @param params - Parameters object to pass to the ability
    * @param options - Optional configuration including transformCode and credentialKey
    */
   async executeAbility(
-    userAbilityId: string,
+    abilityId: string,
     params: Record<string, any>,
     options: {
       transformCode?: string;
@@ -613,7 +613,7 @@ export class UnbrowseApiClient {
     totalExecutions?: number;
     successRate?: string;
   }> {
-    const url = `${this.baseUrl}/my/abilities/${encodeURIComponent(userAbilityId)}/execute`;
+    const url = `${this.baseUrl}/my/abilities/${encodeURIComponent(abilityId)}/execute`;
 
     const headers: Record<string, string> = {
       'Content-Type': 'application/json',

@@ -54,7 +54,7 @@ export default function createServer({
   const credentialCache = new Map<string, Record<string, string> | null>();
 
   // Ability cache - populated by search_abilities, used by execute_ability
-  // Keys are userAbilityId (used for execution), values are full ability objects
+  // Keys are abilityId (used for execution), values are full ability objects
   const abilityCache = new Map<string, IndexedAbility>();
 
   const sanitizeEnvSegment = (value: string): string =>
@@ -310,9 +310,8 @@ export default function createServer({
         delete (payload as Record<string, unknown>)._placeholder;
 
         try {
-          // Execute ability on the server using userAbilityId
-          const userAbilityId = ability.user_ability_id || ability.ability_id;
-          const result = await apiClient.executeAbility(userAbilityId, payload, {
+          // Execute ability on the server using abilityId
+          const result = await apiClient.executeAbility(ability.ability_id, payload, {
             credentialKey: config.password,
           });
 
@@ -499,9 +498,8 @@ export default function createServer({
 
           if (await abilityHasCredentialCoverage(ability)) {
             accessibleAbilities.push(ability);
-            // Cache by userAbilityId for execution, fallback to ability_id if not available
-            const cacheKey = ability.user_ability_id || ability.ability_id;
-            abilityCache.set(cacheKey, ability);
+            // Cache by abilityId for execution
+            abilityCache.set(ability.ability_id, ability);
 
             // Register as individual MCP tool
             try {
@@ -559,15 +557,14 @@ export default function createServer({
         // Store them for credential coverage checking AND cache them
         // Skip abilities already added from favorites
         for (const ability of candidateAbilities) {
-          // Skip if already cached (from favorites) - check by userAbilityId or ability_id
-          const cacheKey = ability.user_ability_id || ability.ability_id;
-          if (abilityCache.has(cacheKey)) {
+          // Skip if already cached (from favorites)
+          if (abilityCache.has(ability.ability_id)) {
             continue;
           }
 
           if (await abilityHasCredentialCoverage(ability)) {
             accessibleAbilities.push(ability);
-            abilityCache.set(cacheKey, ability);
+            abilityCache.set(ability.ability_id, ability);
           }
         }
 
@@ -600,11 +597,11 @@ export default function createServer({
     {
       title: "Execute Ability",
       description:
-        "Executes a specific ability by userAbilityId with the provided parameters. Server-side execution with automatic credential injection.",
+        "Executes a specific ability by abilityId with the provided parameters. Server-side execution with automatic credential injection.",
       inputSchema: {
-        user_ability_id: z
+        ability_id: z
           .string()
-          .describe("The userAbilityId to execute (from search results or list_abilities). This is NOT the same as ability_id."),
+          .describe("The abilityId to execute (from search results or list_abilities)."),
         params: z
           .record(z.any())
           .optional()
@@ -634,11 +631,11 @@ Examples:
 The code is executed in a safe sandbox and must be a valid arrow function or function expression.`),
       },
     },
-    async ({ user_ability_id, params, transform_code }) => {
+    async ({ ability_id, params, transform_code }) => {
       try {
         await ensureInitialized();
 
-        console.log(`[TRACE] Executing ability ${user_ability_id} on server...`);
+        console.log(`[TRACE] Executing ability ${ability_id} on server...`);
 
         // Use params directly as an object (no JSON parsing needed)
         const payload: Record<string, any> = params || {};
@@ -646,7 +643,7 @@ The code is executed in a safe sandbox and must be a valid arrow function or fun
 
         // Execute ability on the server with credential key from config
         // According to MCP_EXECUTION_GUIDE.md, password is the credential key
-        const result = await apiClient.executeAbility(user_ability_id, payload, {
+        const result = await apiClient.executeAbility(ability_id, payload, {
           transformCode: transform_code,
           credentialKey: config.password,
         });
@@ -820,12 +817,11 @@ The code is executed in a safe sandbox and must be a valid arrow function or fun
             const abilityResponse = await apiClient.getAbility(result.ability_id);
             if (abilityResponse.success && abilityResponse.ability) {
               const ability = abilityResponse.ability;
-              const cacheKey = ability.user_ability_id || ability.ability_id;
-              abilityCache.set(cacheKey, ability);
+              abilityCache.set(ability.ability_id, ability);
 
               // Also add to accessibleAbilities array (permanent storage)
               const existingIndex = accessibleAbilities.findIndex(
-                (a) => (a.user_ability_id && a.user_ability_id === ability.user_ability_id) || a.ability_id === ability.ability_id
+                (a) => a.ability_id === ability.ability_id
               );
               if (existingIndex === -1) {
                 accessibleAbilities.push(ability);
@@ -833,7 +829,7 @@ The code is executed in a safe sandbox and must be a valid arrow function or fun
                 accessibleAbilities[existingIndex] = ability;
               }
 
-              console.log(`[INFO] Cached newly ingested ability: ${cacheKey}`);
+              console.log(`[INFO] Cached newly ingested ability: ${ability.ability_id}`);
               console.log(`[INFO] Total accessible abilities: ${accessibleAbilities.length}`);
             }
           } catch (error: any) {
@@ -926,14 +922,13 @@ The code is executed in a safe sandbox and must be a valid arrow function or fun
         );
       }
 
-      // Populate the ability cache with search results using userAbilityId
+      // Populate the ability cache with search results using abilityId
       for (const ability of matches) {
-        const cacheKey = ability.user_ability_id || ability.ability_id;
-        abilityCache.set(cacheKey, ability);
+        abilityCache.set(ability.ability_id, ability);
 
         // Also add to accessibleAbilities array if not already present (permanent storage)
         const existingIndex = accessibleAbilities.findIndex(
-          (a) => (a.user_ability_id && a.user_ability_id === ability.user_ability_id) || a.ability_id === ability.ability_id
+          (a) => a.ability_id === ability.ability_id
         );
         if (existingIndex === -1) {
           accessibleAbilities.push(ability);
@@ -954,10 +949,9 @@ The code is executed in a safe sandbox and must be a valid arrow function or fun
                 success: true,
                 query,
                 count: matches.length,
-                message: `Found ${matches.length} matching abilities. These are now cached and ready to execute. Use execute_ability with the userAbilityId and params.`,
+                message: `Found ${matches.length} matching abilities. These are now cached and ready to execute. Use execute_ability with the abilityId and params.`,
                 availableDomains,
                 abilities: matches.map((a) => ({
-                  userAbilityId: a.user_ability_id || a.ability_id,
                   abilityId: a.ability_id,
                   name: a.ability_name,
                   service: a.service_name,
