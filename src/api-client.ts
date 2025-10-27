@@ -112,7 +112,8 @@ export interface ApiClientConfig {
   timeout?: number;
 }
 
-export const UNBROWSE_API_BASE_URL = "http://localhost:4111";
+export const UNBROWSE_API_BASE_URL = "https://agent.unbrowse.ai";
+// export const UNBROWSE_API_BASE_URL = "http://localhost:4111";
 
 /**
  * Transform camelCase API response to snake_case IndexedAbility
