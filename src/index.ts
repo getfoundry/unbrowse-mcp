@@ -9,7 +9,6 @@
 
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
-import vm from "vm";
 import {
   createApiClient,
   formatAbilityDescription,
@@ -17,9 +16,6 @@ import {
   type IndexedAbility,
   type UnbrowseApiClient,
 } from "./api-client.js";
-import {
-  executeWrapper,
-} from "./wrapper-executor-enhanced.js";
 import { decryptCredentials } from "./crypto-utils.js";
 
 // User-level config from smithery.yaml
@@ -308,60 +304,37 @@ export default function createServer({
         inputSchema: Object.keys(inputSchemaProps).length > 0 ? inputSchemaProps : { _placeholder: z.any().optional().describe("No parameters required") },
       },
       async (params) => {
-        // Forward to execute_ability logic
+        // Forward to server-side execute_ability
         const payload = { ...params };
         delete (payload as Record<string, unknown>)._placeholder;
 
-        const cachedAbility = abilityCache.get(ability.ability_id);
-        if (!cachedAbility) {
+        try {
+          // Execute ability on the server
+          const result = await apiClient.executeAbility(ability.ability_id, payload);
+
           return {
             content: [{
               type: "text",
-              text: JSON.stringify({ success: false, error: `Ability not found: ${ability.ability_id}` }, null, 2),
+              text: JSON.stringify({
+                success: result.success,
+                statusCode: result.result?.statusCode,
+                responseBody: result.result?.body,
+                executedAt: result.result?.executedAt,
+              }, null, 2),
+            }],
+          };
+        } catch (error: any) {
+          return {
+            content: [{
+              type: "text",
+              text: JSON.stringify({
+                success: false,
+                error: error.message || String(error),
+                executedAt: new Date().toISOString(),
+              }, null, 2),
             }],
           };
         }
-
-        // Use the existing execute_ability logic by creating wrapper data
-        const staticHeadersArray = cachedAbility.static_headers
-          ? Object.entries(cachedAbility.static_headers).map(([key, value]) => ({
-              key: `${cachedAbility.service_name}::${key}`,
-              value_code: `() => '${value.replace(/'/g, "\\'")}'`
-            }))
-          : [];
-
-        const wrapperData = {
-          input: {
-            service_name: cachedAbility.service_name,
-            ability_id: cachedAbility.ability_id,
-            ability_name: cachedAbility.ability_name,
-            description: cachedAbility.description,
-            wrapper_code: cachedAbility.wrapper_code,
-            static_headers: staticHeadersArray,
-            dynamic_header_keys: cachedAbility.dynamic_header_keys,
-            input_schema: cachedAbility.input_schema,
-            dependency_order: cachedAbility.dependency_order,
-            http_method: cachedAbility.request_method,
-            url: cachedAbility.request_url,
-          },
-          dependencies: cachedAbility.dependencies,
-        };
-
-        const result = await executeWrapper(cachedAbility.ability_id, payload, {}, {}, wrapperData, undefined, apiClient);
-
-        return {
-          content: [{
-            type: "text",
-            text: JSON.stringify({
-              success: result.success,
-              statusCode: result.statusCode,
-              responseBody: result.responseBody,
-              responseHeaders: result.responseHeaders,
-              error: result.error,
-              executedAt: result.executedAt,
-            }, null, 2),
-          }],
-        };
       },
     );
 
@@ -632,62 +605,8 @@ The code is executed in a safe sandbox and must be a valid arrow function or fun
       try {
         await ensureInitialized();
 
-        // Try to fetch ability from API first for most up-to-date version
-        console.log(`[TRACE] Fetching ability ${ability_id} from API...`);
+        console.log(`[TRACE] Executing ability ${ability_id} on server...`);
 
-        let ability: IndexedAbility | undefined;
-        try {
-          const apiResponse = await apiClient.getAbility(ability_id);
-
-          if (apiResponse.success && apiResponse.ability) {
-            ability = apiResponse.ability;
-            // Update cache with fresh data
-            abilityCache.set(ability_id, ability);
-            console.log(`[TRACE] Fetched and cached ability ${ability_id} from API`);
-          }
-        } catch (error: any) {
-          console.log(`[TRACE] API fetch failed: ${error.message}, checking cache...`);
-        }
-
-        // Fallback to cache if API fetch failed (ability might only exist in vector search results)
-        if (!ability) {
-          ability = abilityCache.get(ability_id);
-          if (!ability) {
-            // Also check accessibleAbilities array
-            ability = accessibleAbilities.find((a) => a.ability_id === ability_id);
-          }
-
-          if (ability) {
-            console.log(`[TRACE] Using cached ability ${ability_id} (not found in API)`);
-          } else {
-            return {
-              content: [
-                {
-                  type: "text",
-                  text: JSON.stringify(
-                    {
-                      success: false,
-                      error: `Ability not found: ${ability_id}. Please run search_abilities first to cache it.`,
-                    },
-                    null,
-                    2
-                  ),
-                },
-              ],
-            };
-          }
-        }
-
-        console.log(
-          `[TRACE] ========== Executing ability: ${ability.ability_id} ==========`,
-        );
-        console.log(`[TRACE] Ability metadata:`, {
-          abilityId: ability.ability_id,
-          abilityName: ability.ability_name,
-          serviceName: ability.service_name,
-          requiresDynamicHeaders: ability.requires_dynamic_headers,
-          dynamicHeaderKeys: ability.dynamic_header_keys,
-        });
         // Parse params from JSON string
         let payload: Record<string, any> = {};
         if (params) {
@@ -715,179 +634,10 @@ The code is executed in a safe sandbox and must be a valid arrow function or fun
           console.log(`[TRACE] No params provided, using empty object`);
         }
 
-        let resolvedCredentials: Record<string, string> | null = null;
-        const envCredentials = getEnvCredentialsForAbility(ability);
-
-        // Check if ability actually needs dynamic headers (defensive check)
-        const actuallyNeedsDynamicHeaders =
-          ability.requires_dynamic_headers &&
-          ability.dynamic_header_keys &&
-          ability.dynamic_header_keys.length > 0;
-
-        if (actuallyNeedsDynamicHeaders) {
-          console.log(
-            `[TRACE] Ability requires dynamic headers, extracting domains...`,
-          );
-
-          // Extract unique domains from dynamic header keys
-          const domains = new Set<string>();
-          ability.dynamic_header_keys.forEach((key: string) => {
-            const domain = key.split("::")[0];
-            console.log(`[TRACE] Processing header key: ${key} -> domain: ${domain}`);
-            if (domain) domains.add(domain);
-          });
-
-          console.log(`[TRACE] Extracted domains:`, Array.from(domains));
-
-          const headersNeedingLookup = ability.dynamic_header_keys.filter(
-            (key: string) => envCredentials[key] === undefined,
-          );
-          let pendingHeaders = new Set(headersNeedingLookup);
-
-          if (headersNeedingLookup.length === 0) {
-            console.log(
-              `[TRACE] All required dynamic headers satisfied via environment variables`,
-            );
-          }
-
-          // Try each domain to find credentials that satisfy all required headers
-          for (const domain of Array.from(domains)) {
-            if (pendingHeaders.size === 0) {
-              break;
-            }
-
-            console.log(`[TRACE] Attempting to fetch credentials for domain: ${domain}`);
-
-            try {
-              const encryptedCreds = await apiClient.getCookieJar(domain);
-              console.log(
-                `[TRACE] Cookie jar response for ${domain}:`,
-                encryptedCreds ? "Found (encrypted)" : "Not found",
-              );
-
-              if (!encryptedCreds) {
-                console.log(
-                  `[TRACE] No credentials found for domain ${domain}`,
-                );
-                continue;
-              }
-
-              // Decrypt credentials
-              const creds = decryptCredentials(encryptedCreds, config.password);
-              console.log(
-                `[TRACE] Decrypted credentials for ${domain}:`,
-                Object.keys(creds),
-              );
-
-              const matchingHeaders = Array.from(pendingHeaders).filter(
-                (key: string) => creds[key] !== undefined,
-              );
-
-              if (matchingHeaders.length > 0) {
-                if (!resolvedCredentials) {
-                  resolvedCredentials = {};
-                }
-
-                for (const key of matchingHeaders) {
-                  resolvedCredentials[key] = creds[key];
-                  pendingHeaders.delete(key);
-                }
-
-                const stillMissing = Array.from(pendingHeaders);
-
-                if (stillMissing.length === 0) {
-                  console.log(
-                    `[TRACE] ✓ Collected all missing headers from domain ${domain} for ability ${ability.ability_id}`,
-                  );
-                  break;
-                } else {
-                  console.log(
-                    `[TRACE] Partial credentials from ${domain}, still missing: ${stillMissing.join(", ")}`,
-                  );
-                }
-              } else {
-                console.log(`[TRACE] ✗ Credentials from ${domain} missing required headers`);
-              }
-            } catch (error: any) {
-              console.warn(
-                `[TRACE] Credential fetch/decrypt failed for domain ${domain}:`,
-                error.message || error,
-              );
-            }
-          }
-        } else {
-          if (ability.requires_dynamic_headers && (!ability.dynamic_header_keys || ability.dynamic_header_keys.length === 0)) {
-            console.warn(
-              `[WARN] Ability ${ability.ability_id} marked as requiresDynamicHeaders=true but has no dynamicHeaderKeys. Treating as public API.`,
-            );
-          }
-          console.log(`[TRACE] Ability does not require dynamic headers (executing as public API)`);
-        }
-
-        const credentialsForExecution = actuallyNeedsDynamicHeaders
-          ? { ...(resolvedCredentials || {}), ...envCredentials }
-          : {};
-
-        if (actuallyNeedsDynamicHeaders) {
-          const missingHeaders = ability.dynamic_header_keys.filter(
-            (key: string) => credentialsForExecution[key] === undefined,
-          );
-
-          if (missingHeaders.length > 0) {
-            const requiredDomains = Array.from(
-              new Set(missingHeaders.map((key: string) => key.split("::")[0]).filter(Boolean)),
-            );
-
-            console.error(
-              `[TRACE] ✗ Failed to resolve credentials. Missing headers: ${missingHeaders.join(
-                ", ",
-              )}`,
-            );
-            throw new Error(
-              `Credentials not available for ability ${ability.ability_id}. Missing headers: ${missingHeaders.join(
-                ", ",
-              )}. Set environment variables for these headers or store credentials for domains: ${requiredDomains.join(
-                ", ",
-              )}.`,
-            );
-          }
-        }
-
-        // Transform static_headers from object to array format for executeWrapper
-        const staticHeadersArray = ability.static_headers
-          ? Object.entries(ability.static_headers).map(([key, value]) => ({
-              key: `${ability.service_name}::${key}`,
-              value_code: `() => '${value.replace(/'/g, "\\'")}'`
-            }))
-          : [];
-
-        // Create a wrapper data object in the format executeWrapper expects
-        const wrapperData = {
-          input: {
-            service_name: ability.service_name,
-            ability_id: ability.ability_id,
-            ability_name: ability.ability_name,
-            description: ability.description,
-            wrapper_code: ability.wrapper_code,
-            static_headers: staticHeadersArray,
-            dynamic_header_keys: ability.dynamic_header_keys,
-            input_schema: ability.input_schema,
-            dependency_order: ability.dependency_order,
-            http_method: ability.request_method,
-            url: ability.request_url,
-          },
-          dependencies: ability.dependencies,
-        };
-
-        const result = await executeWrapper(
-          ability.ability_id,
-          payload,
-          {},
-          credentialsForExecution,
-          wrapperData,
-          undefined, // secret
-          apiClient,
-        );
+        // Execute ability on the server (server handles all credential resolution and wrapper execution)
+        const result = await apiClient.executeAbility(ability_id, payload, {
+          transformCode: transform_code,
+        });
 
         if (config.debug) {
           console.log(
@@ -895,62 +645,12 @@ The code is executed in a safe sandbox and must be a valid arrow function or fun
           );
         }
 
-        // Apply transformation if provided
-        let processedResponseBody = result.responseBody;
-        if (transform_code && result.success && result.responseBody) {
-          try {
-            console.log(`[TRACE] Applying transformation code to response`);
-
-            // Create a safe sandbox for transformation
-            const transformSandbox = {
-              console,
-              JSON,
-              Object,
-              Array,
-              Math,
-              String,
-              Number,
-              Boolean,
-            };
-
-            const transformContext = vm.createContext(transformSandbox);
-
-            // Wrap the transform code to make it executable
-            const wrappedTransform = `
-              const transformFn = ${transform_code};
-              transformFn;
-            `;
-
-            const transformScript = new vm.Script(wrappedTransform);
-            const transformFn = transformScript.runInContext(transformContext);
-
-            if (typeof transformFn !== 'function') {
-              throw new Error('Transform code must be a function');
-            }
-
-            // Execute transformation
-            processedResponseBody = transformFn(result.responseBody);
-            console.log(`[TRACE] Transformation applied successfully`);
-          } catch (error: any) {
-            console.error(`[ERROR] Transformation failed:`, error.message);
-            // Add transformation error to response
-            processedResponseBody = {
-              _transform_error: error.message,
-              _original_data: result.responseBody,
-            };
-          }
-        }
-
         // Prepare response and truncate if needed
         const responseData = {
           success: result.success,
-          statusCode: result.statusCode,
-          responseBody: processedResponseBody,
-          // responseHeaders: result.responseHeaders,
-          error: result.error,
-          credentialsExpired: result.credentialsExpired,
-          loginAbilities: result.loginAbilities,
-          executedAt: result.executedAt,
+          statusCode: result.result?.statusCode,
+          responseBody: result.result?.body,
+          executedAt: result.result?.executedAt,
           transformed: transform_code ? true : false,
         };
 
@@ -959,9 +659,9 @@ The code is executed in a safe sandbox and must be a valid arrow function or fun
         // Truncate response if it exceeds 30k characters
         const MAX_RESPONSE_LENGTH = 30000;
         if (responseText.length > MAX_RESPONSE_LENGTH) {
-          const truncatedBody = typeof result.responseBody === 'string'
-            ? result.responseBody.substring(0, MAX_RESPONSE_LENGTH - 1000)
-            : JSON.stringify(result.responseBody).substring(0, MAX_RESPONSE_LENGTH - 1000);
+          const truncatedBody = typeof result.result?.body === 'string'
+            ? result.result.body.substring(0, MAX_RESPONSE_LENGTH - 1000)
+            : JSON.stringify(result.result?.body).substring(0, MAX_RESPONSE_LENGTH - 1000);
 
           responseData.responseBody = truncatedBody + `\n\n[... Response truncated. Original length: ${responseText.length} characters, showing first ${MAX_RESPONSE_LENGTH} characters]`;
           responseText = JSON.stringify(responseData, null, 2);
