@@ -76,6 +76,7 @@ class BM25 {
  * Fields match the server response structure (snake_case)
  */
 export interface IndexedAbility {
+  user_ability_id?: string; // From /my/abilities endpoint - use this for execution
   ability_id: string;
   ability_name: string;
   service_name: string;
@@ -117,6 +118,7 @@ export const UNBROWSE_API_BASE_URL = "http://localhost:4111";
  */
 function transformAbilityResponse(apiAbility: any): IndexedAbility {
   return {
+    user_ability_id: apiAbility.userAbilityId, // Important: for /my/abilities responses
     ability_id: apiAbility.abilityId,
     ability_name: apiAbility.abilityName,
     service_name: apiAbility.serviceName,
@@ -572,41 +574,76 @@ export class UnbrowseApiClient {
 
   /**
    * Execute an ability on the server
-   * POST /abilities/:abilityId/execute
+   * POST /my/abilities/:userAbilityId/execute
+   *
+   * @param userAbilityId - The userAbilityId (not abilityId) to execute
+   * @param params - Parameters object to pass to the ability
+   * @param options - Optional configuration including transformCode and credentialKey
    */
   async executeAbility(
-    abilityId: string,
+    userAbilityId: string,
     params: Record<string, any>,
     options: {
       transformCode?: string;
+      credentialKey?: string;
     } = {}
   ): Promise<{
     success: boolean;
-    result: {
+    result?: {
       statusCode: number;
       body: any;
       headers: Record<string, string>;
       executedAt: string;
+      executionTimeMs?: number;
     };
+    health?: {
+      score: number;
+      totalExecutions: number;
+      successRate: string;
+    };
+    error?: string;
+    credentialsExpired?: boolean;
+    defunct?: boolean;
+    loginAbilities?: Array<{
+      id: string;
+      name: string;
+      description: string;
+    }>;
+    healthScore?: number;
+    totalExecutions?: number;
+    successRate?: string;
   }> {
-    const url = `${this.baseUrl}/abilities/${encodeURIComponent(abilityId)}/execute`;
+    const url = `${this.baseUrl}/my/abilities/${encodeURIComponent(userAbilityId)}/execute`;
+
+    const headers: Record<string, string> = {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${this.apiKey}`,
+    };
+
+    // Add X-Credential-Key header if provided (required for abilities that need credentials)
+    if (options.credentialKey) {
+      headers['X-Credential-Key'] = options.credentialKey;
+    }
+
     const response = await this.fetchWithTimeout(url, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
+      headers,
       body: JSON.stringify({
         params,
         transformCode: options.transformCode,
       }),
     });
 
+    const data = await response.json();
+
     if (!response.ok) {
-      const errorData = await response.json().catch(() => ({ error: response.statusText }));
-      throw new Error(`Failed to execute ability: ${response.status} ${errorData.error || response.statusText}`);
+      // Handle error responses with additional context
+      throw new Error(
+        data.error || `Failed to execute ability: ${response.status} ${response.statusText}`
+      );
     }
 
-    return response.json();
+    return data;
   }
 }
 
