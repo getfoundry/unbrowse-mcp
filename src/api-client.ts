@@ -160,6 +160,7 @@ export class UnbrowseApiClient {
 
     try {
       const response = await fetch(url, {
+        ...options,
         headers: {
           ...options.headers,
           'Authorization': `Bearer ${this.apiKey}`,
@@ -615,6 +616,8 @@ export class UnbrowseApiClient {
   }> {
     const url = `${this.baseUrl}/my/abilities/${encodeURIComponent(abilityId)}/execute`;
 
+    console.log(`[INFO] Executing ability at URL: ${url}`);
+
     const headers: Record<string, string> = {
       'Content-Type': 'application/json',
       'Authorization': `Bearer ${this.apiKey}`,
@@ -623,18 +626,39 @@ export class UnbrowseApiClient {
     // Add X-Credential-Key header if provided (required for abilities that need credentials)
     if (options.credentialKey) {
       headers['X-Credential-Key'] = options.credentialKey;
+      console.log(`[INFO] X-Credential-Key header added: ${options.credentialKey.substring(0, 4)}...`);
+    } else {
+      console.log(`[WARN] No credentialKey provided in options`);
     }
+
+    const requestBody = {
+      params,
+      transformCode: options.transformCode,
+    };
+
+    console.log(`[INFO] Request body:`, JSON.stringify(requestBody));
+    console.log(`[INFO] Request headers:`, JSON.stringify(headers, null, 2));
 
     const response = await this.fetchWithTimeout(url, {
       method: 'POST',
       headers,
-      body: JSON.stringify({
-        params,
-        transformCode: options.transformCode,
-      }),
+      body: JSON.stringify(requestBody),
     });
 
-    const data = await response.json();
+    console.log(`[INFO] Response status: ${response.status} ${response.statusText}`);
+    console.log(`[INFO] Response headers:`, JSON.stringify(Object.fromEntries(response.headers.entries()), null, 2));
+
+    const responseText = await response.text();
+    console.log(`[INFO] Response body (first 500 chars):`, responseText.substring(0, 500));
+
+    let data;
+    try {
+      data = JSON.parse(responseText);
+    } catch (parseError) {
+      console.error(`[ERROR] Failed to parse response as JSON:`, parseError);
+      console.error(`[ERROR] Response text:`, responseText);
+      throw new Error(`Server returned non-JSON response: ${responseText.substring(0, 200)}`);
+    }
 
     if (!response.ok) {
       // Handle error responses with additional context

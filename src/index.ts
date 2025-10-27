@@ -311,6 +311,7 @@ export default function createServer({
 
         try {
           // Execute ability on the server using abilityId
+          console.log(`[DEBUG] Executing ability - ID: ${ability.ability_id}, Name: ${ability.ability_name}`);
           const result = await apiClient.executeAbility(ability.ability_id, payload, {
             credentialKey: config.password,
           });
@@ -635,6 +636,7 @@ The code is executed in a safe sandbox and must be a valid arrow function or fun
       try {
         await ensureInitialized();
 
+        console.log(`[TRACE] execute_ability tool called with ability_id: ${ability_id}`);
         console.log(`[TRACE] Executing ability ${ability_id} on server...`);
 
         // Use params directly as an object (no JSON parsing needed)
