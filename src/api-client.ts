@@ -107,7 +107,8 @@ export interface IndexedAbility {
  * Configuration for the API client
  */
 export interface ApiClientConfig {
-  apiKey: string;
+  apiKey?: string;
+  sessionToken?: string;
   timeout?: number;
 }
 
@@ -142,13 +143,24 @@ function transformAbilityResponse(apiAbility: any): IndexedAbility {
  */
 export class UnbrowseApiClient {
   private readonly baseUrl: string;
-  private readonly apiKey: string;
+  private readonly authToken: string;
+  private readonly authType: 'api_key' | 'session_token';
   private timeout: number;
 
   constructor(config: ApiClientConfig) {
-    this.apiKey = config.apiKey;
+    // Validate that at least one auth method is provided
+    const authToken = config.apiKey || config.sessionToken;
+    if (!authToken) {
+      throw new Error("Either apiKey or sessionToken must be provided");
+    }
+
+    this.authToken = authToken;
+    // Auto-detect auth type (API keys start with "re_", session tokens don't)
+    this.authType = config.apiKey && config.apiKey.startsWith("re_") ? "api_key" : "session_token";
     this.baseUrl = UNBROWSE_API_BASE_URL;
     this.timeout = config.timeout || 10000; // 10 second default timeout
+
+    console.log(`[API Client] Initialized with auth type: ${this.authType}`);
   }
 
   /**
@@ -163,7 +175,7 @@ export class UnbrowseApiClient {
         ...options,
         headers: {
           ...options.headers,
-          'Authorization': `Bearer ${this.apiKey}`,
+          'Authorization': `Bearer ${this.authToken}`,
         },
         signal: controller.signal,
       });
@@ -620,7 +632,7 @@ export class UnbrowseApiClient {
 
     const headers: Record<string, string> = {
       'Content-Type': 'application/json',
-      'Authorization': `Bearer ${this.apiKey}`,
+      'Authorization': `Bearer ${this.authToken}`,
     };
 
     // Add X-Credential-Key header if provided (required for abilities that need credentials)
@@ -673,10 +685,14 @@ export class UnbrowseApiClient {
 
 /**
  * Create an API client instance
- * @param apiKey - Your Unbrowse API key
+ * @param authToken - Your Unbrowse API key or session token
  */
-export function createApiClient(apiKey: string): UnbrowseApiClient {
-  return new UnbrowseApiClient({ apiKey });
+export function createApiClient(authToken: string): UnbrowseApiClient {
+  // Auto-detect whether this is an API key or session token
+  const isApiKey = authToken.startsWith("re_");
+  return new UnbrowseApiClient(
+    isApiKey ? { apiKey: authToken } : { sessionToken: authToken }
+  );
 }
 
 /**

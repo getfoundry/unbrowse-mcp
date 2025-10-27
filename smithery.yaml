@@ -1,15 +1,21 @@
 runtime: typescript
 
 # Environment configuration
+# Note: Either apiKey OR sessionToken must be provided (not both)
+# Password is only required if your abilities need credential decryption
 config:
   apiKey:
     type: string
-    description: "Your Unbrowse API key"
-    required: true
+    description: "Your Unbrowse API key (starts with re_). Alternative to sessionToken. Can also be set via UNBROWSE_API_KEY env var."
+    required: false
+  sessionToken:
+    type: string
+    description: "Your session token (alternative to apiKey). Can also be set via UNBROWSE_SESSION_TOKEN env var."
+    required: false
   password:
     type: string
-    description: "Your encryption password you previously set"
-    required: true
+    description: "Your encryption password for credential decryption. Only required if abilities need credentials. Can also be set via UNBROWSE_PASSWORD env var."
+    required: false
   debug:
     type: boolean
     description: "Enable debug logging"
