@@ -57,31 +57,40 @@ This MCP server connects to the Unbrowse API ([API Documentation](./docs/API_COM
 
 ### Authentication Flow
 
-The MCP server uses a **dual-authentication** model for maximum security:
+The MCP server uses a **flexible authentication** model with two options:
 
-1. **API Key Authentication** (Server → Unbrowse API)
+#### Option 1: API Key Authentication (Recommended)
    - All API requests include `Authorization: Bearer <apiKey>` header
-   - API key authenticates you to the Unbrowse platform
+   - API key authenticates you to the Unbrowse platform (format: `re_xxxxx`)
    - Allows access to your personal abilities and credentials
    - Can be revoked without changing your password
+   - Best for production use
 
-2. **Password-Based Decryption** (Client-side only)
+#### Option 2: Session Token Authentication
+   - Use session tokens from your browser after logging in
+   - Session tokens expire based on your auth configuration
+   - Useful for development or testing
+   - Can be obtained from browser cookies
+
+#### Password-Based Decryption (Optional)
+   - **Only required if your abilities need credential decryption**
    - Credentials are stored encrypted on the Unbrowse server
    - Your password is used to decrypt them locally in the MCP server
    - Password **never leaves** your machine
    - Follows zero-knowledge encryption model
+   - If you don't use encrypted credentials, password is not needed
 
 ```
-┌─────────────┐                    ┌──────────────┐                  ┌─────────────┐
-│  MCP Server │─────API Key────────▶│ Unbrowse API │                  │  Encrypted  │
-│             │                     │              │                  │ Credentials │
-│             │◀────Encrypted Creds─│              │◀─────Stored─────│  (Server)   │
-│             │                     └──────────────┘                  └─────────────┘
+┌─────────────┐                           ┌──────────────┐                  ┌─────────────┐
+│  MCP Server │──API Key or Session Token─▶│ Unbrowse API │                  │  Encrypted  │
+│             │                            │              │                  │ Credentials │
+│             │◀────Encrypted Creds────────│              │◀─────Stored─────│  (Server)   │
+│             │                            └──────────────┘                  └─────────────┘
 │             │
-│   Password  │─────Decrypt────────▶│  Plaintext   │
-│  (Local)    │                     │  Credentials │
-│             │                     │  (In Memory) │
-└─────────────┘                     └──────────────┘
+│   Password  │────Decrypt (optional)─────▶│  Plaintext   │
+│  (Local)    │    if creds needed         │  Credentials │
+│             │                            │  (In Memory) │
+└─────────────┘                            └──────────────┘
 ```
 
 ## Setup
@@ -90,8 +99,9 @@ The MCP server uses a **dual-authentication** model for maximum security:
 
 - Node.js 18+
 - pnpm (or npm)
-- An Unbrowse account and API key
-- A PASSWORD for encrypting your stored credentials
+- An Unbrowse account
+- **Authentication**: Either an API key OR session token (choose one)
+- **Password** (optional): Only needed if your abilities require credential decryption
 
 ### Getting Your API Key
 
@@ -142,12 +152,19 @@ The API key format is `re_xxxxxxxxxxxx` (managed by Unkey integration).
 pnpm install
 ```
 
-3. Configure your credentials in `smithery.yaml` or MCP settings:
-   - `apiKey`: Your Unbrowse API key (from step 3 above)
-   - `password`: Your local encryption password for credentials (choose a strong password)
-   - The Unbrowse API base URL is fixed to `https://agent.unbrowse.ai`
+3. Configure your authentication in `smithery.yaml`, MCP settings, or environment variables:
 
-The password is used to decrypt credentials stored on the server. The API key authenticates your requests to the Unbrowse API.
+**Authentication (choose ONE method):**
+   - `apiKey`: Your Unbrowse API key (from step 3 above, format: `re_xxxxx`)
+   - OR `sessionToken`: Session token from browser cookies after logging in
+   - Can also use environment variables: `UNBROWSE_API_KEY` or `UNBROWSE_SESSION_TOKEN`
+
+**Credential Decryption (optional):**
+   - `password`: Your encryption password for credential decryption
+   - Only required if your abilities need to decrypt stored credentials
+   - Can also use environment variable: `UNBROWSE_PASSWORD`
+
+The Unbrowse API base URL is fixed to `https://agent.unbrowse.ai`
 
 ### Installing via Smithery
 
@@ -156,6 +173,34 @@ To install Unbrowse automatically via [Smithery](https://smithery.ai/server/@lek
 ```bash
 npx -y @smithery/cli install @lekt9/unbrowse-mcp
 ```
+
+### Environment Variable Configuration
+
+All configuration options can be set via environment variables instead of `smithery.yaml`:
+
+```bash
+# Authentication (choose ONE)
+export UNBROWSE_API_KEY="re_xxxxxxxxxxxxx"
+# OR
+export UNBROWSE_SESSION_TOKEN="cm4xxxxxxxxxxxxx"
+
+# Credential decryption (optional - only if abilities need it)
+export UNBROWSE_PASSWORD="your-encryption-password"
+
+# Optional: Enable debug logging
+export DEBUG="true"
+
+# Optional: Enable API indexing tool
+export ENABLE_INDEX_TOOL="true"
+```
+
+**Benefits of environment variables:**
+- Easier to manage secrets in production
+- Works with Docker, CI/CD, and cloud platforms
+- No need to modify `smithery.yaml`
+- Can override config values dynamically
+
+See [`.env.example`](.env.example) for a complete template.
 
 ### Development
 
