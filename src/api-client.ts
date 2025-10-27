@@ -569,6 +569,45 @@ export class UnbrowseApiClient {
       message: `Deleted ${result.deletedCount} credentials for ${domain}`
     };
   }
+
+  /**
+   * Execute an ability on the server
+   * POST /abilities/:abilityId/execute
+   */
+  async executeAbility(
+    abilityId: string,
+    params: Record<string, any>,
+    options: {
+      transformCode?: string;
+    } = {}
+  ): Promise<{
+    success: boolean;
+    result: {
+      statusCode: number;
+      body: any;
+      headers: Record<string, string>;
+      executedAt: string;
+    };
+  }> {
+    const url = `${this.baseUrl}/abilities/${encodeURIComponent(abilityId)}/execute`;
+    const response = await this.fetchWithTimeout(url, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        params,
+        transformCode: options.transformCode,
+      }),
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({ error: response.statusText }));
+      throw new Error(`Failed to execute ability: ${response.status} ${errorData.error || response.statusText}`);
+    }
+
+    return response.json();
+  }
 }
 
 /**
