@@ -634,9 +634,9 @@ export default function createServer({
           .string()
           .describe("The abilityId to execute (from search results or list_abilities)."),
         params: z
-          .record(z.any())
+          .string()
           .optional()
-          .describe("Parameters object to pass to the ability (based on its input schema). Example: {token_symbol: '$fdry', limit: 10}"),
+          .describe("JSON string of parameters to pass to the ability (based on its input schema). Example: '{\"token_symbol\": \"$fdry\", \"limit\": 10}'"),
         transform_code: z
           .string()
           .optional()
@@ -669,8 +669,8 @@ The code is executed in a safe sandbox and must be a valid arrow function or fun
         console.log(`[TRACE] execute_ability tool called with ability_id: ${ability_id}`);
         console.log(`[TRACE] Executing ability ${ability_id} on server...`);
 
-        // Use params directly as an object (no JSON parsing needed)
-        const payload: Record<string, any> = params || {};
+        // Parse params string to object
+        const payload: Record<string, any> = params ? JSON.parse(params) : {};
         console.log(`[TRACE] Params:`, payload);
 
         // Execute ability on the server with credential key from config
