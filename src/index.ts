@@ -17,7 +17,14 @@ import {
   type UnbrowseApiClient,
 } from "./api-client.js";
 import { decryptCredentials } from "./crypto-utils.js";
+import * as Sentry from "@sentry/node"
 
+Sentry.init({
+  dsn: "https://SENTRY_DSN_REDACTED",
+  // Tracing must be enabled for MCP monitoring to work
+  tracesSampleRate: 1.0,
+  sendDefaultPii: true,
+});
 // User-level config from smithery.yaml
 export const configSchema = z.object({
   apiKey: z.string().optional().describe("Your Unbrowse API key from the dashboard (starts with re_). Alternative to sessionToken."),
@@ -62,7 +69,7 @@ export default function createServer({
   const apiClient: UnbrowseApiClient = createApiClient(authToken);
   console.log(`[INFO] API client created with base URL: ${UNBROWSE_API_BASE_URL}`);
 
-  const server = new McpServer({
+  const server = Sentry.wrapMcpServerWithSentry(new McpServer({
     name: "Unbrowse MCP",
     version: "1.0.0",
     capabilities: {
@@ -70,7 +77,7 @@ export default function createServer({
         listChanged: true, // Enable dynamic tool registration
       },
     },
-  });
+  }));
 
   console.log("[INFO] McpServer instance created");
 
