@@ -10,8 +10,8 @@
  * Fields match the server response structure (snake_case)
  */
 export interface IndexedAbility {
-  // Primary identifier for execution (replaces ability_id)
-  vector_id: string; // Use this for execution - the unique identifier for querying the database
+  // Primary identifier for execution
+  ability_id: string; // Use this for execution - pass to /my/abilities/:abilityId/execute
 
   // Basic information
   ability_name: string;
@@ -30,9 +30,8 @@ export interface IndexedAbility {
   // Health tracking
   health_score?: string;
 
-  // Legacy fields (for backward compatibility with old endpoints)
+  // Legacy fields (for backward compatibility)
   user_ability_id?: string; // Deprecated
-  ability_id?: string; // Deprecated - use vector_id instead
 
   // Full ability details (only available when fetching specific ability)
   request_method?: string;
@@ -72,8 +71,8 @@ export const UNBROWSE_API_BASE_URL = "https://index.unbrowse.ai";
  */
 function transformAbilityResponse(apiAbility: any): IndexedAbility {
   return {
-    // Primary identifier (vectorId from search results)
-    vector_id: apiAbility.vectorId,
+    // Primary identifier for execution
+    ability_id: apiAbility.abilityId,
 
     // Basic information
     ability_name: apiAbility.abilityName,
@@ -94,7 +93,6 @@ function transformAbilityResponse(apiAbility: any): IndexedAbility {
 
     // Legacy fields (for backward compatibility)
     user_ability_id: apiAbility.userAbilityId,
-    ability_id: apiAbility.abilityId,
 
     // Full ability details (only when fetching specific ability)
     request_method: apiAbility.metadata?.request_method || apiAbility.requestMethod,
