@@ -46,7 +46,7 @@ export interface ApiClientConfig {
   timeout?: number;
 }
 
-export const UNBROWSE_API_BASE_URL = "https://agent.unbrowse.ai";
+export const UNBROWSE_API_BASE_URL = "https://index.unbrowse.ai";
 // export const UNBROWSE_API_BASE_URL = "http://localhost:4111";
 
 /**
