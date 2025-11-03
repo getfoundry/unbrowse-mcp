@@ -998,14 +998,17 @@ For simpler searches, you can use shorter queries like 'create trade', 'fetch to
                 count: matches.length,
                 message: `Found ${matches.length} matching abilities. These are now cached and ready to execute. Use execute_ability with the abilityId and params.`,
                 availableDomains,
-                abilities: matches.map((a) => ({
+                results: matches.map((a) => ({
                   abilityId: a.ability_id,
-                  name: a.ability_name,
-                  service: a.service_name,
+                  abilityName: a.ability_name,
+                  serviceName: a.service_name,
+                  domain: a.domain,
                   description: formatAbilityDescription(a),
                   inputSchema: a.input_schema,
-                  requiresCreds: a.requires_dynamic_headers,
-                  neededCreds: a.dynamic_header_keys,
+                  outputSchema: a.output_schema,
+                  dynamicHeadersRequired: a.requires_dynamic_headers,
+                  dynamicHeaderKeys: a.dynamic_header_keys,
+                  healthScore: a.health_score,
                   dependencyOrder: a.dependency_order,
                   missingDependencies:
                     a.dependencies?.missing?.map((d) => d.ability_id) || [],
