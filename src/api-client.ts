@@ -10,27 +10,38 @@
  * Fields match the server response structure (snake_case)
  */
 export interface IndexedAbility {
-  user_ability_id?: string; // From /my/abilities endpoint (deprecated, use ability_id for execution)
-  ability_id: string; // Use this for execution - the unique identifier for querying the database
+  // Primary identifier for execution (replaces ability_id)
+  vector_id: string; // Use this for execution - the unique identifier for querying the database
+
+  // Basic information
   ability_name: string;
   service_name: string;
   domain?: string; // The domain this ability is for (e.g., "api.github.com")
   description: string;
-  input_schema?: any; // Only available when fetching full ability details
+
+  // Schemas (returned in search results)
+  input_schema?: any;
   output_schema?: any;
-  request_method?: string; // Only available when fetching full ability details
-  request_url?: string; // Only available when fetching full ability details
-  dependency_order: string[];
+
+  // Credential requirements
   requires_dynamic_headers: boolean;
   dynamic_header_keys: string[];
-  static_headers?: Record<string, string>;
-  wrapper_code?: string; // Only available when fetching full ability details
-  generated_at?: string;
-  // Additional fields from search results
-  is_favorite?: boolean;
-  is_published?: boolean;
+
+  // Health tracking
   health_score?: string;
-  vector_id?: number | null; // Infraxa vector ID (for internal use)
+
+  // Legacy fields (for backward compatibility with old endpoints)
+  user_ability_id?: string; // Deprecated
+  ability_id?: string; // Deprecated - use vector_id instead
+
+  // Full ability details (only available when fetching specific ability)
+  request_method?: string;
+  request_url?: string;
+  dependency_order?: string[];
+  static_headers?: Record<string, string>;
+  wrapper_code?: string;
+  generated_at?: string;
+
   // Optional fields that may be added by processing
   dependencies?: {
     resolved?: any[];
@@ -57,41 +68,41 @@ export const UNBROWSE_API_BASE_URL = "https://index.unbrowse.ai";
 
 /**
  * Transform camelCase API response to snake_case IndexedAbility
- * Handles both full ability details and search results
+ * Handles both search results and full ability details
  */
 function transformAbilityResponse(apiAbility: any): IndexedAbility {
   return {
-    // Core identifiers
-    user_ability_id: apiAbility.userAbilityId,
-    ability_id: apiAbility.abilityId,
+    // Primary identifier (vectorId from search results)
+    vector_id: apiAbility.vectorId,
 
-    // Basic info
+    // Basic information
     ability_name: apiAbility.abilityName,
     service_name: apiAbility.serviceName,
     domain: apiAbility.domain,
     description: apiAbility.description,
 
-    // Schema and wrapper (only in full ability details)
-    input_schema: apiAbility.metadata?.input_schema || apiAbility.inputSchema,
-    output_schema: apiAbility.metadata?.output_schema || apiAbility.outputSchema,
+    // Schemas (returned in search results)
+    input_schema: apiAbility.inputSchema || apiAbility.metadata?.input_schema,
+    output_schema: apiAbility.outputSchema || apiAbility.metadata?.output_schema,
+
+    // Credential requirements
+    requires_dynamic_headers: apiAbility.dynamicHeadersRequired || false,
+    dynamic_header_keys: apiAbility.dynamicHeaderKeys || [],
+
+    // Health tracking
+    health_score: apiAbility.healthScore,
+
+    // Legacy fields (for backward compatibility)
+    user_ability_id: apiAbility.userAbilityId,
+    ability_id: apiAbility.abilityId,
+
+    // Full ability details (only when fetching specific ability)
     request_method: apiAbility.metadata?.request_method || apiAbility.requestMethod,
     request_url: apiAbility.metadata?.request_url || apiAbility.requestUrl,
     wrapper_code: apiAbility.metadata?.wrapper_code || apiAbility.wrapperCode,
-
-    // Dependencies and headers
     dependency_order: apiAbility.metadata?.dependency_order || apiAbility.dependencyOrder || [],
-    requires_dynamic_headers: apiAbility.dynamicHeadersRequired || false,
-    dynamic_header_keys: apiAbility.dynamicHeaderKeys || [],
     static_headers: apiAbility.metadata?.static_headers || apiAbility.staticHeaders,
-
-    // Timestamps and metadata
     generated_at: apiAbility.metadata?.generated_at || apiAbility.generatedAt || apiAbility.createdAt,
-
-    // Search result fields
-    is_favorite: apiAbility.isFavorite,
-    is_published: apiAbility.isPublished,
-    health_score: apiAbility.healthScore,
-    vector_id: apiAbility.vectorId,
 
     // Dependencies
     dependencies: apiAbility.dependencies,
