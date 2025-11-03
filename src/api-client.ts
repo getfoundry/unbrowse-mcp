@@ -6,72 +6,6 @@
  */
 
 /**
- * Simple BM25 implementation for ranking search results
- * Based on the Robertson/Zaragoza BM25 algorithm
- */
-class BM25 {
-  private docs: string[][];
-  private k1: number;
-  private b: number;
-  private avgdl: number;
-  private idf: Map<string, number>;
-
-  constructor(docs: string[][], k1: number = 1.5, b: number = 0.75) {
-    this.docs = docs;
-    this.k1 = k1;
-    this.b = b;
-
-    // Calculate average document length
-    const totalLength = docs.reduce((sum, doc) => sum + doc.length, 0);
-    this.avgdl = totalLength / docs.length;
-
-    // Calculate IDF for each term
-    this.idf = new Map();
-    const docCount = docs.length;
-    const termDocCount = new Map<string, number>();
-
-    // Count documents containing each term
-    for (const doc of docs) {
-      const uniqueTerms = new Set(doc);
-      for (const term of uniqueTerms) {
-        termDocCount.set(term, (termDocCount.get(term) || 0) + 1);
-      }
-    }
-
-    // Calculate IDF: log((N - df + 0.5) / (df + 0.5))
-    for (const [term, df] of termDocCount.entries()) {
-      const idf = Math.log((docCount - df + 0.5) / (df + 0.5));
-      this.idf.set(term, idf);
-    }
-  }
-
-  score(query: string[], docIndex: number): number {
-    const doc = this.docs[docIndex];
-    const docLength = doc.length;
-
-    // Count term frequencies in document
-    const termFreq = new Map<string, number>();
-    for (const term of doc) {
-      termFreq.set(term, (termFreq.get(term) || 0) + 1);
-    }
-
-    let score = 0;
-    for (const term of query) {
-      const idf = this.idf.get(term) || 0;
-      const tf = termFreq.get(term) || 0;
-
-      // BM25 score formula
-      const numerator = tf * (this.k1 + 1);
-      const denominator = tf + this.k1 * (1 - this.b + this.b * (docLength / this.avgdl));
-
-      score += idf * (numerator / denominator);
-    }
-
-    return score;
-  }
-}
-
-/**
  * Interface for indexed abilities from the API
  * Fields match the server response structure (snake_case)
  */
@@ -230,115 +164,45 @@ export class UnbrowseApiClient {
   }
 
   /**
-   * Search abilities across both user's personal abilities AND the global published index
-   * This searches both /my/abilities (personal) and /public/abilities (global) and merges results
+   * Search abilities using server-side Infraxa vector search
+   * Uses the /abilities/search endpoint which queries both user's personal abilities
+   * AND the global published index using hybrid KGE search with 10% boost for personal abilities.
    *
    * @param query - Search query string
-   * @param options - Filter options for personal abilities
-   * @param limit - Maximum number of results to return (default: 30)
+   * @param limit - Maximum number of results to return (default: 6, max: 45)
    */
-  async searchAbilities(query: string, options: {
-    favorites?: boolean;
-    published?: boolean;
-  } = {}, limit: number = 30): Promise<{
+  async searchAbilities(query: string, limit: number = 6): Promise<{
     success: boolean;
     count: number;
+    query: string;
     abilities: IndexedAbility[];
+    cost?: string;
   }> {
-    // Search both personal abilities and global published abilities in parallel
-    const [personalResult, publicResult] = await Promise.allSettled([
-      // Get all personal abilities (no client-side filtering)
-      this.listAbilities(options).then(result => result.abilities),
-      // Search global published abilities (server-side vector search)
-      this.searchPublicAbilities(query, limit * 3).then(result => result.abilities),
-    ]);
+    const params = new URLSearchParams({
+      q: query,
+      top_k: String(Math.min(limit, 45)) // Server enforces max of 45
+    });
 
-    // Extract results from Promise.allSettled with error logging
-    const personalAbilities = personalResult.status === 'fulfilled'
-      ? personalResult.value
-      : (() => {
-          console.warn('[WARN] Personal abilities search failed:', personalResult.reason?.message || personalResult.reason);
-          return [] as IndexedAbility[];
-        })();
+    const url = `${this.baseUrl}/abilities/search?${params}`;
+    const response = await this.fetchWithTimeout(url);
 
-    const publicAbilities = publicResult.status === 'fulfilled'
-      ? publicResult.value
-      : (() => {
-          console.warn('[WARN] Public abilities search failed:', publicResult.reason?.message || publicResult.reason);
-          return [] as IndexedAbility[];
-        })();
-
-    // Combine and rank abilities using BM25 with 10% boost for personal abilities
-    interface ScoredAbility {
-      ability: IndexedAbility;
-      score: number;
-      isPersonal: boolean;
-    }
-
-    const scoredAbilities: ScoredAbility[] = [];
-    const seenIds = new Set<string>();
-
-    // Tokenize query for BM25
-    const queryTokens = query.toLowerCase().split(/\s+/).filter(t => t.length > 0);
-
-    // Score personal abilities with BM25 + 10% boost
-    if (personalAbilities.length > 0) {
-      const personalDocs = personalAbilities.map(a => {
-        const text = `${a.ability_name || ''} ${a.description || ''} ${a.service_name || ''}`.toLowerCase();
-        return text.split(/\s+/).filter(t => t.length > 0);
-      });
-      const personalBM25 = new BM25(personalDocs);
-
-      for (let i = 0; i < personalAbilities.length; i++) {
-        const ability = personalAbilities[i];
-        seenIds.add(ability.ability_id);
-
-        const bm25Score = personalBM25.score(queryTokens, i);
-        const personalBoost = 0.1; // 10% boost for personal abilities
-
-        scoredAbilities.push({
-          ability,
-          score: bm25Score + personalBoost,
-          isPersonal: true,
-        });
+    if (!response.ok) {
+      if (response.status === 402) {
+        const data = await response.json();
+        throw new Error(data.error || 'Insufficient tokens for search');
       }
+      throw new Error(`Failed to search abilities: ${response.status} ${response.statusText}`);
     }
 
-    // Score public abilities with BM25 (no boost)
-    if (publicAbilities.length > 0) {
-      const publicDocs = publicAbilities.map(a => {
-        const text = `${a.ability_name || ''} ${a.description || ''} ${a.service_name || ''}`.toLowerCase();
-        return text.split(/\s+/).filter(t => t.length > 0);
-      });
-      const publicBM25 = new BM25(publicDocs);
+    const data = await response.json();
 
-      for (let i = 0; i < publicAbilities.length; i++) {
-        const ability = publicAbilities[i];
-
-        // Skip if already added as personal ability
-        if (seenIds.has(ability.ability_id)) {
-          continue;
-        }
-        seenIds.add(ability.ability_id);
-
-        const bm25Score = publicBM25.score(queryTokens, i);
-
-        scoredAbilities.push({
-          ability,
-          score: bm25Score,
-          isPersonal: false,
-        });
-      }
-    }
-
-    // Sort by score (highest first) and take top results
-    scoredAbilities.sort((a, b) => b.score - a.score);
-    const mergedAbilities = scoredAbilities.slice(0, limit).map(sa => sa.ability);
-
+    // Transform camelCase API response to snake_case
     return {
-      success: true,
-      count: mergedAbilities.length,
-      abilities: mergedAbilities
+      success: data.success,
+      count: data.count,
+      query: data.query,
+      abilities: (data.results || []).map(transformAbilityResponse),
+      cost: data.cost,
     };
   }
 
