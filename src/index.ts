@@ -671,7 +671,7 @@ The code is executed in a safe sandbox and must be a valid arrow function or fun
     },
     async ({ ability_id, params, transform_code }) => {
       try {
-        await ensureInitialized();
+        // await ensureInitialized();
 
         console.log(`[TRACE] execute_ability tool called with ability_id: ${ability_id}`);
         console.log(`[TRACE] Executing ability ${ability_id} on server...`);
@@ -946,7 +946,7 @@ For simpler searches, you can use shorter queries like 'create trade', 'fetch to
     },
     async ({ query }) => {
       // Ensure abilities are loaded
-      await ensureInitialized();
+      // await ensureInitialized();
 
       const resultLimit = 20;
 
@@ -1023,9 +1023,9 @@ For simpler searches, you can use shorter queries like 'create trade', 'fetch to
   // Start background initialization - loads abilities for search/execute
   // Note: autoRegisterFavorites is deprecated and removed since we can't block synchronously
   // Users should use search_abilities to discover abilities, then execute_ability to run them
-  ensureInitialized().catch((error) => {
-    console.error('[ERROR] Background initialization failed:', error);
-  });
+  // ensureInitialized().catch((error) => {
+  //   console.error('[ERROR] Background initialization failed:', error);
+  // });
 
   return server.server;
 }
