@@ -515,118 +515,118 @@ export default function createServer({
   const ensureInitialized = async (): Promise<void> => {
     if (isInitialized) return;
     if (initializationPromise) return initializationPromise;
+    return
+    // initializationPromise = (async () => {
+    //   // Step 1: Load favorites and register them as tools
+    //   try {
+    //     console.log('[INFO] Loading favorited abilities...');
+    //     const favoritesResult = await apiClient.listAbilities({ favorites: true });
+    //     const favoriteAbilities = favoritesResult.abilities || [];
+    //     console.log(`[INFO] Found ${favoriteAbilities.length} favorited abilities`);
 
-    initializationPromise = (async () => {
-      // Step 1: Load favorites and register them as tools
-      try {
-        console.log('[INFO] Loading favorited abilities...');
-        const favoritesResult = await apiClient.listAbilities({ favorites: true });
-        const favoriteAbilities = favoritesResult.abilities || [];
-        console.log(`[INFO] Found ${favoriteAbilities.length} favorited abilities`);
+    //     const registeredAbilityIds = new Set<string>();
+    //     let registeredCount = 0;
 
-        const registeredAbilityIds = new Set<string>();
-        let registeredCount = 0;
+    //     for (const ability of favoriteAbilities) {
+    //       // Skip duplicates
+    //       if (registeredAbilityIds.has(ability.ability_id)) {
+    //         console.log(`[DEBUG] Skipping duplicate favorite: ${ability.ability_id}`);
+    //         continue;
+    //       }
 
-        for (const ability of favoriteAbilities) {
-          // Skip duplicates
-          if (registeredAbilityIds.has(ability.ability_id)) {
-            console.log(`[DEBUG] Skipping duplicate favorite: ${ability.ability_id}`);
-            continue;
-          }
+    //       if (await abilityHasCredentialCoverage(ability)) {
+    //         accessibleAbilities.push(ability);
+    //         // Cache by abilityId for execution
+    //         abilityCache.set(ability.ability_id, ability);
 
-          if (await abilityHasCredentialCoverage(ability)) {
-            accessibleAbilities.push(ability);
-            // Cache by abilityId for execution
-            abilityCache.set(ability.ability_id, ability);
+    //         // Register as individual MCP tool
+    //         try {
+    //           registerAbilityAsTool(ability);
+    //           registeredAbilityIds.add(ability.ability_id);
+    //           registeredCount++;
+    //         } catch (error: any) {
+    //           console.error(`[ERROR] Failed to register ${ability.ability_id}:`, error.message);
+    //         }
+    //       }
+    //     }
 
-            // Register as individual MCP tool
-            try {
-              registerAbilityAsTool(ability);
-              registeredAbilityIds.add(ability.ability_id);
-              registeredCount++;
-            } catch (error: any) {
-              console.error(`[ERROR] Failed to register ${ability.ability_id}:`, error.message);
-            }
-          }
-        }
+    //     console.log(`[INFO] Registered ${registeredCount} favorite abilities as tools`);
 
-        console.log(`[INFO] Registered ${registeredCount} favorite abilities as tools`);
+    //     // Notify MCP client that tools have been added
+    //     // We need to wait for the client to connect before sending the notification
+    //     if (registeredCount > 0) {
+    //       // Poll until client is connected, then send notification
+    //       const waitForConnection = async () => {
+    //         const maxWaitTime = 30000; // 30 seconds max
+    //         const pollInterval = 100; // Check every 100ms
+    //         const startTime = Date.now();
 
-        // Notify MCP client that tools have been added
-        // We need to wait for the client to connect before sending the notification
-        if (registeredCount > 0) {
-          // Poll until client is connected, then send notification
-          const waitForConnection = async () => {
-            const maxWaitTime = 30000; // 30 seconds max
-            const pollInterval = 100; // Check every 100ms
-            const startTime = Date.now();
+    //         while (!server.isConnected()) {
+    //           if (Date.now() - startTime > maxWaitTime) {
+    //             console.warn('[WARN] Client did not connect within 30 seconds, notification not sent');
+    //             return;
+    //           }
+    //           await new Promise(resolve => setTimeout(resolve, pollInterval));
+    //         }
 
-            while (!server.isConnected()) {
-              if (Date.now() - startTime > maxWaitTime) {
-                console.warn('[WARN] Client did not connect within 30 seconds, notification not sent');
-                return;
-              }
-              await new Promise(resolve => setTimeout(resolve, pollInterval));
-            }
+    //         // Client is now connected, send notification
+    //         server.sendToolListChanged();
+    //         console.log('[INFO] Client connected, sent tools/list_changed notification');
+    //       };
 
-            // Client is now connected, send notification
-            server.sendToolListChanged();
-            console.log('[INFO] Client connected, sent tools/list_changed notification');
-          };
+    //       // Don't await - let this run in background
+    //       waitForConnection().catch(error => {
+    //         console.error('[ERROR] Failed to send tool list changed notification:', error);
+    //       });
+    //     }
+    //   } catch (error: any) {
+    //     console.error(`[ERROR] Failed to load favorites:`, error.message);
+    //   }
 
-          // Don't await - let this run in background
-          waitForConnection().catch(error => {
-            console.error('[ERROR] Failed to send tool list changed notification:', error);
-          });
-        }
-      } catch (error: any) {
-        console.error(`[ERROR] Failed to load favorites:`, error.message);
-      }
+    //   // Step 2: Fetch all abilities from the API to populate the accessible abilities list
+    //   // Pre-populate the cache with all abilities that have credential coverage
+    //   try {
+    //     const result = await apiClient.listAbilities();
+    //     const candidateAbilities = result.abilities || [];
+    //     console.log(
+    //       `[INFO] Loaded ${candidateAbilities.length} abilities from API (available for search)`,
+    //     );
 
-      // Step 2: Fetch all abilities from the API to populate the accessible abilities list
-      // Pre-populate the cache with all abilities that have credential coverage
-      try {
-        const result = await apiClient.listAbilities();
-        const candidateAbilities = result.abilities || [];
-        console.log(
-          `[INFO] Loaded ${candidateAbilities.length} abilities from API (available for search)`,
-        );
+    //     // Store them for credential coverage checking AND cache them
+    //     // Skip abilities already added from favorites
+    //     for (const ability of candidateAbilities) {
+    //       // Skip if already cached (from favorites)
+    //       if (abilityCache.has(ability.ability_id)) {
+    //         continue;
+    //       }
 
-        // Store them for credential coverage checking AND cache them
-        // Skip abilities already added from favorites
-        for (const ability of candidateAbilities) {
-          // Skip if already cached (from favorites)
-          if (abilityCache.has(ability.ability_id)) {
-            continue;
-          }
+    //       if (await abilityHasCredentialCoverage(ability)) {
+    //         accessibleAbilities.push(ability);
+    //         abilityCache.set(ability.ability_id, ability);
+    //       }
+    //     }
 
-          if (await abilityHasCredentialCoverage(ability)) {
-            accessibleAbilities.push(ability);
-            abilityCache.set(ability.ability_id, ability);
-          }
-        }
+    //     console.log(
+    //       `[INFO] ${accessibleAbilities.length} abilities available with credential coverage`,
+    //     );
+    //     console.log(
+    //       `[INFO] Pre-cached ${abilityCache.size} abilities for immediate execution`,
+    //     );
+    //     if (availableCredentialKeys.size > 0) {
+    //       console.log(
+    //         `[INFO] Detected ${availableCredentialKeys.size} credential key(s) from decrypted cookie jar entries`,
+    //       );
+    //     }
+    //   } catch (error: any) {
+    //     console.error(`[ERROR] Failed to load abilities from API:`, error.message);
+    //     console.error(`[ERROR] Make sure the Unbrowse API is accessible at ${UNBROWSE_API_BASE_URL}`);
+    //     console.error(`[ERROR] Verify your API key is valid and not expired`);
+    //   }
 
-        console.log(
-          `[INFO] ${accessibleAbilities.length} abilities available with credential coverage`,
-        );
-        console.log(
-          `[INFO] Pre-cached ${abilityCache.size} abilities for immediate execution`,
-        );
-        if (availableCredentialKeys.size > 0) {
-          console.log(
-            `[INFO] Detected ${availableCredentialKeys.size} credential key(s) from decrypted cookie jar entries`,
-          );
-        }
-      } catch (error: any) {
-        console.error(`[ERROR] Failed to load abilities from API:`, error.message);
-        console.error(`[ERROR] Make sure the Unbrowse API is accessible at ${UNBROWSE_API_BASE_URL}`);
-        console.error(`[ERROR] Verify your API key is valid and not expired`);
-      }
+    //   isInitialized = true;
+    // })();
 
-      isInitialized = true;
-    })();
-
-    return initializationPromise;
+    // return initializationPromise;
   };
 
   // Tool: Execute Ability
