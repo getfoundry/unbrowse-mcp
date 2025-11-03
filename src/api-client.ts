@@ -11,20 +11,26 @@
  */
 export interface IndexedAbility {
   user_ability_id?: string; // From /my/abilities endpoint (deprecated, use ability_id for execution)
-  ability_id: string; // Use this for execution
+  ability_id: string; // Use this for execution - the unique identifier for querying the database
   ability_name: string;
   service_name: string;
+  domain?: string; // The domain this ability is for (e.g., "api.github.com")
   description: string;
-  input_schema: any;
+  input_schema?: any; // Only available when fetching full ability details
   output_schema?: any;
-  request_method: string;
-  request_url: string;
+  request_method?: string; // Only available when fetching full ability details
+  request_url?: string; // Only available when fetching full ability details
   dependency_order: string[];
   requires_dynamic_headers: boolean;
   dynamic_header_keys: string[];
   static_headers?: Record<string, string>;
-  wrapper_code: string;
-  generated_at: string;
+  wrapper_code?: string; // Only available when fetching full ability details
+  generated_at?: string;
+  // Additional fields from search results
+  is_favorite?: boolean;
+  is_published?: boolean;
+  health_score?: string;
+  vector_id?: number | null; // Infraxa vector ID (for internal use)
   // Optional fields that may be added by processing
   dependencies?: {
     resolved?: any[];
@@ -51,24 +57,43 @@ export const UNBROWSE_API_BASE_URL = "https://index.unbrowse.ai";
 
 /**
  * Transform camelCase API response to snake_case IndexedAbility
+ * Handles both full ability details and search results
  */
 function transformAbilityResponse(apiAbility: any): IndexedAbility {
   return {
-    user_ability_id: apiAbility.userAbilityId, // Important: for /my/abilities responses
+    // Core identifiers
+    user_ability_id: apiAbility.userAbilityId,
     ability_id: apiAbility.abilityId,
+
+    // Basic info
     ability_name: apiAbility.abilityName,
     service_name: apiAbility.serviceName,
+    domain: apiAbility.domain,
     description: apiAbility.description,
+
+    // Schema and wrapper (only in full ability details)
     input_schema: apiAbility.metadata?.input_schema || apiAbility.inputSchema,
     output_schema: apiAbility.metadata?.output_schema || apiAbility.outputSchema,
     request_method: apiAbility.metadata?.request_method || apiAbility.requestMethod,
     request_url: apiAbility.metadata?.request_url || apiAbility.requestUrl,
+    wrapper_code: apiAbility.metadata?.wrapper_code || apiAbility.wrapperCode,
+
+    // Dependencies and headers
     dependency_order: apiAbility.metadata?.dependency_order || apiAbility.dependencyOrder || [],
     requires_dynamic_headers: apiAbility.dynamicHeadersRequired || false,
     dynamic_header_keys: apiAbility.dynamicHeaderKeys || [],
     static_headers: apiAbility.metadata?.static_headers || apiAbility.staticHeaders,
-    wrapper_code: apiAbility.metadata?.wrapper_code || apiAbility.wrapperCode || '',
+
+    // Timestamps and metadata
     generated_at: apiAbility.metadata?.generated_at || apiAbility.generatedAt || apiAbility.createdAt,
+
+    // Search result fields
+    is_favorite: apiAbility.isFavorite,
+    is_published: apiAbility.isPublished,
+    health_score: apiAbility.healthScore,
+    vector_id: apiAbility.vectorId,
+
+    // Dependencies
     dependencies: apiAbility.dependencies,
   };
 }
@@ -204,7 +229,7 @@ export class UnbrowseApiClient {
       success: data.success,
       count: data.count,
       query: data.query,
-      abilities: (data.results || []),
+      abilities: (data.results || []).map(transformAbilityResponse),
       cost: data.cost,
     };
   }
