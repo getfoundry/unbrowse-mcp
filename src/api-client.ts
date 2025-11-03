@@ -196,12 +196,14 @@ export class UnbrowseApiClient {
 
     const data = await response.json();
 
+    console.log({data})
+
     // Transform camelCase API response to snake_case
     return {
       success: data.success,
       count: data.count,
       query: data.query,
-      abilities: (data.results || []).map(transformAbilityResponse),
+      abilities: (data.results || []),
       cost: data.cost,
     };
   }
