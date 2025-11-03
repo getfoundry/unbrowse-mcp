@@ -185,6 +185,7 @@ export class UnbrowseApiClient {
 
     const url = `${this.baseUrl}/abilities/search?${params}`;
     const response = await this.fetchWithTimeout(url);
+    console.log({response})
 
     if (!response.ok) {
       if (response.status === 402) {
