@@ -950,8 +950,8 @@ For simpler searches, you can use shorter queries like 'create trade', 'fetch to
 
       const resultLimit = 20;
 
-      // Search abilities (now searches both personal /my/abilities and global /public/abilities)
-      const result = await apiClient.searchAbilities(query, {}, resultLimit);
+      // Search abilities using server-side Infraxa vector search
+      const result = await apiClient.searchAbilities(query, resultLimit);
       const matches = result.abilities;
       const domainCandidates = new Set<string>(
         Array.from(availableCredentialKeys).map((key) => key.split("::")[0]),
