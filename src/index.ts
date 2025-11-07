@@ -647,24 +647,36 @@ export default function createServer({
         transform_code: z
           .string()
           .optional()
-          .describe(`Optional JavaScript code to transform/process the API response. The code receives 'data' (parsed response body) and should return the processed result.
+          .describe(`Optional JavaScript code to transform/process the API response body.
+
+IMPORTANT: The transform function receives ONLY the parsed response body from the API (the 'responseBody' field), NOT the entire execution result wrapper.
+
+For example, if the API returns:
+{
+  "success": true,
+  "statusCode": 200,
+  "responseBody": { "results": [...], "total": 100 },
+  ...
+}
+
+Your transform function will receive: { "results": [...], "total": 100 }
 
 Examples:
 
-1. Filter array to specific fields:
-(data) => data.map(item => ({ name: item.user_name, image: item.profile_image_url }))
+1. Filter array from nested results:
+(data) => data.results.map(item => ({ name: item.user_name, image: item.profile_image_url }))
 
 2. Aggregate/summarize data:
-(data) => ({ total: data.length, avgPrice: data.reduce((sum, item) => sum + item.price, 0) / data.length })
+(data) => ({ total: data.results.length, avgPrice: data.results.reduce((sum, item) => sum + item.price, 0) / data.results.length })
 
 3. Search/filter results:
-(data) => data.filter(item => item.status === 'active' && item.price > 100)
+(data) => data.results.filter(item => item.status === 'active' && item.price > 100)
 
 4. Extract nested fields:
 (data) => data.results.map(r => r.metadata.id)
 
 5. Transform to different structure:
-(data) => ({ tokens: data.map(t => t.symbol), count: data.length })
+(data) => ({ tokens: data.results.map(t => t.symbol), count: data.results.length })
 
 The code is executed in a safe sandbox and must be a valid arrow function or function expression.`),
       },
