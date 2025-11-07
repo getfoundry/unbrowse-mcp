@@ -7,24 +7,33 @@
   "type": "module",
   "scripts": {
     "dev": "npx smithery dev",
-    "build": "npx smithery build"
+    "build": "npx smithery build",
+    "http": "tsx src/http-server.ts",
+    "http:dev": "tsx watch src/http-server.ts",
+    "http:paid": "ENABLE_X402_PAYMENTS=true tsx src/http-server.ts"
   },
   "keywords": [],
   "author": "",
   "license": "ISC",
   "dependencies": {
+    "@faremeter/info": "^0.11.1",
+    "@faremeter/middleware": "^0.11.1",
     "@modelcontextprotocol/sdk": "^1.20.1",
     "@sentry/node": "^10.22.0",
     "@smithery/sdk": "^1.6.4",
+    "axios": "^1.13.2",
     "chalk": "^5.3.0",
     "cors": "^2.8.5",
     "crypto": "^1.0.1",
     "express": "^5.1.0",
     "undici": "^7.16.0",
+    "viem": "^2.38.6",
     "vm": "^0.1.0",
+    "x402-axios": "^0.7.0",
     "zod": "^3.25.46"
   },
   "devDependencies": {
-    "@smithery/cli": "^1.4.6"
+    "@smithery/cli": "^1.4.6",
+    "tsx": "^4.20.6"
   }
 }

@@ -1195,6 +1195,140 @@ For simpler searches, you can use shorter queries like 'create trade', 'fetch to
     },
   );
 
+  // Tool: Call X402 Protected API (if enabled)
+  if (process.env.X402_PRIVATE_KEY) {
+    server.registerTool(
+      "call_x402_api",
+      {
+        title: "Call X402 Protected API",
+        description:
+          "Calls an x402-protected API endpoint, automatically handling payment when required (HTTP 402). " +
+          "This tool uses your configured wallet to pay for API access when needed. " +
+          "Use this when you need to access paid APIs that require per-request payment.",
+        inputSchema: {
+          url: z
+            .string()
+            .url()
+            .describe(
+              "The full URL of the x402-protected API endpoint to call"
+            ),
+          method: z
+            .enum(["GET", "POST", "PUT", "DELETE", "PATCH"])
+            .default("GET")
+            .describe("HTTP method to use for the request"),
+          headers: z
+            .record(z.string())
+            .optional()
+            .describe("Optional HTTP headers to include in the request"),
+          data: z
+            .any()
+            .optional()
+            .describe("Request body data (for POST/PUT/PATCH requests)"),
+          params: z
+            .record(z.string())
+            .optional()
+            .describe("URL query parameters to include"),
+        },
+      },
+      async ({ url, method, headers, data, params }) => {
+        try {
+          // Lazy import to avoid errors if dependencies aren't installed
+          const { getX402Client, callX402API } = await import("./x402-client.js");
+
+          const client = getX402Client();
+          const result = await callX402API(client, {
+            url,
+            method,
+            headers,
+            data,
+            params,
+          });
+
+          if (result.success) {
+            return {
+              content: [
+                {
+                  type: "text",
+                  text: JSON.stringify(
+                    {
+                      success: true,
+                      data: result.data,
+                      statusCode: result.statusCode,
+                      paymentMade: result.paymentMade,
+                      message: result.paymentMade
+                        ? "Payment was made to access this API"
+                        : "API accessed without payment",
+                    },
+                    null,
+                    2
+                  ),
+                },
+              ],
+            };
+          } else {
+            return {
+              content: [
+                {
+                  type: "text",
+                  text: JSON.stringify(
+                    {
+                      success: false,
+                      error: result.error,
+                      statusCode: result.statusCode,
+                      data: result.data,
+                    },
+                    null,
+                    2
+                  ),
+                },
+              ],
+            };
+          }
+        } catch (error: any) {
+          if (error.message?.includes("X402_PRIVATE_KEY")) {
+            return {
+              content: [
+                {
+                  type: "text",
+                  text: JSON.stringify(
+                    {
+                      success: false,
+                      error:
+                        "X402_PRIVATE_KEY environment variable is required to use x402 payment client",
+                    },
+                    null,
+                    2
+                  ),
+                },
+              ],
+            };
+          }
+
+          return {
+            content: [
+              {
+                type: "text",
+                text: JSON.stringify(
+                  {
+                    success: false,
+                    error: `Failed to call x402 API: ${error.message}`,
+                  },
+                  null,
+                  2
+                ),
+              },
+            ],
+          };
+        }
+      }
+    );
+    console.log("[INFO] X402 payment client enabled");
+  } else {
+    console.log(
+      "[INFO] X402 payment client disabled (set X402_PRIVATE_KEY environment variable to enable)"
+    );
+  }
+
   // Start background initialization - loads abilities for search/execute
   // Note: autoRegisterFavorites is deprecated and removed since we can't block synchronously
   // Users should use search_abilities to discover abilities, then execute_ability to run them
