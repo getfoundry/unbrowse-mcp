@@ -635,7 +635,7 @@ export default function createServer({
     {
       title: "Execute Ability",
       description:
-        "Executes a specific ability by abilityId with the provided parameters. Server-side execution with automatic credential injection.",
+        "Executes a specific ability by abilityId with the provided parameters. This is always using a stringified json input for params.",
       inputSchema: {
         ability_id: z
           .string()
@@ -643,7 +643,7 @@ export default function createServer({
         params: z
           .string()
           .optional()
-          .describe("JSON string of parameters to pass to the ability (based on its input schema). Example: '{\"token_symbol\": \"$fdry\", \"limit\": 10}'"),
+          .describe("JSON string of parameters to pass to the ability (based on its input schema). Example: '{\"token_symbol\": \"$fdry\", \"limit\": 10}'.You must make sure this is always stringified."),
         transform_code: z
           .string()
           .optional()
@@ -803,7 +803,7 @@ The code is executed in a safe sandbox and must be a valid arrow function or fun
   server.registerTool(
     "execute_ability_chain",
     {
-      title: "Execute Ability Chain (Workflow)",
+      title: "Execute Ability Chain",
       description:
         "Executes multiple abilities in sequence (pipeline/chain), where the output of one ability becomes the input to the next. Successful chains automatically create reusable workflow abilities.",
       inputSchema: {
