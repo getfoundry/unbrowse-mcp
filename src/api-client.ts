@@ -506,6 +506,8 @@ export class UnbrowseApiClient {
     success: boolean;
     result?: {
       statusCode: number;
+      abilityName: string;
+      domain: string;
       body: any;
       headers: Record<string, string>;
       executedAt: string;

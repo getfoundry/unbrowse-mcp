@@ -748,13 +748,15 @@ The code is executed in a safe sandbox and must be a valid arrow function or fun
 
         // Prepare success response with health information
         const responseData = {
-          success: result.success,
-          statusCode: result.result?.statusCode,
+          // success: result.success,
+          // statusCode: result.result?.statusCode,
+          abilityName: result.result?.abilityName,
+          domain: result.result?.domain,
           responseBody: result.result?.body,
-          executedAt: result.result?.executedAt,
-          executionTimeMs: result.result?.executionTimeMs,
+          // executedAt: result.result?.executedAt,
+          // executionTimeMs: result.result?.executionTimeMs,
           transformed: transform_code ? true : false,
-          health: result.health,
+          // health: result.health,
         };
 
         let responseText = JSON.stringify(responseData, null, 2);
