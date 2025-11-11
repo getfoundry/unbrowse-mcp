@@ -127,7 +127,7 @@ export class UnbrowseApiClient {
     // Auto-detect auth type (API keys start with "re_", session tokens don't)
     this.authType = config.apiKey && config.apiKey.startsWith("re_") ? "api_key" : "session_token";
     this.baseUrl = UNBROWSE_API_BASE_URL;
-    this.timeout = config.timeout || 10000; // 10 second default timeout
+    this.timeout = config.timeout || 30000; // 10 second default timeout
 
     console.log(`[API Client] Initialized with auth type: ${this.authType}`);
   }
