@@ -204,8 +204,9 @@ export class UnbrowseApiClient {
    *
    * @param query - Search query string
    * @param limit - Maximum number of results to return (default: 6, max: 45)
+   * @param domains - Optional domain whitelist for filtering results (e.g., ["api.github.com", "github.com"])
    */
-  async searchAbilities(query: string, limit: number = 6): Promise<{
+  async searchAbilities(query: string, limit: number = 6, domains?: string[]): Promise<{
     success: boolean;
     count: number;
     query: string;
@@ -216,6 +217,11 @@ export class UnbrowseApiClient {
       q: query,
       top_k: String(Math.min(limit, 45)) // Server enforces max of 45
     });
+
+    // Add domain whitelist if provided
+    if (domains && domains.length > 0) {
+      params.append('domains', domains.join(','));
+    }
 
     const url = `${this.baseUrl}/abilities/search?${params}`;
     const response = await this.fetchWithTimeout(url);

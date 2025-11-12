@@ -1118,16 +1118,22 @@ Examples of well-formatted queries:
 
 For simpler searches, you can use shorter queries like 'create trade', 'fetch token prices', or 'send email notification', but detailed queries following the format above will yield better-matched abilities with clearer usage instructions.`,
           ),
+        domains: z
+          .array(z.string())
+          .optional()
+          .describe(
+            `Optional array of domains to filter results. Only abilities from these domains will be returned. This filtering happens at the Infraxa vector database level for optimal performance. Examples: ["api.github.com", "github.com"], ["api.stripe.com"], ["twitter.com", "x.com"]`,
+          ),
       },
     },
-    async ({ query }) => {
+    async ({ query, domains }) => {
       // Ensure abilities are loaded
       // await ensureInitialized();
 
       const resultLimit = 20;
 
-      // Search abilities using server-side Infraxa vector search
-      const result = await apiClient.searchAbilities(query, resultLimit);
+      // Search abilities using server-side Infraxa vector search with optional domain filtering
+      const result = await apiClient.searchAbilities(query, resultLimit, domains);
       const matches = result.abilities;
       const domainCandidates = new Set<string>(
         Array.from(availableCredentialKeys).map((key) => key.split("::")[0]),
