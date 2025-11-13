@@ -803,6 +803,247 @@ The code is executed in a safe sandbox and must be a valid arrow function or fun
     },
   );
 
+  // Tool: Execute Multiple Abilities in Parallel
+  server.registerTool(
+    "execute_abilities",
+    {
+      title: "Execute Multiple Abilities in Parallel",
+      description:
+        "Executes multiple abilities simultaneously in parallel using Promise.all. Useful for batch operations like fetching multiple pages of a paginated API, or fetching data from multiple different APIs at once. Unlike execute_ability_chain (which runs sequentially with output piping), this runs all abilities independently and concurrently.",
+      inputSchema: {
+        abilities: z
+          .array(
+            z.object({
+              ability_id: z.string().describe("The abilityId to execute"),
+              params: z
+                .union([z.string(), z.record(z.any())])
+                .optional()
+                .describe("Parameters to pass to this ability. Can be JSON string or object."),
+              transform_code: z
+                .string()
+                .optional()
+                .describe("Optional JavaScript transform code for this ability's response"),
+            })
+          )
+          .min(1)
+          .describe(`Array of abilities to execute in parallel. Each executes independently with no data sharing.
+
+Common use cases:
+
+1. **Pagination**: Fetch multiple pages of an API simultaneously
+   Example:
+   [
+     { "ability_id": "github_search", "params": { "query": "react", "page": 1 } },
+     { "ability_id": "github_search", "params": { "query": "react", "page": 2 } },
+     { "ability_id": "github_search", "params": { "query": "react", "page": 3 } }
+   ]
+
+2. **Multiple APIs**: Fetch from different services at once
+   Example:
+   [
+     { "ability_id": "github_user_profile", "params": { "username": "octocat" } },
+     { "ability_id": "twitter_user_profile", "params": { "username": "octocat" } }
+   ]
+
+3. **Batch Operations**: Execute same ability with different inputs
+   Example:
+   [
+     { "ability_id": "stock_price", "params": { "symbol": "AAPL" } },
+     { "ability_id": "stock_price", "params": { "symbol": "GOOGL" } },
+     { "ability_id": "stock_price", "params": { "symbol": "MSFT" } }
+   ]`),
+        aggregate_results: z
+          .boolean()
+          .optional()
+          .default(false)
+          .describe("If true, attempts to merge all successful results into a single array. Useful for pagination where each response has the same structure."),
+      },
+    },
+    async ({ abilities, aggregate_results }) => {
+      try {
+        console.log(`[TRACE] execute_abilities tool called with ${abilities.length} abilities`);
+
+        // Execute all abilities in parallel using Promise.allSettled
+        const startTime = Date.now();
+        const results = await Promise.allSettled(
+          abilities.map(async ({ ability_id, params, transform_code }) => {
+            // Parse params to object (handle both string and object input)
+            const payload: Record<string, any> = params
+              ? (typeof params === 'string' ? JSON.parse(params) : params)
+              : {};
+
+            console.log(`[TRACE] Executing ${ability_id} with params:`, payload);
+
+            // Execute ability on the server
+            const result = await apiClient.executeAbility(ability_id, payload, {
+              transformCode: transform_code,
+              credentialKey: password,
+            });
+
+            return {
+              ability_id,
+              params: payload,
+              result,
+            };
+          })
+        );
+        const totalTime = Date.now() - startTime;
+
+        // Separate successful and failed executions
+        const successful = results
+          .filter((r) => r.status === 'fulfilled' && r.value.result.success)
+          .map((r) => (r as PromiseFulfilledResult<any>).value);
+
+        const failed = results
+          .map((r, idx) => {
+            if (r.status === 'rejected') {
+              return {
+                ability_id: abilities[idx].ability_id,
+                params: abilities[idx].params,
+                error: r.reason?.message || String(r.reason),
+                type: 'exception',
+              };
+            }
+            if (r.status === 'fulfilled' && !r.value.result.success) {
+              return {
+                ability_id: r.value.ability_id,
+                params: r.value.params,
+                error: r.value.result.error || 'Execution failed',
+                credentialsExpired: r.value.result.credentialsExpired,
+                defunct: r.value.result.defunct,
+                type: 'failed',
+              };
+            }
+            return null;
+          })
+          .filter(Boolean);
+
+        console.log(
+          `[INFO] Parallel execution completed: ${successful.length} succeeded, ${failed.length} failed, ${totalTime}ms total`
+        );
+
+        // Prepare response
+        const response: any = {
+          success: failed.length === 0,
+          total: abilities.length,
+          successful: successful.length,
+          failed: failed.length,
+          totalExecutionTimeMs: totalTime,
+        };
+
+        // Handle aggregation if requested
+        if (aggregate_results && successful.length > 0) {
+          try {
+            // Attempt to merge all responseBody arrays
+            const aggregated: any[] = [];
+            let aggregationSucceeded = true;
+
+            for (const exec of successful) {
+              const body = exec.result.result?.body;
+
+              // Check if body is an array
+              if (Array.isArray(body)) {
+                aggregated.push(...body);
+              } else if (body && typeof body === 'object') {
+                // Try to find an array property (common patterns: results, data, items, etc.)
+                const arrayProp = Object.keys(body).find(key => Array.isArray(body[key]));
+                if (arrayProp) {
+                  aggregated.push(...body[arrayProp]);
+                } else {
+                  // Can't aggregate non-array responses
+                  aggregationSucceeded = false;
+                  break;
+                }
+              } else {
+                aggregationSucceeded = false;
+                break;
+              }
+            }
+
+            if (aggregationSucceeded) {
+              response.aggregatedResults = aggregated;
+              response.aggregatedCount = aggregated.length;
+              response.note = `Successfully aggregated ${aggregated.length} items from ${successful.length} abilities`;
+            } else {
+              response.note = 'Aggregation requested but responses are not compatible (not all arrays)';
+            }
+          } catch (error: any) {
+            console.warn(`[WARN] Aggregation failed: ${error.message}`);
+            response.note = `Aggregation failed: ${error.message}`;
+          }
+        }
+
+        // Include individual results
+        response.results = successful.map((exec) => ({
+          abilityId: exec.ability_id,
+          abilityName: exec.result.result?.abilityName,
+          domain: exec.result.result?.domain,
+          statusCode: exec.result.result?.statusCode,
+          responseBody: exec.result.result?.body,
+          executionTimeMs: exec.result.result?.executionTimeMs,
+        }));
+
+        // Include failures if any
+        if (failed.length > 0) {
+          response.failures = failed;
+        }
+
+        // Truncate if response is too large
+        let responseText = JSON.stringify(response, null, 2);
+        const MAX_RESPONSE_LENGTH = 30000;
+
+        if (responseText.length > MAX_RESPONSE_LENGTH) {
+          // Try to truncate individual result bodies
+          const truncatedResponse = { ...response };
+          truncatedResponse.results = response.results.map((r: any) => {
+            const bodyStr = JSON.stringify(r.responseBody);
+            if (bodyStr.length > 5000) {
+              return {
+                ...r,
+                responseBody: `[Truncated - original length: ${bodyStr.length} chars]`,
+              };
+            }
+            return r;
+          });
+
+          if (response.aggregatedResults) {
+            truncatedResponse.aggregatedResults = `[${response.aggregatedCount} items - truncated for display]`;
+          }
+
+          responseText = JSON.stringify(truncatedResponse, null, 2);
+          response.truncated = true;
+        }
+
+        return {
+          content: [
+            {
+              type: "text",
+              text: responseText,
+            },
+          ],
+        };
+      } catch (error: any) {
+        console.error(`[ERROR] Parallel execution failed:`, error);
+        return {
+          content: [
+            {
+              type: "text",
+              text: JSON.stringify(
+                {
+                  success: false,
+                  error: error.message || String(error),
+                  executedAt: new Date().toISOString(),
+                },
+                null,
+                2
+              ),
+            },
+          ],
+        };
+      }
+    }
+  );
+
   // Tool: Execute Ability Chain (Workflow)
   server.registerTool(
     "execute_ability_chain",
