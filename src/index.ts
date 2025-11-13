@@ -629,179 +629,179 @@ export default function createServer({
     // return initializationPromise;
   };
 
-  // Tool: Execute Ability
-  server.registerTool(
-    "execute_ability",
-    {
-      title: "Execute Ability",
-      description:
-        "Executes a specific ability by abilityId with the provided parameters. This is always using a stringified json input for params.",
-      inputSchema: {
-        ability_id: z
-          .string()
-          .describe("The abilityId to execute (from search results or list_abilities)."),
-        params: z
-          .union([z.string(), z.record(z.any())])
-          .optional()
-          .describe("Parameters to pass to the ability (based on its input schema). Prefers to be a JSON string not an object. Example string: '{\"token_symbol\": \"$fdry\", \"limit\": 10}' or object: {\"token_symbol\": \"$fdry\", \"limit\": 10}."),
-        transform_code: z
-          .string()
-          .optional()
-          .describe(`Optional JavaScript code to transform/process the API response body.
+//   // Tool: Execute Ability
+//   server.registerTool(
+//     "execute_ability",
+//     {
+//       title: "Execute Ability",
+//       description:
+//         "Executes a specific ability by abilityId with the provided parameters. This is always using a stringified json input for params.",
+//       inputSchema: {
+//         ability_id: z
+//           .string()
+//           .describe("The abilityId to execute (from search results or list_abilities)."),
+//         params: z
+//           .union([z.string(), z.record(z.any())])
+//           .optional()
+//           .describe("Parameters to pass to the ability (based on its input schema). Prefers to be a JSON string not an object. Example string: '{\"token_symbol\": \"$fdry\", \"limit\": 10}' or object: {\"token_symbol\": \"$fdry\", \"limit\": 10}."),
+//         transform_code: z
+//           .string()
+//           .optional()
+//           .describe(`Optional JavaScript code to transform/process the API response body.
 
-CRITICAL: The data parameter is ALREADY A PARSED JAVASCRIPT OBJECT. Do NOT use JSON.parse() - it will fail!
+// CRITICAL: The data parameter is ALREADY A PARSED JAVASCRIPT OBJECT. Do NOT use JSON.parse() - it will fail!
 
-The transform function receives ONLY the parsed response body from the API (the 'responseBody' field), NOT the entire execution result wrapper.
+// The transform function receives ONLY the parsed response body from the API (the 'responseBody' field), NOT the entire execution result wrapper.
 
-For example, if the execution returns:
-{
-  "success": true,
-  "statusCode": 200,
-  "responseBody": { "results": [...], "total": 100 },
-  ...
-}
+// For example, if the execution returns:
+// {
+//   "success": true,
+//   "statusCode": 200,
+//   "responseBody": { "results": [...], "total": 100 },
+//   ...
+// }
 
-Your transform function receives the ALREADY-PARSED object: { "results": [...], "total": 100 }
+// Your transform function receives the ALREADY-PARSED object: { "results": [...], "total": 100 }
 
-CORRECT transform examples:
+// CORRECT transform examples:
 
-1. Extract array from nested results:
-(data) => data.results
+// 1. Extract array from nested results:
+// (data) => data.results
 
-2. Filter and map array items:
-(data) => data.results.map(item => ({ name: item.user_name, image: item.profile_image_url }))
+// 2. Filter and map array items:
+// (data) => data.results.map(item => ({ name: item.user_name, image: item.profile_image_url }))
 
-3. Aggregate/summarize data:
-(data) => ({ total: data.results.length, avgPrice: data.results.reduce((sum, item) => sum + item.price, 0) / data.results.length })
+// 3. Aggregate/summarize data:
+// (data) => ({ total: data.results.length, avgPrice: data.results.reduce((sum, item) => sum + item.price, 0) / data.results.length })
 
-4. Search/filter results:
-(data) => data.results.filter(item => item.status === 'active' && item.price > 100)
+// 4. Search/filter results:
+// (data) => data.results.filter(item => item.status === 'active' && item.price > 100)
 
-5. Extract nested fields:
-(data) => data.results.map(r => r.metadata.id)
+// 5. Extract nested fields:
+// (data) => data.results.map(r => r.metadata.id)
 
-INCORRECT examples (DO NOT DO THIS):
-❌ (data) => JSON.parse(data).results  // WRONG - data is already an object, not a string!
-❌ (data) => JSON.parse(data)  // WRONG - will throw "[object Object] is not valid JSON"
+// INCORRECT examples (DO NOT DO THIS):
+// ❌ (data) => JSON.parse(data).results  // WRONG - data is already an object, not a string!
+// ❌ (data) => JSON.parse(data)  // WRONG - will throw "[object Object] is not valid JSON"
 
-The code is executed in a safe sandbox and must be a valid arrow function or function expression.`),
-      },
-    },
-    async ({ ability_id, params, transform_code }) => {
-      try {
-        // await ensureInitialized();
+// The code is executed in a safe sandbox and must be a valid arrow function or function expression.`),
+//       },
+//     },
+//     async ({ ability_id, params, transform_code }) => {
+//       try {
+//         // await ensureInitialized();
 
-        console.log(`[TRACE] execute_ability tool called with ability_id: ${ability_id}`);
-        console.log(`[TRACE] Executing ability ${ability_id} on server...`);
+//         console.log(`[TRACE] execute_ability tool called with ability_id: ${ability_id}`);
+//         console.log(`[TRACE] Executing ability ${ability_id} on server...`);
 
-        // Parse params to object (handle both string and object input)
-        const payload: Record<string, any> = params
-          ? (typeof params === 'string' ? JSON.parse(params) : params)
-          : {};
-        console.log(`[TRACE] Params:`, payload);
+//         // Parse params to object (handle both string and object input)
+//         const payload: Record<string, any> = params
+//           ? (typeof params === 'string' ? JSON.parse(params) : params)
+//           : {};
+//         console.log(`[TRACE] Params:`, payload);
 
-        // Execute ability on the server with credential key from config
-        // According to MCP_EXECUTION_GUIDE.md, password is the credential key
-        const result = await apiClient.executeAbility(ability_id, payload, {
-          transformCode: transform_code,
-          credentialKey: password,
-        });
+//         // Execute ability on the server with credential key from config
+//         // According to MCP_EXECUTION_GUIDE.md, password is the credential key
+//         const result = await apiClient.executeAbility(ability_id, payload, {
+//           transformCode: transform_code,
+//           credentialKey: password,
+//         });
 
-        if (config.debug) {
-          console.log(
-            `[DEBUG] Execution result: ${result.success ? "SUCCESS" : "FAILED"}`,
-          );
-        }
+//         if (config.debug) {
+//           console.log(
+//             `[DEBUG] Execution result: ${result.success ? "SUCCESS" : "FAILED"}`,
+//           );
+//         }
 
-        // Handle error responses
-        if (!result.success) {
-          let errorMessage = result.error || 'Execution failed';
+//         // Handle error responses
+//         if (!result.success) {
+//           let errorMessage = result.error || 'Execution failed';
 
-          if (result.credentialsExpired) {
-            errorMessage += '\n\nCredentials have expired. Please re-authenticate with the service.';
-          }
+//           if (result.credentialsExpired) {
+//             errorMessage += '\n\nCredentials have expired. Please re-authenticate with the service.';
+//           }
 
-          if (result.defunct) {
-            errorMessage += `\n\nThis ability has been marked as defunct (health score: ${result.healthScore}). Please search for an alternative.`;
-          }
+//           if (result.defunct) {
+//             errorMessage += `\n\nThis ability has been marked as defunct (health score: ${result.healthScore}). Please search for an alternative.`;
+//           }
 
-          return {
-            content: [
-              {
-                type: "text",
-                text: JSON.stringify(
-                  {
-                    success: false,
-                    error: errorMessage,
-                    credentialsExpired: result.credentialsExpired,
-                    defunct: result.defunct,
-                    healthScore: result.healthScore,
-                    executedAt: result.result?.executedAt || new Date().toISOString(),
-                  },
-                  null,
-                  2
-                ),
-              },
-            ],
-          };
-        }
+//           return {
+//             content: [
+//               {
+//                 type: "text",
+//                 text: JSON.stringify(
+//                   {
+//                     success: false,
+//                     error: errorMessage,
+//                     credentialsExpired: result.credentialsExpired,
+//                     defunct: result.defunct,
+//                     healthScore: result.healthScore,
+//                     executedAt: result.result?.executedAt || new Date().toISOString(),
+//                   },
+//                   null,
+//                   2
+//                 ),
+//               },
+//             ],
+//           };
+//         }
 
-        // Prepare success response with health information
-        const responseData = {
-          // success: result.success,
-          // statusCode: result.result?.statusCode,
-          abilityName: result.result?.abilityName,
-          domain: result.result?.domain,
-          responseBody: result.result?.body,
-          // executedAt: result.result?.executedAt,
-          // executionTimeMs: result.result?.executionTimeMs,
-          transformed: transform_code ? true : false,
-          // health: result.health,
-        };
+//         // Prepare success response with health information
+//         const responseData = {
+//           // success: result.success,
+//           // statusCode: result.result?.statusCode,
+//           abilityName: result.result?.abilityName,
+//           domain: result.result?.domain,
+//           responseBody: result.result?.body,
+//           // executedAt: result.result?.executedAt,
+//           // executionTimeMs: result.result?.executionTimeMs,
+//           transformed: transform_code ? true : false,
+//           // health: result.health,
+//         };
 
-        let responseText = JSON.stringify(responseData, null, 2);
+//         let responseText = JSON.stringify(responseData, null, 2);
 
-        // Truncate response if it exceeds 30k characters
-        const MAX_RESPONSE_LENGTH = 30000;
-        if (responseText.length > MAX_RESPONSE_LENGTH) {
-          const truncatedBody = typeof result.result?.body === 'string'
-            ? result.result.body.substring(0, MAX_RESPONSE_LENGTH - 1000)
-            : JSON.stringify(result.result?.body).substring(0, MAX_RESPONSE_LENGTH - 1000);
+//         // Truncate response if it exceeds 30k characters
+//         const MAX_RESPONSE_LENGTH = 30000;
+//         if (responseText.length > MAX_RESPONSE_LENGTH) {
+//           const truncatedBody = typeof result.result?.body === 'string'
+//             ? result.result.body.substring(0, MAX_RESPONSE_LENGTH - 1000)
+//             : JSON.stringify(result.result?.body).substring(0, MAX_RESPONSE_LENGTH - 1000);
 
-          responseData.responseBody = truncatedBody + `\n\n[... Response truncated. Original length: ${responseText.length} characters, showing first ${MAX_RESPONSE_LENGTH} characters]`;
-          responseText = JSON.stringify(responseData, null, 2);
+//           responseData.responseBody = truncatedBody + `\n\n[... Response truncated. Original length: ${responseText.length} characters, showing first ${MAX_RESPONSE_LENGTH} characters]`;
+//           responseText = JSON.stringify(responseData, null, 2);
 
-          console.log(`[WARN] Response truncated from ${responseText.length} to ${MAX_RESPONSE_LENGTH} characters`);
-        }
+//           console.log(`[WARN] Response truncated from ${responseText.length} to ${MAX_RESPONSE_LENGTH} characters`);
+//         }
 
-        return {
-          content: [
-            {
-              type: "text",
-              text: responseText,
-            },
-          ],
-        };
-      } catch (error: any) {
-        return {
-          content: [
-            {
-              type: "text",
-              text: JSON.stringify(
-                {
-                  success: false,
-                  error: error.message || String(error),
-                  executedAt: new Date().toISOString(),
-                },
-                null,
-                2,
-              ),
-            },
-          ],
-        };
-      }
-    },
-  );
+//         return {
+//           content: [
+//             {
+//               type: "text",
+//               text: responseText,
+//             },
+//           ],
+//         };
+//       } catch (error: any) {
+//         return {
+//           content: [
+//             {
+//               type: "text",
+//               text: JSON.stringify(
+//                 {
+//                   success: false,
+//                   error: error.message || String(error),
+//                   executedAt: new Date().toISOString(),
+//                 },
+//                 null,
+//                 2,
+//               ),
+//             },
+//           ],
+//         };
+//       }
+//     },
+//   );
 
   // Tool: Execute Multiple Abilities in Parallel
   server.registerTool(
