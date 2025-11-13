@@ -988,31 +988,22 @@ Common use cases:
           response.failures = failed;
         }
 
-        // Truncate if response is too large
-        let responseText = JSON.stringify(response, null, 2);
-        const MAX_RESPONSE_LENGTH = 30000;
-
-        if (responseText.length > MAX_RESPONSE_LENGTH) {
-          // Try to truncate individual result bodies
-          const truncatedResponse = { ...response };
-          truncatedResponse.results = response.results.map((r: any) => {
-            const bodyStr = JSON.stringify(r.responseBody);
-            if (bodyStr.length > 5000) {
-              return {
-                ...r,
-                responseBody: `[Truncated - original length: ${bodyStr.length} chars]`,
-              };
-            }
-            return r;
-          });
-
-          if (response.aggregatedResults) {
-            truncatedResponse.aggregatedResults = `[${response.aggregatedCount} items - truncated for display]`;
+        // Truncate individual result bodies if they're too large (independently of total size)
+        const MAX_INDIVIDUAL_RESULT_LENGTH = 8000; // 50k per result
+        response.results = response.results.map((r: any) => {
+          const bodyStr = JSON.stringify(r.responseBody);
+          if (bodyStr.length > MAX_INDIVIDUAL_RESULT_LENGTH) {
+            console.log(`[WARN] Truncating result for ${r.abilityId} from ${bodyStr.length} to ${MAX_INDIVIDUAL_RESULT_LENGTH} chars`);
+            return {
+              ...r,
+              responseBody: `${bodyStr}...`,
+              truncated: true,
+            };
           }
+          return r;
+        });
 
-          responseText = JSON.stringify(truncatedResponse, null, 2);
-          response.truncated = true;
-        }
+        let responseText = JSON.stringify(response, null, 2);
 
         return {
           content: [
