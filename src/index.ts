@@ -996,7 +996,7 @@ Common use cases:
             console.log(`[WARN] Truncating result for ${r.abilityId} from ${bodyStr.length} to ${MAX_INDIVIDUAL_RESULT_LENGTH} chars`);
             return {
               ...r,
-              responseBody: `${bodyStr}...`,
+              responseBody: `${bodyStr.slice(0, MAX_INDIVIDUAL_RESULT_LENGTH)}...`,
               truncated: true,
             };
           }
