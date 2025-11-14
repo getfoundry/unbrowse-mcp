@@ -1328,6 +1328,193 @@ Example:
     console.log("[INFO] Index tool disabled (set enableIndexTool=true in smithery.yaml to enable)");
   }
 
+  // Tool: Search Multiple Abilities in Parallel
+  server.registerTool(
+    "search_abilities_parallel",
+    {
+      title: "Search Multiple Abilities in Parallel",
+      description:
+        "Executes multiple ability searches simultaneously in parallel. Useful when you need to search for different capabilities at once (e.g., searching for 'create user' and 'send email' and 'upload file' all at the same time).",
+      inputSchema: {
+        searches: z
+          .array(
+            z.object({
+              query: z
+                .string()
+                .min(1)
+                .describe("Natural language description of the capability needed"),
+              domains: z
+                .array(z.string())
+                .optional()
+                .describe("Optional array of domains to filter results for this specific search - Only use this after you discover what domains there are."),
+            })
+          )
+          .min(1)
+          .describe(`Array of searches to execute in parallel. Each search runs independently.
+
+Example:
+[
+  { "query": "create github repository", "domains": ["api.github.com"] },
+  { "query": "send email notification", "domains": ["api.sendgrid.com"] },
+  { "query": "upload file to s3" }
+]`),
+        result_limit_per_search: z
+          .number()
+          .optional()
+          .default(20)
+          .describe("Maximum number of results to return per search query. Default: 20"),
+      },
+    },
+    async ({ searches, result_limit_per_search }) => {
+      try {
+        console.log(`[TRACE] search_abilities_parallel called with ${searches.length} searches`);
+
+        // Execute all searches in parallel using Promise.allSettled
+        const startTime = Date.now();
+        const results = await Promise.allSettled(
+          searches.map(async ({ query, domains }) => {
+            console.log(`[TRACE] Searching for: "${query}"${domains ? ` in domains: ${domains.join(', ')}` : ''}`);
+
+            const result = await apiClient.searchAbilities(query, result_limit_per_search || 20, domains);
+
+            return {
+              query,
+              domains,
+              abilities: result.abilities,
+            };
+          })
+        );
+        const totalTime = Date.now() - startTime;
+
+        // Separate successful and failed searches
+        const successful = results
+          .filter((r) => r.status === 'fulfilled')
+          .map((r) => (r as PromiseFulfilledResult<any>).value);
+
+        const failed = results
+          .map((r, idx) => {
+            if (r.status === 'rejected') {
+              return {
+                query: searches[idx].query,
+                domains: searches[idx].domains,
+                error: r.reason?.message || String(r.reason),
+              };
+            }
+            return null;
+          })
+          .filter(Boolean);
+
+        // Collect all abilities from successful searches and cache them
+        const allAbilities = new Set<string>(); // Track by ability_id to avoid duplicates
+        const abilityResults: any[] = [];
+
+        for (const search of successful) {
+          for (const ability of search.abilities) {
+            if (!allAbilities.has(ability.ability_id)) {
+              allAbilities.add(ability.ability_id);
+
+              // Cache the ability
+              abilityCache.set(ability.ability_id, ability);
+
+              // Also add to accessibleAbilities array if not already present
+              const existingIndex = accessibleAbilities.findIndex(
+                (a) => a.ability_id === ability.ability_id
+              );
+              if (existingIndex === -1) {
+                accessibleAbilities.push(ability);
+              } else {
+                accessibleAbilities[existingIndex] = ability;
+              }
+
+              abilityResults.push({
+                abilityId: ability.ability_id,
+                abilityName: ability.ability_name,
+                serviceName: ability.service_name,
+                domain: ability.domain,
+                description: formatAbilityDescription(ability),
+                inputSchema: ability.input_schema,
+                outputSchema: ability.output_schema,
+                dynamicHeadersRequired: ability.requires_dynamic_headers,
+                dynamicHeaderKeys: ability.dynamic_header_keys,
+                healthScore: ability.health_score,
+                dependencyOrder: ability.dependency_order,
+                missingDependencies: ability.dependencies?.missing?.map((d) => d.ability_id) || [],
+                matchedQuery: search.query, // Track which query matched this ability
+              });
+            }
+          }
+        }
+
+        console.log(
+          `[INFO] Parallel search completed: ${successful.length}/${searches.length} succeeded, found ${allAbilities.size} unique abilities, ${totalTime}ms total`
+        );
+        console.log(`[INFO] Total accessible abilities: ${accessibleAbilities.length}`);
+
+        // Get available domains
+        const domainCandidates = new Set<string>(
+          Array.from(availableCredentialKeys).map((key) => key.split("::")[0]),
+        );
+        if (domainCandidates.size === 0) {
+          accessibleAbilities.forEach((ability) =>
+            domainCandidates.add(ability.service_name),
+          );
+        }
+        const availableDomains = Array.from(domainCandidates);
+
+        // Prepare response
+        const response: any = {
+          success: failed.length === 0,
+          totalSearches: searches.length,
+          successfulSearches: successful.length,
+          failedSearches: failed.length,
+          totalAbilitiesFound: allAbilities.size,
+          totalExecutionTimeMs: totalTime,
+          message: `Found ${allAbilities.size} unique abilities across ${successful.length} searches. All are cached and ready to execute.`,
+          availableDomains,
+          results: abilityResults,
+        };
+
+        // Include per-search breakdown
+        response.searchBreakdown = successful.map((search) => ({
+          query: search.query,
+          domains: search.domains,
+          count: search.abilities.length,
+        }));
+
+        // Include failures if any
+        if (failed.length > 0) {
+          response.failures = failed;
+        }
+
+        return {
+          content: [
+            {
+              type: "text",
+              text: JSON.stringify(response, null, 2),
+            },
+          ],
+        };
+      } catch (error: any) {
+        console.error(`[ERROR] Parallel search failed:`, error);
+        return {
+          content: [
+            {
+              type: "text",
+              text: JSON.stringify(
+                {
+                  success: false,
+                  error: error.message || String(error),
+                },
+                null,
+                2
+              ),
+            },
+          ],
+        };
+      }
+    }
+  );
+
   // Tool: Search Abilities (Credential-aware)
   server.registerTool(
     "search_abilities",
@@ -1354,7 +1541,7 @@ For simpler searches, you can use shorter queries like 'create trade', 'fetch to
           .array(z.string())
           .optional()
           .describe(
-            `Optional array of domains to filter results. Only abilities from these domains will be returned. This filtering happens at the Infraxa vector database level for optimal performance. Examples: ["api.github.com", "github.com"], ["api.stripe.com"], ["twitter.com", "x.com"]`,
+            `Optional array of domains to filter results. Only abilities from these domains will be returned. This filtering happens at the Infraxa vector database level for optimal performance. Examples: ["api.github.com", "github.com"], ["api.stripe.com"], ["twitter.com", "x.com"] Only use this after you discover what abilities are available.`,
           ),
       },
     },
