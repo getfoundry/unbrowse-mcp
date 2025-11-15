@@ -1361,8 +1361,8 @@ Example:
         result_limit_per_search: z
           .number()
           .optional()
-          .default(20)
-          .describe("Maximum number of results to return per search query. Default: 20"),
+          .default(3)
+          .describe("Maximum number of results to return per search query. Default: 3"),
       },
     },
     async ({ searches, result_limit_per_search }) => {
@@ -1380,7 +1380,7 @@ Example:
             return {
               query,
               domains,
-              abilities: result.abilities,
+              abilities: result.abilities.slice(0, result_limit_per_search),
             };
           })
         );
