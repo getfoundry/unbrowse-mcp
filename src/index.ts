@@ -1035,159 +1035,159 @@ Common use cases:
     }
   );
 
-  // Tool: Execute Ability Chain (Workflow)
-  server.registerTool(
-    "execute_ability_chain",
-    {
-      title: "Execute Ability Chain",
-      description:
-        "Executes multiple abilities in sequence (pipeline/chain), where the output of one ability becomes the input to the next. Successful chains automatically create reusable workflow abilities.",
-      inputSchema: {
-        chain: z
-          .string()
-          .describe(`JSON array defining the chain of abilities to execute in sequence.
+//   // Tool: Execute Ability Chain (Workflow)
+//   server.registerTool(
+//     "execute_ability_chain",
+//     {
+//       title: "Execute Ability Chain",
+//       description:
+//         "Executes multiple abilities in sequence (pipeline/chain), where the output of one ability becomes the input to the next. Successful chains automatically create reusable workflow abilities.",
+//       inputSchema: {
+//         chain: z
+//           .string()
+//           .describe(`JSON array defining the chain of abilities to execute in sequence.
 
-Structure:
-[
-  {
-    "abilityId": "ability-1",
-    "params": { /* parameters for first ability */ },
-    "outputMapping": { "output.field": "input.field" }  // Optional: map output to next input
-  },
-  {
-    "abilityId": "ability-2",
-    "params": { /* base parameters */ }
-  }
-]
+// Structure:
+// [
+//   {
+//     "abilityId": "ability-1",
+//     "params": { /* parameters for first ability */ },
+//     "outputMapping": { "output.field": "input.field" }  // Optional: map output to next input
+//   },
+//   {
+//     "abilityId": "ability-2",
+//     "params": { /* base parameters */ }
+//   }
+// ]
 
-Features:
-- Output of ability N is passed as input to ability N+1
-- Use outputMapping to map specific fields (dot notation supported)
-- Without outputMapping, entire output is merged with next step's params
-- Maximum 10 abilities per chain
-- Successful chains auto-create reusable workflow abilities
+// Features:
+// - Output of ability N is passed as input to ability N+1
+// - Use outputMapping to map specific fields (dot notation supported)
+// - Without outputMapping, entire output is merged with next step's params
+// - Maximum 10 abilities per chain
+// - Successful chains auto-create reusable workflow abilities
 
-Example:
-[
-  {
-    "abilityId": "twitter-search",
-    "params": { "query": "AI agents", "count": 5 },
-    "outputMapping": { "tweets.0.id": "tweetId" }
-  },
-  {
-    "abilityId": "twitter-get-details",
-    "params": {}
-  }
-]`),
-        stop_on_error: z
-          .boolean()
-          .optional()
-          .default(true)
-          .describe("Stop chain execution if any step fails. Default: true. Set to false to execute all steps and get partial results."),
-        transform_code: z
-          .string()
-          .optional()
-          .describe("Optional JavaScript code to transform the final output (applied to last successful step's result)."),
-      },
-    },
-    async ({ chain, stop_on_error, transform_code }) => {
-      try {
-        console.log(`[TRACE] execute_ability_chain tool called`);
+// Example:
+// [
+//   {
+//     "abilityId": "twitter-search",
+//     "params": { "query": "AI agents", "count": 5 },
+//     "outputMapping": { "tweets.0.id": "tweetId" }
+//   },
+//   {
+//     "abilityId": "twitter-get-details",
+//     "params": {}
+//   }
+// ]`),
+//         stop_on_error: z
+//           .boolean()
+//           .optional()
+//           .default(true)
+//           .describe("Stop chain execution if any step fails. Default: true. Set to false to execute all steps and get partial results."),
+//         transform_code: z
+//           .string()
+//           .optional()
+//           .describe("Optional JavaScript code to transform the final output (applied to last successful step's result)."),
+//       },
+//     },
+//     async ({ chain, stop_on_error, transform_code }) => {
+//       try {
+//         console.log(`[TRACE] execute_ability_chain tool called`);
 
-        // Parse chain string to array
-        const chainArray = JSON.parse(chain);
-        console.log(`[TRACE] Chain length: ${chainArray.length} steps`);
+//         // Parse chain string to array
+//         const chainArray = JSON.parse(chain);
+//         console.log(`[TRACE] Chain length: ${chainArray.length} steps`);
 
-        // Execute chain on the server
-        const response = await fetch(`${UNBROWSE_API_BASE_URL}/my/abilities/chain/execute`, {
-          method: 'POST',
-          headers: {
-            'Authorization': `Bearer ${authToken}`,
-            'X-Credential-Key': password || '',
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            chain: chainArray,
-            stopOnError: stop_on_error,
-            transformCode: transform_code,
-          }),
-        });
+//         // Execute chain on the server
+//         const response = await fetch(`${UNBROWSE_API_BASE_URL}/my/abilities/chain/execute`, {
+//           method: 'POST',
+//           headers: {
+//             'Authorization': `Bearer ${authToken}`,
+//             'X-Credential-Key': password || '',
+//             'Content-Type': 'application/json',
+//           },
+//           body: JSON.stringify({
+//             chain: chainArray,
+//             stopOnError: stop_on_error,
+//             transformCode: transform_code,
+//           }),
+//         });
 
-        const result = await response.json();
+//         const result = await response.json();
 
-        if (config.debug) {
-          console.log(`[DEBUG] Chain execution result: ${result.success ? "SUCCESS" : "FAILED"}`);
-          console.log(`[DEBUG] Steps completed: ${result.stepsCompleted}/${result.stepsTotal}`);
-        }
+//         if (config.debug) {
+//           console.log(`[DEBUG] Chain execution result: ${result.success ? "SUCCESS" : "FAILED"}`);
+//           console.log(`[DEBUG] Steps completed: ${result.stepsCompleted}/${result.stepsTotal}`);
+//         }
 
-        // Format response
-        if (!result.success) {
-          const failedSteps = result.results?.filter((r: any) => !r.success) || [];
-          const errorDetails = failedSteps.map((step: any) =>
-            `- Step ${step.abilityId}: ${step.error || 'Unknown error'}`
-          ).join('\n');
+//         // Format response
+//         if (!result.success) {
+//           const failedSteps = result.results?.filter((r: any) => !r.success) || [];
+//           const errorDetails = failedSteps.map((step: any) =>
+//             `- Step ${step.abilityId}: ${step.error || 'Unknown error'}`
+//           ).join('\n');
 
-          return {
-            content: [
-              {
-                type: "text",
-                text: `Chain execution failed:\n\n${errorDetails}\n\nCompleted: ${result.stepsCompleted}/${result.stepsTotal} steps\nTotal time: ${result.totalExecutionTimeMs}ms`,
-              },
-            ],
-            isError: true,
-          };
-        }
+//           return {
+//             content: [
+//               {
+//                 type: "text",
+//                 text: `Chain execution failed:\n\n${errorDetails}\n\nCompleted: ${result.stepsCompleted}/${result.stepsTotal} steps\nTotal time: ${result.totalExecutionTimeMs}ms`,
+//               },
+//             ],
+//             isError: true,
+//           };
+//         }
 
-        // Success
-        let responseText = `✅ Chain executed successfully!\n\n`;
-        responseText += `📊 Results:\n`;
-        responseText += `- Steps completed: ${result.stepsCompleted}/${result.stepsTotal}\n`;
-        responseText += `- Total execution time: ${result.totalExecutionTimeMs}ms\n`;
+//         // Success
+//         let responseText = `✅ Chain executed successfully!\n\n`;
+//         responseText += `📊 Results:\n`;
+//         responseText += `- Steps completed: ${result.stepsCompleted}/${result.stepsTotal}\n`;
+//         responseText += `- Total execution time: ${result.totalExecutionTimeMs}ms\n`;
 
-        if (result.workflowAbilityId) {
-          responseText += `\n🎉 Workflow ability auto-created!\n`;
-          responseText += `- Workflow ID: ${result.workflowAbilityId}\n`;
-          responseText += `- This chain is now reusable as a single ability\n`;
-          responseText += `- Execute it with: execute_ability(ability_id="${result.workflowAbilityId}")\n`;
-        }
+//         if (result.workflowAbilityId) {
+//           responseText += `\n🎉 Workflow ability auto-created!\n`;
+//           responseText += `- Workflow ID: ${result.workflowAbilityId}\n`;
+//           responseText += `- This chain is now reusable as a single ability\n`;
+//           responseText += `- Execute it with: execute_ability(ability_id="${result.workflowAbilityId}")\n`;
+//         }
 
-        responseText += `\n📦 Final Output:\n${JSON.stringify(result.finalOutput, null, 2)}`;
+//         responseText += `\n📦 Final Output:\n${JSON.stringify(result.finalOutput, null, 2)}`;
 
-        // Include step-by-step results if debugging
-        if (config.debug && result.results) {
-          responseText += `\n\n🔍 Step Details:\n`;
-          result.results.forEach((step: any, idx: number) => {
-            responseText += `\nStep ${idx + 1} (${step.abilityId}):\n`;
-            responseText += `  Status: ${step.success ? '✅ Success' : '❌ Failed'}\n`;
-            responseText += `  Time: ${step.executionTimeMs}ms\n`;
-            if (!step.success && step.error) {
-              responseText += `  Error: ${step.error}\n`;
-            }
-          });
-        }
+//         // Include step-by-step results if debugging
+//         if (config.debug && result.results) {
+//           responseText += `\n\n🔍 Step Details:\n`;
+//           result.results.forEach((step: any, idx: number) => {
+//             responseText += `\nStep ${idx + 1} (${step.abilityId}):\n`;
+//             responseText += `  Status: ${step.success ? '✅ Success' : '❌ Failed'}\n`;
+//             responseText += `  Time: ${step.executionTimeMs}ms\n`;
+//             if (!step.success && step.error) {
+//               responseText += `  Error: ${step.error}\n`;
+//             }
+//           });
+//         }
 
-        return {
-          content: [
-            {
-              type: "text",
-              text: responseText,
-            },
-          ],
-        };
-      } catch (error: any) {
-        console.error(`[ERROR] Chain execution failed:`, error);
-        return {
-          content: [
-            {
-              type: "text",
-              text: `Failed to execute chain: ${error.message}`,
-            },
-          ],
-          isError: true,
-        };
-      }
-    },
-  );
+//         return {
+//           content: [
+//             {
+//               type: "text",
+//               text: responseText,
+//             },
+//           ],
+//         };
+//       } catch (error: any) {
+//         console.error(`[ERROR] Chain execution failed:`, error);
+//         return {
+//           content: [
+//             {
+//               type: "text",
+//               text: `Failed to execute chain: ${error.message}`,
+//             },
+//           ],
+//           isError: true,
+//         };
+//       }
+//     },
+//   );
 
   // Tool: Ingest API Endpoint (conditionally registered based on config)
   if (config.enableIndexTool) {
