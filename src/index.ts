@@ -298,10 +298,7 @@ export default function createServer({
     const toolName = ability.ability_name;
 
     // Build description with dependency information
-    let toolDescription = ability.description || "";
-    if (ability.dependency_order && ability.dependency_order.length > 0) {
-      toolDescription += `\n\n**Dependencies (must be called first):** ${ability.dependency_order.join(", ")}`;
-    }
+    const toolDescription = formatAbilityDescription(ability);
 
     // Parse input schema to create zod schema
     const inputSchemaProps: Record<string, any> = {};

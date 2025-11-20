@@ -617,6 +617,21 @@ export function formatAbilityDescription(ability: IndexedAbility): string {
     desc += `\nCall these abilities in sequence before executing this one.`;
   }
 
+  // Add input schema examples
+  if (ability.input_schema?.properties) {
+    const examples: string[] = [];
+    for (const [key, prop] of Object.entries(ability.input_schema.properties as Record<string, any>)) {
+      if (prop.example !== undefined) {
+        examples.push(`- \`${key}\`: ${JSON.stringify(prop.example)}`);
+      }
+    }
+
+    if (examples.length > 0) {
+      desc += `\n\n**Input Examples:**\n${examples.join('\n')}`;
+      desc += `\n\n**Tip:** If you need an arbitrary value to execute this ability (especially for IDs or numbers), use the examples provided above.`;
+    }
+  }
+
   // Add missing dependency warnings
   if (
     ability.dependencies?.missing &&
