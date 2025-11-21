@@ -32,6 +32,7 @@ export const configSchema = z.object({
   password: z.string().optional().describe("Your encryption password for credential decryption. Only required if abilities need credentials."),
   debug: z.boolean().default(false).describe("Enable debug logging"),
   enableIndexTool: z.boolean().default(false).describe("Enable the ingest_api_endpoint tool for indexing new APIs"),
+  devMode: z.boolean().default(false).describe("Enable developer mode to see detailed API usage documentation in search results (RAG mode)"),
 }).refine(
   (data) => data.apiKey || data.sessionToken,
   {
@@ -51,6 +52,7 @@ export default function createServer({
   const apiKey = config.apiKey || process.env.UNBROWSE_API_KEY;
   const sessionToken = config.sessionToken || process.env.UNBROWSE_SESSION_TOKEN;
   const password = config.password || process.env.UNBROWSE_PASSWORD || process.env.UNBROWSE_CREDENTIAL_KEY;
+  const devMode = config.devMode || process.env.DEV_MODE === 'true' || process.env.UNBROWSE_DEV_MODE === 'true';
 
   // Validate that at least one auth method is provided
   const authToken = apiKey || sessionToken;
@@ -64,6 +66,10 @@ export default function createServer({
   // Detect auth type (API keys start with "re_", session tokens don't)
   const authType = apiKey && apiKey.startsWith("re_") ? "api_key" : "session_token";
   console.log(`[INFO] Authentication type: ${authType}`);
+
+  if (devMode) {
+    console.log(`[INFO] Dev mode enabled: Search results will include API usage documentation`);
+  }
 
   // Create authenticated API client
   const apiClient: UnbrowseApiClient = createApiClient(authToken);
@@ -1325,6 +1331,66 @@ Common use cases:
     console.log("[INFO] Index tool disabled (set enableIndexTool=true in smithery.yaml to enable)");
   }
 
+  const generateUsageDocs = (ability: IndexedAbility): any => {
+    const baseUrl = UNBROWSE_API_BASE_URL;
+    const endpoint = `${baseUrl}/my/abilities/${ability.ability_id}/execute`;
+    
+    // Generate example params
+    const exampleParams: Record<string, any> = {};
+    if (ability.input_schema?.properties) {
+      for (const [key, prop] of Object.entries(ability.input_schema.properties as Record<string, any>)) {
+         if (prop.example !== undefined) {
+           exampleParams[key] = prop.example;
+         } else {
+           // Infer basic defaults
+           if (prop.type === 'string') exampleParams[key] = "string_value";
+           else if (prop.type === 'number') exampleParams[key] = 0;
+           else if (prop.type === 'boolean') exampleParams[key] = true;
+           else if (prop.type === 'object') exampleParams[key] = {};
+           else if (prop.type === 'array') exampleParams[key] = [];
+         }
+      }
+    }
+
+    const safeAbilityName = ability.ability_name.replace(/[^a-zA-Z0-9]/g, '_');
+    const fetchCode = `
+/**
+ * Usage Example for ${ability.ability_name}
+ * Executes: ${ability.description}
+ */
+const execute_${safeAbilityName} = async (params) => {
+  const response = await fetch("${endpoint}", {
+    method: "POST",
+    headers: {
+      "Authorization": "Bearer " + process.env.UNBROWSE_API_KEY,
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify({
+      params: params
+    })
+  });
+  return await response.json();
+};
+
+// Example Call
+// const result = await execute_${safeAbilityName}(${JSON.stringify(exampleParams, null, 2)});
+`;
+
+    return {
+      endpoint,
+      method: "POST",
+      headers: {
+        "Authorization": "Bearer <YOUR_API_KEY>",
+        "Content-Type": "application/json"
+      },
+      bodySchema: {
+        params: ability.input_schema
+      },
+      responseSchema: ability.output_schema,
+      fetchSnippet: fetchCode.trim()
+    };
+  };
+
   // Tool: Search Multiple Abilities in Parallel
   server.registerTool(
     "search_abilities_parallel",
@@ -1435,8 +1501,8 @@ Example:
                 dynamicHeaderKeys: ability.dynamic_header_keys,
                 healthScore: ability.health_score,
                 dependencyOrder: ability.dependency_order,
-                missingDependencies: ability.dependencies?.missing?.map((d) => d.ability_id) || [],
                 matchedQuery: search.query, // Track which query matched this ability
+                ...(devMode ? { usage: generateUsageDocs(ability) } : {}),
               });
             }
           }
@@ -1608,8 +1674,7 @@ For simpler searches, you can use shorter queries like 'create trade', 'fetch to
                   dynamicHeaderKeys: a.dynamic_header_keys,
                   healthScore: a.health_score,
                   dependencyOrder: a.dependency_order,
-                  missingDependencies:
-                    a.dependencies?.missing?.map((d) => d.ability_id) || [],
+                  ...(devMode ? { usage: generateUsageDocs(a) } : {}),
                 })),
               },
               null,

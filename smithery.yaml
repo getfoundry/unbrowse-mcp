@@ -16,3 +16,8 @@ config:
     type: string
     description: "Your encryption password for credential decryption. Only required if abilities need credentials. Can also be set via UNBROWSE_PASSWORD env var."
     required: true
+  devMode:
+    type: boolean
+    description: "Enable developer mode to see detailed API usage documentation in search results (RAG mode). Can also be set via DEV_MODE env var."
+    required: false
+    default: false
