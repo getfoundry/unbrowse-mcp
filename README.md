@@ -200,7 +200,35 @@ export ENABLE_INDEX_TOOL="true"
 - No need to modify `smithery.yaml`
 - Can override config values dynamically
 
-See [`.env.example`](.env.example) for a complete template.
+See [.env.example](.env.example) for a complete template.
+
+### Developer Mode (RAG Support)
+
+Enable developer mode to get detailed API usage documentation in search results, including ready-to-use `fetch()` code snippets. This is ideal for "vibe coding" or RAG workflows where you want to copy-paste ability execution code directly into your application.
+
+**Enable via config:**
+```yaml
+config:
+  devMode: true
+```
+
+**Enable via environment variable:**
+```bash
+export DEV_MODE="true"
+```
+
+**Output Example:**
+When enabled, `search_abilities` results include a `usage` field:
+
+```json
+{
+  "usage": {
+    "fetchSnippet": "const execute_ability = async (params) => { ... }",
+    "endpoint": "https://agent.unbrowse.ai/my/abilities/...",
+    "bodySchema": { ... }
+  }
+}
+```
 
 ### Development
 
