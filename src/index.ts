@@ -1384,10 +1384,10 @@ const execute_${safeAbilityName} = async (params) => {
         "Authorization": "Bearer <YOUR_API_KEY>",
         "Content-Type": "application/json"
       },
-      bodySchema: {
+      input_schema: {
         params: ability.input_schema
       },
-      responseSchema: ability.output_schema,
+      output_schema: ability.output_schema,
       fetchSnippet: fetchCode.trim()
     };
   };
@@ -1580,18 +1580,12 @@ Example:
   );
 
   // Tool: Search Abilities (Credential-aware)
-  server.registerTool(
-    "search_abilities",
-    {
-      title: "Search Abilities",
-      description:
-        "Searches for abilities across both your personal abilities and the global published index. Use this when user requests for something that you do not have capabilities of doing.",
-      inputSchema: {
-        query: z
-          .string()
-          .min(1)
-          .describe(
-            `Detailed natural language description of the capability or action needed. Format your query with comprehensive context including: purpose, use cases, parameters (with types and defaults), concrete examples with parameter values, and related queries it can fulfill. Be explicit about what data is returned and how it relates to other abilities.
+  const searchInputSchema: Record<string, any> = {
+    query: z
+      .string()
+      .min(1)
+      .describe(
+        `Detailed natural language description of the capability or action needed. Format your query with comprehensive context including: purpose, use cases, parameters (with types and defaults), concrete examples with parameter values, and related queries it can fulfill. Be explicit about what data is returned and how it relates to other abilities.
 
 Examples of well-formatted queries:
 
@@ -1600,20 +1594,33 @@ Examples of well-formatted queries:
 "Retrieves detailed information for a specific Statement of Account (SOA) by its ID for a given company from Zeemart's payment management service."
 
 For simpler searches, you can use shorter queries like 'create trade', 'fetch token prices', or 'send email notification', but detailed queries following the format above will yield better-matched abilities with clearer usage instructions.`,
-          ),
-        domains: z
-          .array(z.string())
-          .optional()
-          .describe(
-            `Optional array of domains to filter results. Only abilities from these domains will be returned. This filtering happens at the Infraxa vector database level for optimal performance. Examples: ["api.github.com", "github.com"], ["api.stripe.com"], ["twitter.com", "x.com"] Only use this after you discover what abilities are available.`,
-          ),
-      },
+      ),
+    domains: z
+      .array(z.string())
+      .optional()
+      .describe(
+        `Optional array of domains to filter results. Only abilities from these domains will be returned. This filtering happens at the Infraxa vector database level for optimal performance. Examples: ["api.github.com", "github.com"], ["api.stripe.com"], ["twitter.com", "x.com"] Only use this after you discover what abilities are available.`,
+      ),
+  };
+
+  if (!devMode) {
+    searchInputSchema.rag_mode = z.boolean().optional().describe("Force developer mode (RAG mode) to see detailed API usage documentation and code generation instructions, normally only available in dev mode.");
+  }
+
+  server.registerTool(
+    "search_abilities",
+    {
+      title: "Search Abilities",
+      description:
+        "Searches for abilities across both your personal abilities and the global published index. Use this when user requests for something that you do not have capabilities of doing.",
+      inputSchema: searchInputSchema,
     },
-    async ({ query, domains }) => {
+    async ({ query, domains, rag_mode }: any) => {
       // Ensure abilities are loaded
       // await ensureInitialized();
 
       const resultLimit = 20;
+      const showUsage = devMode || rag_mode;
 
       // Search abilities using server-side Infraxa vector search with optional domain filtering
       const result = await apiClient.searchAbilities(query, resultLimit, domains);
@@ -1661,7 +1668,7 @@ For simpler searches, you can use shorter queries like 'create trade', 'fetch to
                 success: true,
                 query,
                 count: matches.length,
-                message: `Found ${matches.length} matching abilities. These are now cached and ready to execute. Use execute_ability with the abilityId and params.`,
+                message: `Found ${matches.length} matching abilities. These are now cached and ready to execute. Use execute_ability with the abilityId and params.${showUsage ? " RAG mode enabled: Use the provided usage documentation to generate code." : ""}`,
                 availableDomains,
                 results: matches.map((a) => ({
                   abilityId: a.ability_id,
@@ -1671,11 +1678,13 @@ For simpler searches, you can use shorter queries like 'create trade', 'fetch to
                   description: formatAbilityDescription(a),
                   inputSchema: a.input_schema,
                   outputSchema: a.output_schema,
+                  input_schema: a.input_schema,
+                  output_schema: a.output_schema,
                   dynamicHeadersRequired: a.requires_dynamic_headers,
                   dynamicHeaderKeys: a.dynamic_header_keys,
                   healthScore: a.health_score,
                   dependencyOrder: a.dependency_order,
-                  ...(devMode ? { usage: generateUsageDocs(a) } : {}),
+                  ...(showUsage ? { usage: generateUsageDocs(a) } : {}),
                 })),
               },
               null,
