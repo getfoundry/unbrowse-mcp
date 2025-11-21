@@ -1363,7 +1363,8 @@ const execute_${safeAbilityName} = async (params) => {
     method: "POST",
     headers: {
       "Authorization": "Bearer " + process.env.UNBROWSE_API_KEY,
-      "Content-Type": "application/json"
+      "Content-Type": "application/json",
+      // "X-Credential-Key": process.env.UNBROWSE_PASSWORD // Required if ability needs credential decryption
     },
     body: JSON.stringify({
       params: params
