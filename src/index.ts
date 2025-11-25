@@ -812,7 +812,7 @@ export default function createServer({
     {
       title: "Execute Multiple Abilities in Parallel",
       description:
-        "Executes multiple abilities simultaneously in parallel using Promise.all. Useful for batch operations like fetching multiple pages of a paginated API, or fetching data from multiple different APIs at once. Unlike execute_ability_chain (which runs sequentially with output piping), this runs all abilities independently and concurrently.",
+        "Executes multiple abilities simultaneously in parallel using Promise.all. Useful for batch operations like fetching multiple pages of a paginated API, or fetching data from multiple different APIs at once. Unlike execute_ability_chain (which runs sequentially with output piping), this runs all abilities independently and concurrently.\n\n⚠️ IMPORTANT: If responses are truncated (indicated by 'truncated: true' in results), use the 'transform_code' parameter to extract only the specific data you need. Transform code runs server-side BEFORE truncation, allowing you to get complete filtered data instead of cut-off responses.",
       inputSchema: {
         abilities: z
           .array(
@@ -992,19 +992,27 @@ Common use cases:
         }
 
         // Truncate individual result bodies if they're too large (independently of total size)
-        const MAX_INDIVIDUAL_RESULT_LENGTH = 12000; // 50k per result
+        const MAX_INDIVIDUAL_RESULT_LENGTH = 12000; // 12k per result
+        let anyTruncated = false;
         response.results = response.results.map((r: any) => {
           const bodyStr = JSON.stringify(r.responseBody);
           if (bodyStr.length > MAX_INDIVIDUAL_RESULT_LENGTH) {
             console.log(`[WARN] Truncating result for ${r.abilityId} from ${bodyStr.length} to ${MAX_INDIVIDUAL_RESULT_LENGTH} chars`);
+            anyTruncated = true;
             return {
               ...r,
               responseBody: `${bodyStr.slice(0, MAX_INDIVIDUAL_RESULT_LENGTH)}...`,
               truncated: true,
+              truncatedOriginalLength: bodyStr.length,
             };
           }
           return r;
         });
+
+        // Add hint about transform_code if any results were truncated
+        if (anyTruncated) {
+          response.truncationWarning = "⚠️ One or more responses were truncated due to size. To get complete data, re-run this request with a 'transform_code' parameter to extract only the fields you need. Example: (data) => data.results.map(item => ({ id: item.id, name: item.name }))";
+        }
 
         let responseText = JSON.stringify(response, null, 2);
 
