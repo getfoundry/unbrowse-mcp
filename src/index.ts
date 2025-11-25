@@ -992,7 +992,7 @@ Common use cases:
         }
 
         // Truncate individual result bodies if they're too large (independently of total size)
-        const MAX_INDIVIDUAL_RESULT_LENGTH = 12000; // 12k per result
+        const MAX_INDIVIDUAL_RESULT_LENGTH = 20000; // 12k per result
         let anyTruncated = false;
         response.results = response.results.map((r: any) => {
           const bodyStr = JSON.stringify(r.responseBody);
