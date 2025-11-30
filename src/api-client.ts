@@ -627,16 +627,51 @@ export function createApiClient(authToken: string): UnbrowseApiClient {
 // ============================================================================
 
 /**
+ * Payment record for tracking x402 payments
+ */
+export interface PaymentRecord {
+  id: string;
+  timestamp: number;
+  type: 'search' | 'execute';
+  abilityId?: string;
+  abilityName?: string;
+  amount: string; // In USDC lamports
+  amountFormatted: string; // Human readable (e.g., "0.001 USDC")
+  amountCents: number; // In cents (e.g., 0.1 or 0.5)
+  signature?: string;
+  verified: boolean;
+  success: boolean;
+  error?: string;
+}
+
+/**
+ * Payment tracking summary
+ */
+export interface PaymentSummary {
+  totalPayments: number;
+  totalSpentCents: number;
+  totalSpentFormatted: string;
+  searchCount: number;
+  searchSpentCents: number;
+  executeCount: number;
+  executeSpentCents: number;
+  recentPayments: PaymentRecord[];
+}
+
+/**
  * x402 Payment-based API Client
  *
  * Uses Solana USDC payments instead of API key authentication.
  * Automatically handles 402 Payment Required responses by constructing
  * and signing USDC transfer transactions.
+ *
+ * Includes payment tracking to monitor spending.
  */
 export class UnbrowseX402Client {
   private readonly baseUrl: string;
   private readonly x402Client: X402SolanaClient;
   private timeout: number;
+  private paymentHistory: PaymentRecord[] = [];
 
   constructor(config: {
     privateKey: string; // Base58 Solana private key
@@ -757,22 +792,64 @@ export class UnbrowseX402Client {
     const url = `${this.baseUrl}/x402/abilities?${params}`;
     console.log(`[x402] Searching abilities: "${query}"`);
 
-    const response = await this.fetchWithPayment(url);
+    try {
+      const response = await this.fetchWithPayment(url);
 
-    if (!response.ok) {
-      const errorData = await response.json().catch(() => ({}));
-      throw new Error(errorData.error || `Search failed: ${response.status} ${response.statusText}`);
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        const error = errorData.error || `Search failed: ${response.status} ${response.statusText}`;
+
+        // Record failed payment attempt
+        this.recordPayment({
+          type: 'search',
+          amount: '1000', // 0.1 cents = 1000 USDC lamports
+          amountFormatted: '0.001 USDC',
+          amountCents: 0.1,
+          verified: false,
+          success: false,
+          error,
+        });
+
+        throw new Error(error);
+      }
+
+      const data = await response.json();
+
+      // Record successful payment
+      if (data.payment) {
+        this.recordPayment({
+          type: 'search',
+          amount: '1000', // 0.1 cents = 1000 USDC lamports
+          amountFormatted: '0.001 USDC',
+          amountCents: 0.1,
+          signature: data.payment.signature,
+          verified: data.payment.verified,
+          success: true,
+        });
+      }
+
+      return {
+        success: data.success,
+        count: data.count,
+        query: data.query,
+        abilities: (data.results || []).map(transformAbilityResponse),
+        payment: data.payment,
+      };
+    } catch (error: any) {
+      // Record failed payment if not already recorded
+      if (!error.message?.includes('Search failed')) {
+        this.recordPayment({
+          type: 'search',
+          amount: '1000',
+          amountFormatted: '0.001 USDC',
+          amountCents: 0.1,
+          verified: false,
+          success: false,
+          error: error.message,
+        });
+      }
+      throw error;
     }
-
-    const data = await response.json();
-
-    return {
-      success: data.success,
-      count: data.count,
-      query: data.query,
-      abilities: (data.results || []).map(transformAbilityResponse),
-      payment: data.payment,
-    };
   }
 
   /**
@@ -820,28 +897,86 @@ export class UnbrowseX402Client {
       transformCode: options.transformCode,
     };
 
-    const response = await this.fetchWithPayment(url, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify(requestBody),
-    });
-
-    const responseText = await response.text();
-
-    let data;
     try {
-      data = JSON.parse(responseText);
-    } catch (parseError) {
-      throw new Error(`Server returned non-JSON response: ${responseText.substring(0, 200)}`);
-    }
+      const response = await this.fetchWithPayment(url, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(requestBody),
+      });
 
-    if (!response.ok) {
-      throw new Error(data.error || `Failed to execute ability: ${response.status} ${response.statusText}`);
-    }
+      const responseText = await response.text();
 
-    return data;
+      let data;
+      try {
+        data = JSON.parse(responseText);
+      } catch (parseError) {
+        // Record failed payment
+        this.recordPayment({
+          type: 'execute',
+          abilityId,
+          amount: '5000', // 0.5 cents = 5000 USDC lamports
+          amountFormatted: '0.005 USDC',
+          amountCents: 0.5,
+          verified: false,
+          success: false,
+          error: `Server returned non-JSON response`,
+        });
+        throw new Error(`Server returned non-JSON response: ${responseText.substring(0, 200)}`);
+      }
+
+      if (!response.ok) {
+        const error = data.error || `Failed to execute ability: ${response.status} ${response.statusText}`;
+
+        // Record failed payment
+        this.recordPayment({
+          type: 'execute',
+          abilityId,
+          abilityName: data.result?.abilityName,
+          amount: '5000',
+          amountFormatted: '0.005 USDC',
+          amountCents: 0.5,
+          verified: false,
+          success: false,
+          error,
+        });
+
+        throw new Error(error);
+      }
+
+      // Record successful payment
+      if (data.payment) {
+        this.recordPayment({
+          type: 'execute',
+          abilityId,
+          abilityName: data.result?.abilityName,
+          amount: '5000', // 0.5 cents = 5000 USDC lamports
+          amountFormatted: '0.005 USDC',
+          amountCents: 0.5,
+          signature: data.payment.signature,
+          verified: data.payment.verified,
+          success: true,
+        });
+      }
+
+      return data;
+    } catch (error: any) {
+      // Record failed payment if not already recorded
+      if (!error.message?.includes('Failed to execute') && !error.message?.includes('non-JSON')) {
+        this.recordPayment({
+          type: 'execute',
+          abilityId,
+          amount: '5000',
+          amountFormatted: '0.005 USDC',
+          amountCents: 0.5,
+          verified: false,
+          success: false,
+          error: error.message,
+        });
+      }
+      throw error;
+    }
   }
 
   /**
@@ -893,6 +1028,80 @@ export class UnbrowseX402Client {
       balance: balance.toString(),
       balanceFormatted: `${formatted} USDC`,
     };
+  }
+
+  // ============================================================================
+  // PAYMENT TRACKING
+  // ============================================================================
+
+  /**
+   * Record a payment for tracking
+   */
+  private recordPayment(record: Omit<PaymentRecord, 'id' | 'timestamp'>): PaymentRecord {
+    const fullRecord: PaymentRecord = {
+      ...record,
+      id: `pay_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`,
+      timestamp: Date.now(),
+    };
+
+    this.paymentHistory.push(fullRecord);
+
+    // Keep only last 1000 payments in memory
+    if (this.paymentHistory.length > 1000) {
+      this.paymentHistory = this.paymentHistory.slice(-1000);
+    }
+
+    console.log(`[x402] Payment recorded: ${record.type} - ${record.amountFormatted} - ${record.verified ? 'verified' : 'pending'}`);
+
+    return fullRecord;
+  }
+
+  /**
+   * Get payment history
+   * @param limit - Maximum number of records to return (default: 50)
+   * @param type - Filter by payment type ('search' or 'execute')
+   */
+  getPaymentHistory(limit: number = 50, type?: 'search' | 'execute'): PaymentRecord[] {
+    let records = [...this.paymentHistory].reverse(); // Most recent first
+
+    if (type) {
+      records = records.filter(r => r.type === type);
+    }
+
+    return records.slice(0, limit);
+  }
+
+  /**
+   * Get payment summary statistics
+   */
+  getPaymentSummary(): PaymentSummary {
+    const successfulPayments = this.paymentHistory.filter(p => p.success);
+
+    const searchPayments = successfulPayments.filter(p => p.type === 'search');
+    const executePayments = successfulPayments.filter(p => p.type === 'execute');
+
+    const searchSpentCents = searchPayments.reduce((sum, p) => sum + p.amountCents, 0);
+    const executeSpentCents = executePayments.reduce((sum, p) => sum + p.amountCents, 0);
+    const totalSpentCents = searchSpentCents + executeSpentCents;
+
+    return {
+      totalPayments: successfulPayments.length,
+      totalSpentCents,
+      totalSpentFormatted: `$${(totalSpentCents / 100).toFixed(4)} (${totalSpentCents.toFixed(2)} cents)`,
+      searchCount: searchPayments.length,
+      searchSpentCents,
+      executeCount: executePayments.length,
+      executeSpentCents,
+      recentPayments: this.getPaymentHistory(10),
+    };
+  }
+
+  /**
+   * Clear payment history
+   */
+  clearPaymentHistory(): void {
+    this.paymentHistory = [];
+    console.log('[x402] Payment history cleared');
   }
 }
 

@@ -1772,6 +1772,113 @@ For simpler searches, you can use shorter queries like 'create trade', 'fetch to
     },
   );
 
+  // Tool: Get Payment History (x402 mode only)
+  // This tool is only available when using x402 payment mode
+  if (useX402Mode && x402Client) {
+    server.registerTool(
+      "get_payment_history",
+      {
+        title: "Get Payment History",
+        description:
+          "View your x402 payment history and spending summary. Only available in x402 payment mode. Shows recent payments, total spending, and breakdown by search vs execute operations.",
+        inputSchema: {
+          limit: z
+            .number()
+            .optional()
+            .default(20)
+            .describe("Maximum number of recent payments to return. Default: 20, Max: 100"),
+          type: z
+            .enum(["search", "execute"])
+            .optional()
+            .describe("Filter by payment type: 'search' (0.1 cents each) or 'execute' (0.5 cents each). Leave empty for all types."),
+          include_summary: z
+            .boolean()
+            .optional()
+            .default(true)
+            .describe("Include spending summary with totals. Default: true"),
+        },
+      },
+      async ({ limit, type, include_summary }) => {
+        try {
+          console.log(`[x402] Getting payment history (limit: ${limit}, type: ${type || 'all'})`);
+
+          const history = x402Client!.getPaymentHistory(Math.min(limit || 20, 100), type);
+
+          const response: any = {
+            success: true,
+            paymentMode: "x402_solana",
+            walletAddress: x402Client!.getWalletAddress(),
+            paymentsReturned: history.length,
+            payments: history.map(p => ({
+              id: p.id,
+              timestamp: new Date(p.timestamp).toISOString(),
+              type: p.type,
+              abilityId: p.abilityId,
+              abilityName: p.abilityName,
+              amount: p.amountFormatted,
+              amountCents: p.amountCents,
+              signature: p.signature,
+              verified: p.verified,
+              success: p.success,
+              error: p.error,
+            })),
+          };
+
+          if (include_summary) {
+            const summary = x402Client!.getPaymentSummary();
+            response.summary = {
+              totalPayments: summary.totalPayments,
+              totalSpent: summary.totalSpentFormatted,
+              totalSpentCents: summary.totalSpentCents,
+              breakdown: {
+                searches: {
+                  count: summary.searchCount,
+                  spentCents: summary.searchSpentCents,
+                  costPerSearch: "0.1 cents",
+                },
+                executions: {
+                  count: summary.executeCount,
+                  spentCents: summary.executeSpentCents,
+                  costPerExecution: "0.5 cents",
+                },
+              },
+            };
+          }
+
+          console.log(`[x402] Returned ${history.length} payment records`);
+
+          return {
+            content: [
+              {
+                type: "text",
+                text: JSON.stringify(response, null, 2),
+              },
+            ],
+          };
+        } catch (error: any) {
+          console.error(`[ERROR] Failed to get payment history:`, error);
+          return {
+            content: [
+              {
+                type: "text",
+                text: JSON.stringify(
+                  {
+                    success: false,
+                    error: error.message || String(error),
+                  },
+                  null,
+                  2
+                ),
+              },
+            ],
+          };
+        }
+      }
+    );
+
+    console.log("[INFO] Registered get_payment_history tool (x402 mode)");
+  }
+
   // Start background initialization - loads abilities for search/execute
   // Note: autoRegisterFavorites is deprecated and removed since we can't block synchronously
   // Users should use search_abilities to discover abilities, then execute_ability to run them
