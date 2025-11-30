@@ -3,7 +3,19 @@
  *
  * Client for interacting with the Unbrowse API at http://localhost:4111
  * Handles fetching abilities and credentials from the real API endpoints.
+ *
+ * Supports two authentication modes:
+ * 1. API Key / Session Token - Traditional bearer token authentication
+ * 2. x402 Payment - Pay-per-request using Solana USDC (no auth required)
  */
+
+import {
+  X402SolanaClient,
+  createX402Client,
+  parsePaymentRequirement,
+  type X402Config,
+  type PaymentRequirement,
+} from "./x402-solana.js";
 
 /**
  * Interface for indexed abilities from the API
@@ -60,6 +72,11 @@ export interface ApiClientConfig {
   apiKey?: string;
   sessionToken?: string;
   timeout?: number;
+  // x402 payment configuration (alternative to apiKey/sessionToken)
+  x402?: {
+    privateKey: string; // Base58 Solana private key
+    rpcUrl?: string; // Optional custom RPC URL
+  };
 }
 
 export const UNBROWSE_API_BASE_URL = process.env.UNBROWSE_API_BASE_URL ?? "https://index.unbrowse.ai";
@@ -603,6 +620,289 @@ export function createApiClient(authToken: string): UnbrowseApiClient {
   return new UnbrowseApiClient(
     isApiKey ? { apiKey: authToken } : { sessionToken: authToken }
   );
+}
+
+// ============================================================================
+// x402 PAYMENT-BASED API CLIENT
+// ============================================================================
+
+/**
+ * x402 Payment-based API Client
+ *
+ * Uses Solana USDC payments instead of API key authentication.
+ * Automatically handles 402 Payment Required responses by constructing
+ * and signing USDC transfer transactions.
+ */
+export class UnbrowseX402Client {
+  private readonly baseUrl: string;
+  private readonly x402Client: X402SolanaClient;
+  private timeout: number;
+
+  constructor(config: {
+    privateKey: string; // Base58 Solana private key
+    rpcUrl?: string;
+    timeout?: number;
+  }) {
+    this.x402Client = createX402Client({
+      privateKey: config.privateKey,
+      rpcUrl: config.rpcUrl,
+    });
+    this.baseUrl = UNBROWSE_API_BASE_URL;
+    this.timeout = config.timeout || 300000;
+
+    console.log(`[x402 Client] Initialized with wallet: ${this.x402Client.getPublicKey()}`);
+  }
+
+  /**
+   * Get the wallet public key
+   */
+  getWalletAddress(): string {
+    return this.x402Client.getPublicKey();
+  }
+
+  /**
+   * Makes a fetch request with timeout
+   */
+  private async fetchWithTimeout(url: string, options: RequestInit = {}): Promise<Response> {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), this.timeout);
+
+    try {
+      const response = await fetch(url, {
+        ...options,
+        signal: controller.signal,
+      });
+      clearTimeout(timeoutId);
+      return response;
+    } catch (error: any) {
+      clearTimeout(timeoutId);
+      if (error.name === 'AbortError') {
+        throw new Error(`Request timeout after ${this.timeout}ms`);
+      }
+      throw error;
+    }
+  }
+
+  /**
+   * Makes a request with x402 payment handling
+   * If server responds with 402, constructs payment and retries
+   */
+  private async fetchWithPayment(
+    url: string,
+    options: RequestInit = {}
+  ): Promise<Response> {
+    // First attempt without payment
+    const response = await this.fetchWithTimeout(url, options);
+
+    // If not 402, return as-is
+    if (response.status !== 402) {
+      return response;
+    }
+
+    // Handle 402 Payment Required
+    console.log(`[x402] Received 402 Payment Required for ${url}`);
+
+    const responseBody = await response.json();
+    const requirement = parsePaymentRequirement(responseBody);
+
+    if (!requirement) {
+      throw new Error('Server returned 402 but payment requirement could not be parsed');
+    }
+
+    console.log(`[x402] Payment required: ${requirement.amountFormatted}`);
+
+    // Process payment
+    const paymentResult = await this.x402Client.processPaymentRequired(requirement);
+
+    if (!paymentResult.success) {
+      throw new Error(`Payment failed: ${paymentResult.error}`);
+    }
+
+    console.log(`[x402] Payment transaction created, retrying request with X-Payment header`);
+
+    // Retry with payment header
+    const retryResponse = await this.fetchWithTimeout(url, {
+      ...options,
+      headers: {
+        ...options.headers,
+        'X-Payment': paymentResult.paymentHeader!,
+      },
+    });
+
+    return retryResponse;
+  }
+
+  /**
+   * Search abilities using x402 paid endpoint
+   * GET /x402/abilities?q=<query>
+   *
+   * Cost: 0.1 cents per search in USDC on Solana
+   */
+  async searchAbilities(query: string, limit: number = 12): Promise<{
+    success: boolean;
+    count: number;
+    query: string;
+    abilities: IndexedAbility[];
+    payment?: {
+      verified: boolean;
+      signature?: string;
+      type: string;
+    };
+  }> {
+    const params = new URLSearchParams({
+      q: query,
+      top_k: String(Math.min(limit, 45))
+    });
+
+    const url = `${this.baseUrl}/x402/abilities?${params}`;
+    console.log(`[x402] Searching abilities: "${query}"`);
+
+    const response = await this.fetchWithPayment(url);
+
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      throw new Error(errorData.error || `Search failed: ${response.status} ${response.statusText}`);
+    }
+
+    const data = await response.json();
+
+    return {
+      success: data.success,
+      count: data.count,
+      query: data.query,
+      abilities: (data.results || []).map(transformAbilityResponse),
+      payment: data.payment,
+    };
+  }
+
+  /**
+   * Execute an ability using x402 paid endpoint
+   * POST /x402/abilities/:abilityId/execute
+   *
+   * Cost: 0.5 cents per execution in USDC on Solana
+   * Payment is split: 20% platform, 80% ability owner
+   */
+  async executeAbility(
+    abilityId: string,
+    params: Record<string, any>,
+    options: {
+      transformCode?: string;
+    } = {}
+  ): Promise<{
+    success: boolean;
+    result?: {
+      statusCode: number;
+      abilityName: string;
+      domain: string;
+      body: any;
+      headers: Record<string, string>;
+      executedAt: string;
+      executionTimeMs?: number;
+    };
+    health?: {
+      score: number;
+      totalExecutions: number;
+      successRate: string;
+    };
+    error?: string;
+    payment?: {
+      verified: boolean;
+      signature?: string;
+      type: string;
+    };
+  }> {
+    const url = `${this.baseUrl}/x402/abilities/${encodeURIComponent(abilityId)}/execute`;
+
+    console.log(`[x402] Executing ability: ${abilityId}`);
+
+    const requestBody = {
+      params,
+      transformCode: options.transformCode,
+    };
+
+    const response = await this.fetchWithPayment(url, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(requestBody),
+    });
+
+    const responseText = await response.text();
+
+    let data;
+    try {
+      data = JSON.parse(responseText);
+    } catch (parseError) {
+      throw new Error(`Server returned non-JSON response: ${responseText.substring(0, 200)}`);
+    }
+
+    if (!response.ok) {
+      throw new Error(data.error || `Failed to execute ability: ${response.status} ${response.statusText}`);
+    }
+
+    return data;
+  }
+
+  /**
+   * Get ability details by ID (public endpoint, no payment required)
+   * GET /abilities/:abilityId
+   */
+  async getAbility(abilityId: string): Promise<{
+    success: boolean;
+    ability: IndexedAbility;
+    wrapper: any;
+  }> {
+    const url = `${this.baseUrl}/abilities/${encodeURIComponent(abilityId)}`;
+    const response = await this.fetchWithTimeout(url);
+
+    if (!response.ok) {
+      if (response.status === 404) {
+        throw new Error(`Ability not found: ${abilityId}`);
+      }
+      throw new Error(`Failed to get ability: ${response.status} ${response.statusText}`);
+    }
+
+    const data = await response.json();
+
+    return {
+      success: data.success,
+      ability: transformAbilityResponse(data.ability),
+      wrapper: data.wrapper,
+    };
+  }
+
+  /**
+   * Check USDC balance for current wallet
+   */
+  async getBalance(chain: 'devnet' | 'mainnet-beta' = 'devnet'): Promise<{
+    balance: string;
+    balanceFormatted: string;
+  }> {
+    // Get USDC mint from the first 402 response or use default
+    const USDC_MINT_DEVNET = '4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU';
+    const USDC_MINT_MAINNET = 'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v';
+
+    const mint = chain === 'devnet' ? USDC_MINT_DEVNET : USDC_MINT_MAINNET;
+    const balance = await this.x402Client.getUsdcBalance(chain, mint);
+
+    // Format: USDC has 6 decimals
+    const formatted = (Number(balance) / 1_000_000).toFixed(6);
+
+    return {
+      balance: balance.toString(),
+      balanceFormatted: `${formatted} USDC`,
+    };
+  }
+}
+
+/**
+ * Create an x402 payment-based API client
+ * @param privateKey - Base58 encoded Solana private key
+ * @param rpcUrl - Optional custom RPC URL
+ */
+export function createX402ApiClient(privateKey: string, rpcUrl?: string): UnbrowseX402Client {
+  return new UnbrowseX402Client({ privateKey, rpcUrl });
 }
 
 /**

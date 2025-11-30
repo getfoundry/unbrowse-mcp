@@ -11,10 +11,12 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import {
   createApiClient,
+  createX402ApiClient,
   formatAbilityDescription,
   UNBROWSE_API_BASE_URL,
   type IndexedAbility,
   type UnbrowseApiClient,
+  type UnbrowseX402Client,
 } from "./api-client.js";
 import { decryptCredentials } from "./crypto-utils.js";
 import * as Sentry from "@sentry/node"
@@ -27,17 +29,24 @@ Sentry.init({
 });
 // User-level config from smithery.yaml
 export const configSchema = z.object({
-  apiKey: z.string().optional().describe("Your Unbrowse API key from the dashboard (starts with re_). Alternative to sessionToken."),
-  sessionToken: z.string().optional().describe("Your session token (alternative to apiKey)."),
+  // Traditional API key/session token authentication
+  apiKey: z.string().optional().describe("Your Unbrowse API key from the dashboard (starts with re_). Alternative to sessionToken or solanaPrivateKey."),
+  sessionToken: z.string().optional().describe("Your session token (alternative to apiKey or solanaPrivateKey)."),
+
+  // x402 Payment authentication (pay-per-request with Solana USDC)
+  solanaPrivateKey: z.string().optional().describe("Base58 encoded Solana private key for x402 payment-based authentication. Alternative to apiKey/sessionToken. Wallet must have USDC balance for payments."),
+  solanaRpcUrl: z.string().optional().describe("Custom Solana RPC URL (defaults to devnet or mainnet based on server response)."),
+
+  // Common options
   password: z.string().optional().describe("Your encryption password for credential decryption. Only required if abilities need credentials."),
   debug: z.boolean().default(false).describe("Enable debug logging"),
   enableIndexTool: z.boolean().default(false).describe("Enable the ingest_api_endpoint tool for indexing new APIs"),
   devMode: z.boolean().default(false).describe("Enable developer mode to see detailed API usage documentation in search results (RAG mode)"),
 }).refine(
-  (data) => data.apiKey || data.sessionToken,
+  (data) => data.apiKey || data.sessionToken || data.solanaPrivateKey,
   {
-    message: "Either apiKey or sessionToken must be provided",
-    path: ["apiKey", "sessionToken"],
+    message: "Either apiKey, sessionToken, or solanaPrivateKey must be provided",
+    path: ["apiKey", "sessionToken", "solanaPrivateKey"],
   }
 );
 
@@ -51,29 +60,55 @@ export default function createServer({
   // Apply environment variable fallbacks
   const apiKey = config.apiKey || process.env.UNBROWSE_API_KEY;
   const sessionToken = config.sessionToken || process.env.UNBROWSE_SESSION_TOKEN;
+  const solanaPrivateKey = config.solanaPrivateKey || process.env.SOLANA_PRIVATE_KEY || process.env.UNBROWSE_SOLANA_KEY;
+  const solanaRpcUrl = config.solanaRpcUrl || process.env.SOLANA_RPC_URL;
   const password = config.password || process.env.UNBROWSE_PASSWORD || process.env.UNBROWSE_CREDENTIAL_KEY;
   const devMode = config.devMode || process.env.DEV_MODE === 'true' || process.env.UNBROWSE_DEV_MODE === 'true';
 
-  // Validate that at least one auth method is provided
+  // Determine authentication mode: x402 (Solana payment) or traditional (API key/session token)
+  const useX402Mode = !!solanaPrivateKey && !apiKey && !sessionToken;
   const authToken = apiKey || sessionToken;
-  if (!authToken) {
+
+  // Validate that at least one auth method is provided
+  if (!authToken && !solanaPrivateKey) {
     throw new Error(
-      "Authentication required: Provide either apiKey or sessionToken via config or environment variables " +
-      "(UNBROWSE_API_KEY or UNBROWSE_SESSION_TOKEN)"
+      "Authentication required: Provide either apiKey, sessionToken, or solanaPrivateKey via config or environment variables " +
+      "(UNBROWSE_API_KEY, UNBROWSE_SESSION_TOKEN, or SOLANA_PRIVATE_KEY)"
     );
   }
 
-  // Detect auth type (API keys start with "re_", session tokens don't)
-  const authType = apiKey && apiKey.startsWith("re_") ? "api_key" : "session_token";
+  // Detect auth type
+  let authType: string;
+  if (useX402Mode) {
+    authType = "x402_solana";
+  } else if (apiKey && apiKey.startsWith("re_")) {
+    authType = "api_key";
+  } else {
+    authType = "session_token";
+  }
   console.log(`[INFO] Authentication type: ${authType}`);
 
   if (devMode) {
     console.log(`[INFO] Dev mode enabled: Search results will include API usage documentation`);
   }
 
-  // Create authenticated API client
-  const apiClient: UnbrowseApiClient = createApiClient(authToken);
-  console.log(`[INFO] API client created with base URL: ${UNBROWSE_API_BASE_URL}`);
+  // Create the appropriate API client based on auth mode
+  let apiClient: UnbrowseApiClient;
+  let x402Client: UnbrowseX402Client | null = null;
+
+  if (useX402Mode) {
+    // x402 mode - pay-per-request with Solana USDC
+    console.log(`[INFO] Using x402 payment mode with Solana USDC`);
+    x402Client = createX402ApiClient(solanaPrivateKey!, solanaRpcUrl);
+    // Create a wrapper that matches UnbrowseApiClient interface for backward compatibility
+    // The x402Client will be used directly for search and execute operations
+    apiClient = createApiClient("x402_placeholder"); // Placeholder - won't be used for authed requests
+    console.log(`[INFO] x402 client created with wallet: ${x402Client.getWalletAddress()}`);
+  } else {
+    // Traditional API key/session token mode
+    apiClient = createApiClient(authToken!);
+    console.log(`[INFO] API client created with base URL: ${UNBROWSE_API_BASE_URL}`);
+  }
 
   const server = Sentry.wrapMcpServerWithSentry(new McpServer({
     name: "Unbrowse MCP",
@@ -347,9 +382,17 @@ export default function createServer({
         try {
           // Execute ability on the server using abilityId
           console.log(`[DEBUG] Executing ability - ID: ${ability.ability_id}, Name: ${ability.ability_name}`);
-          const result = await apiClient.executeAbility(ability.ability_id, payload, {
-            credentialKey: password,
-          });
+
+          // Use x402 client if in x402 mode, otherwise use traditional API client
+          let result;
+          if (useX402Mode && x402Client) {
+            console.log(`[x402] Using x402 client for registered tool: ${ability.ability_name}`);
+            result = await x402Client.executeAbility(ability.ability_id, payload, {});
+          } else {
+            result = await apiClient.executeAbility(ability.ability_id, payload, {
+              credentialKey: password,
+            });
+          }
 
           // Handle error responses
           if (!result.success) {
@@ -812,7 +855,7 @@ export default function createServer({
     {
       title: "Execute Multiple Abilities in Parallel",
       description:
-        "Executes multiple abilities simultaneously in parallel using Promise.all. Useful for batch operations like fetching multiple pages of a paginated API, or fetching data from multiple different APIs at once. Unlike execute_ability_chain (which runs sequentially with output piping), this runs all abilities independently and concurrently.\n\n⚠️ IMPORTANT: If responses are truncated (indicated by 'truncated: true' in results), use the 'transform_code' parameter to extract only the specific data you need. Transform code runs server-side BEFORE truncation, allowing you to get complete filtered data instead of cut-off responses.",
+        `Executes multiple abilities simultaneously in parallel using Promise.all. Useful for batch operations like fetching multiple pages of a paginated API, or fetching data from multiple different APIs at once. Unlike execute_ability_chain (which runs sequentially with output piping), this runs all abilities independently and concurrently.\n\n⚠️ IMPORTANT: If responses are truncated (indicated by 'truncated: true' in results), use the 'transform_code' parameter to extract only the specific data you need. Transform code runs server-side BEFORE truncation, allowing you to get complete filtered data instead of cut-off responses.${useX402Mode ? "\n\n[x402 Mode: Each execution costs 0.5 cents in USDC - 20% platform, 80% ability owner]" : ""}`,
       inputSchema: {
         abilities: z
           .array(
@@ -877,11 +920,21 @@ Common use cases:
 
             console.log(`[TRACE] Executing ${ability_id} with params:`, payload);
 
-            // Execute ability on the server
-            const result = await apiClient.executeAbility(ability_id, payload, {
-              transformCode: transform_code,
-              credentialKey: password,
-            });
+            // Execute ability on the server using appropriate client
+            let result;
+            if (useX402Mode && x402Client) {
+              // x402 mode: paid execution (no credential key needed - payment handles auth)
+              console.log(`[x402] Using x402 client for execution: ${ability_id}`);
+              result = await x402Client.executeAbility(ability_id, payload, {
+                transformCode: transform_code,
+              });
+            } else {
+              // Traditional mode: use API key with credential key for encrypted credentials
+              result = await apiClient.executeAbility(ability_id, payload, {
+                transformCode: transform_code,
+                credentialKey: password,
+              });
+            }
 
             return {
               ability_id,
@@ -1406,7 +1459,7 @@ const execute_${safeAbilityName} = async (params) => {
     {
       title: "Search Multiple Abilities in Parallel",
       description:
-        "Executes multiple ability searches simultaneously in parallel. Useful when you need to search for different capabilities at once (e.g., searching for 'create user' and 'send email' and 'upload file' all at the same time).",
+        `Executes multiple ability searches simultaneously in parallel. Useful when you need to search for different capabilities at once (e.g., searching for 'create user' and 'send email' and 'upload file' all at the same time).${useX402Mode ? " [x402 Mode: Each search costs 0.1 cents in USDC]" : ""}`,
       inputSchema: {
         searches: z
           .array(
@@ -1447,7 +1500,14 @@ Example:
           searches.map(async ({ query, domains }) => {
             console.log(`[TRACE] Searching for: "${query}"${domains ? ` in domains: ${domains.join(', ')}` : ''}`);
 
-            const result = await apiClient.searchAbilities(query, result_limit_per_search || 20, domains);
+            // Use x402 client if in x402 mode, otherwise use traditional API client
+            let result;
+            if (useX402Mode && x402Client) {
+              // x402 mode: paid search (no domain filtering in x402)
+              result = await x402Client.searchAbilities(query, result_limit_per_search || 20);
+            } else {
+              result = await apiClient.searchAbilities(query, result_limit_per_search || 20, domains);
+            }
 
             return {
               query,
@@ -1620,7 +1680,7 @@ For simpler searches, you can use shorter queries like 'create trade', 'fetch to
     {
       title: "Search Abilities",
       description:
-        "Searches for abilities across both your personal abilities and the global published index. Use this when user requests for something that you do not have capabilities of doing.",
+        `Searches for abilities across both your personal abilities and the global published index. Use this when user requests for something that you do not have capabilities of doing.${useX402Mode ? " [x402 Mode: This search costs 0.1 cents in USDC per request]" : ""}`,
       inputSchema: searchInputSchema,
     },
     async ({ query, domains, rag_mode }: any) => {
@@ -1630,8 +1690,16 @@ For simpler searches, you can use shorter queries like 'create trade', 'fetch to
       const resultLimit = 20;
       const showUsage = devMode || rag_mode;
 
-      // Search abilities using server-side Infraxa vector search with optional domain filtering
-      const result = await apiClient.searchAbilities(query, resultLimit, domains);
+      // Search abilities using appropriate client (x402 or traditional)
+      let result;
+      if (useX402Mode && x402Client) {
+        // x402 mode: Use paid search endpoint (no domain filtering in x402)
+        console.log(`[x402] Using x402 client for search: "${query}"`);
+        result = await x402Client.searchAbilities(query, resultLimit);
+      } else {
+        // Traditional mode: Use API key-based search with optional domain filtering
+        result = await apiClient.searchAbilities(query, resultLimit, domains);
+      }
       const matches = result.abilities;
       const domainCandidates = new Set<string>(
         Array.from(availableCredentialKeys).map((key) => key.split("::")[0]),
