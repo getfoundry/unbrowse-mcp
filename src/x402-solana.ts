@@ -1,17 +1,21 @@
 /**
- * x402 Payment Protocol - Solana USDC Implementation
+ * x402 Payment Protocol - Solana Smart Contract Implementation
  *
  * Handles HTTP 402 Payment Required responses by constructing and signing
- * USDC transfer transactions on Solana. This enables pay-per-request API access
- * without traditional API key authentication.
+ * transactions using the x402 payment smart contract on Solana.
  *
  * Protocol Flow:
  * 1. Client makes request to x402 endpoint
- * 2. Server responds with 402 + payment requirements (recipient, amount, mint)
- * 3. Client constructs USDC transfer transaction(s)
+ * 2. Server responds with 402 + payment requirements (amount, wallet info)
+ * 3. Client constructs verify_payment + settle_payment smart contract instructions
  * 4. Client signs transaction with private key
  * 5. Client retries request with X-Payment header containing base64 transaction
  * 6. Server verifies and submits transaction, then processes request
+ *
+ * Smart Contract Details:
+ * - Program ID: 5g8XvMcpWEgHitW7abiYTr1u8sDasePLQnrebQyCLPvY
+ * - 4-way split enforced on-chain: 2% (fixed), 3%, 30%, 65%
+ * - Wallet 1 (2%) is hardcoded and validated by the contract
  */
 
 import {
@@ -20,16 +24,27 @@ import {
   PublicKey,
   Transaction,
   TransactionInstruction,
+  SystemProgram,
+  SYSVAR_RENT_PUBKEY,
   ComputeBudgetProgram,
 } from "@solana/web3.js";
 import {
   getAssociatedTokenAddress,
-  createTransferInstruction,
   TOKEN_PROGRAM_ID,
   getAccount,
   createAssociatedTokenAccountInstruction,
 } from "@solana/spl-token";
 import bs58 from "bs58";
+
+// ============================================================================
+// CONSTANTS
+// ============================================================================
+
+// x402 Payment Program on Solana
+const X402_PROGRAM_ID = new PublicKey('5g8XvMcpWEgHitW7abiYTr1u8sDasePLQnrebQyCLPvY');
+
+// Fixed wallet (2%) - hardcoded in smart contract, cannot be changed
+const WALLET_1_FIXED = new PublicKey('8XLmbY1XRiPzeVNRDe9FZWHeCYKZAzvgc1c4EhyKsvEy');
 
 // ============================================================================
 // TYPES
@@ -39,12 +54,16 @@ export interface PaymentRequirement {
   type: "usdc";
   network: "solana";
   chain: "devnet" | "mainnet-beta";
-  recipient: string;
-  amount: string; // In smallest unit (USDC lamports)
+  recipient: string; // Primary recipient (FDRY Treasury)
+  amount: string; // Total amount in smallest unit (USDC lamports)
   amountFormatted: string;
   mint: string;
   description: string;
   splits?: PaymentSplit[];
+  // Smart contract wallet configuration
+  wallet2?: string; // 3% recipient
+  wallet3?: string; // 30% recipient
+  wallet4?: string; // 65% recipient
 }
 
 export interface PaymentSplit {
@@ -64,6 +83,102 @@ export interface X402PaymentResult {
   signature?: string;
   paymentHeader?: string;
   error?: string;
+}
+
+// ============================================================================
+// SMART CONTRACT HELPERS
+// ============================================================================
+
+/**
+ * Find the payment record PDA for a given payer and nonce
+ */
+function findPaymentRecordPDA(
+  payer: PublicKey,
+  nonce: bigint,
+  programId: PublicKey = X402_PROGRAM_ID
+): [PublicKey, number] {
+  const nonceBuffer = Buffer.alloc(8);
+  nonceBuffer.writeBigUInt64LE(nonce);
+
+  return PublicKey.findProgramAddressSync(
+    [Buffer.from('payment'), payer.toBuffer(), nonceBuffer],
+    programId
+  );
+}
+
+/**
+ * Create verify_payment instruction
+ * Instruction 0: Creates payment record PDA, verifies payer has sufficient balance
+ */
+function createVerifyPaymentInstruction(
+  payer: PublicKey,
+  paymentRecord: PublicKey,
+  recipient: PublicKey,
+  tokenMint: PublicKey,
+  payerTokenAccount: PublicKey,
+  amount: bigint,
+  nonce: bigint,
+  programId: PublicKey = X402_PROGRAM_ID
+): TransactionInstruction {
+  // Instruction data: opcode (1) + amount (8) + nonce (8) = 17 bytes
+  const data = Buffer.alloc(17);
+  data.writeUInt8(0, 0); // Opcode 0 = verify_payment
+  data.writeBigUInt64LE(amount, 1);
+  data.writeBigUInt64LE(nonce, 9);
+
+  return new TransactionInstruction({
+    keys: [
+      { pubkey: payer, isSigner: true, isWritable: true },
+      { pubkey: paymentRecord, isSigner: false, isWritable: true },
+      { pubkey: recipient, isSigner: false, isWritable: false },
+      { pubkey: tokenMint, isSigner: false, isWritable: false },
+      { pubkey: payerTokenAccount, isSigner: false, isWritable: false },
+      { pubkey: SystemProgram.programId, isSigner: false, isWritable: false },
+      { pubkey: SYSVAR_RENT_PUBKEY, isSigner: false, isWritable: false },
+    ],
+    programId,
+    data,
+  });
+}
+
+/**
+ * Create settle_payment instruction
+ * Instruction 1: Executes 4-way split transfer
+ * - Wallet 1 (2%) - FIXED, validated by contract
+ * - Wallet 2 (3%) - Passed in
+ * - Wallet 3 (30%) - Passed in
+ * - Wallet 4 (65%) - Passed in
+ */
+function createSettlePaymentInstruction(
+  payer: PublicKey,
+  paymentRecord: PublicKey,
+  payerTokenAccount: PublicKey,
+  wallet1TokenAccount: PublicKey,
+  wallet2TokenAccount: PublicKey,
+  wallet3TokenAccount: PublicKey,
+  wallet4TokenAccount: PublicKey,
+  nonce: bigint,
+  programId: PublicKey = X402_PROGRAM_ID
+): TransactionInstruction {
+  // Instruction data: opcode (1) + nonce (8) = 9 bytes
+  const data = Buffer.alloc(9);
+  data.writeUInt8(1, 0); // Opcode 1 = settle_payment
+  data.writeBigUInt64LE(nonce, 1);
+
+  return new TransactionInstruction({
+    keys: [
+      { pubkey: payer, isSigner: true, isWritable: true },
+      { pubkey: paymentRecord, isSigner: false, isWritable: true },
+      { pubkey: payerTokenAccount, isSigner: false, isWritable: true },
+      { pubkey: wallet1TokenAccount, isSigner: false, isWritable: true },
+      { pubkey: wallet2TokenAccount, isSigner: false, isWritable: true },
+      { pubkey: wallet3TokenAccount, isSigner: false, isWritable: true },
+      { pubkey: wallet4TokenAccount, isSigner: false, isWritable: true },
+      { pubkey: TOKEN_PROGRAM_ID, isSigner: false, isWritable: false },
+    ],
+    programId,
+    data,
+  });
 }
 
 // ============================================================================
@@ -119,7 +234,7 @@ export class X402SolanaClient {
   }
 
   /**
-   * Create a payment transaction based on 402 response requirements
+   * Create a payment transaction using the x402 smart contract
    */
   async createPaymentTransaction(
     requirement: PaymentRequirement
@@ -127,9 +242,41 @@ export class X402SolanaClient {
     const connection = this.getConnection(requirement.chain);
     const mint = new PublicKey(requirement.mint);
     const payer = this.keypair.publicKey;
+    const amount = BigInt(requirement.amount);
+
+    // Generate unique nonce for this payment
+    const nonce = BigInt(Date.now());
 
     // Get payer's token account
     const payerAta = await getAssociatedTokenAddress(mint, payer);
+
+    // Determine wallet addresses for 4-way split
+    // Default all wallets to primary recipient (FDRY Treasury) if not specified
+    const primaryRecipient = new PublicKey(requirement.recipient);
+    const wallet2 = requirement.wallet2 ? new PublicKey(requirement.wallet2) : primaryRecipient;
+    const wallet3 = requirement.wallet3 ? new PublicKey(requirement.wallet3) : primaryRecipient;
+    const wallet4 = requirement.wallet4 ? new PublicKey(requirement.wallet4) : primaryRecipient;
+
+    // Get token accounts for all wallets
+    const wallet1TokenAccount = await getAssociatedTokenAddress(mint, WALLET_1_FIXED);
+    const wallet2TokenAccount = await getAssociatedTokenAddress(mint, wallet2);
+    const wallet3TokenAccount = await getAssociatedTokenAddress(mint, wallet3);
+    const wallet4TokenAccount = await getAssociatedTokenAddress(mint, wallet4);
+
+    // Find payment record PDA
+    const [paymentRecordPDA] = findPaymentRecordPDA(payer, nonce);
+
+    console.error(`[x402] Creating smart contract payment:`);
+    console.error(`[x402]   - Program: ${X402_PROGRAM_ID.toBase58()}`);
+    console.error(`[x402]   - Payer: ${payer.toBase58()}`);
+    console.error(`[x402]   - Amount: ${amount}`);
+    console.error(`[x402]   - Nonce: ${nonce}`);
+    console.error(`[x402]   - Payment Record PDA: ${paymentRecordPDA.toBase58()}`);
+    console.error(`[x402]   - Mint: ${mint.toBase58()}`);
+    console.error(`[x402]   - Wallet 1 (2% fixed): ${WALLET_1_FIXED.toBase58()}`);
+    console.error(`[x402]   - Wallet 2 (3%): ${wallet2.toBase58()}`);
+    console.error(`[x402]   - Wallet 3 (30%): ${wallet3.toBase58()}`);
+    console.error(`[x402]   - Wallet 4 (65%): ${wallet4.toBase58()}`);
 
     // Build transaction
     const tx = new Transaction();
@@ -137,69 +284,58 @@ export class X402SolanaClient {
     // Add compute budget for faster processing
     tx.add(
       ComputeBudgetProgram.setComputeUnitPrice({ microLamports: 1000 }),
-      ComputeBudgetProgram.setComputeUnitLimit({ units: 100000 })
+      ComputeBudgetProgram.setComputeUnitLimit({ units: 200000 })
     );
 
-    // Determine recipients - use splits if available, otherwise single recipient
-    const transfers: Array<{ recipient: PublicKey; amount: bigint }> = [];
+    // Create token accounts if they don't exist
+    const tokenAccountsToCreate: Array<{ ata: PublicKey; owner: PublicKey; name: string }> = [
+      { ata: wallet1TokenAccount, owner: WALLET_1_FIXED, name: 'Wallet 1' },
+      { ata: wallet2TokenAccount, owner: wallet2, name: 'Wallet 2' },
+      { ata: wallet3TokenAccount, owner: wallet3, name: 'Wallet 3' },
+      { ata: wallet4TokenAccount, owner: wallet4, name: 'Wallet 4' },
+    ];
 
-    if (requirement.splits && requirement.splits.length > 0) {
-      // Multiple recipients (payment splits)
-      for (const split of requirement.splits) {
-        transfers.push({
-          recipient: new PublicKey(split.recipient),
-          amount: BigInt(split.amount),
-        });
-      }
-    } else {
-      // Single recipient
-      transfers.push({
-        recipient: new PublicKey(requirement.recipient),
-        amount: BigInt(requirement.amount),
-      });
-    }
-
-    // Add transfer instructions for each recipient
-    for (const transfer of transfers) {
-      const recipientAta = await getAssociatedTokenAddress(
-        mint,
-        transfer.recipient
-      );
-
-      console.error(`[x402] Creating transfer:`);
-      console.error(`[x402]   - Mint: ${mint.toBase58()}`);
-      console.error(`[x402]   - Recipient wallet: ${transfer.recipient.toBase58()}`);
-      console.error(`[x402]   - Recipient ATA: ${recipientAta.toBase58()}`);
-      console.error(`[x402]   - Amount: ${transfer.amount}`);
-      console.error(`[x402]   - Source ATA (payer): ${payerAta.toBase58()}`);
-
-      // Check if recipient ATA exists, if not add create instruction
+    for (const { ata, owner, name } of tokenAccountsToCreate) {
       try {
-        await getAccount(connection, recipientAta);
-        console.error(`[x402]   - Recipient ATA exists`);
+        await getAccount(connection, ata);
+        console.error(`[x402]   - ${name} ATA exists`);
       } catch {
-        // ATA doesn't exist, add create instruction
-        console.error(`[x402]   - Recipient ATA doesn't exist, adding create instruction`);
+        console.error(`[x402]   - Creating ${name} ATA...`);
         tx.add(
           createAssociatedTokenAccountInstruction(
-            payer, // payer
-            recipientAta, // ata
-            transfer.recipient, // owner
-            mint // mint
+            payer,
+            ata,
+            owner,
+            mint
           )
         );
       }
-
-      // Add transfer instruction
-      tx.add(
-        createTransferInstruction(
-          payerAta, // source
-          recipientAta, // destination
-          payer, // owner
-          transfer.amount // amount
-        )
-      );
     }
+
+    // Add verify_payment instruction
+    const verifyIx = createVerifyPaymentInstruction(
+      payer,
+      paymentRecordPDA,
+      wallet4, // Primary recipient for verification
+      mint,
+      payerAta,
+      amount,
+      nonce
+    );
+    tx.add(verifyIx);
+
+    // Add settle_payment instruction
+    const settleIx = createSettlePaymentInstruction(
+      payer,
+      paymentRecordPDA,
+      payerAta,
+      wallet1TokenAccount,
+      wallet2TokenAccount,
+      wallet3TokenAccount,
+      wallet4TokenAccount,
+      nonce
+    );
+    tx.add(settleIx);
 
     // Get recent blockhash
     const { blockhash, lastValidBlockHeight } =
@@ -252,7 +388,7 @@ export class X402SolanaClient {
       // Create payment header
       const paymentHeader = this.createPaymentHeader(tx);
 
-      console.error(`[x402] Payment transaction created and signed`);
+      console.error(`[x402] Payment transaction created and signed (smart contract)`);
 
       return {
         success: true,
