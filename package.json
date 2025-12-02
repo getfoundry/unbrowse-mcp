@@ -1,6 +1,6 @@
 {
   "name": "unbrowse-mcp",
-  "version": "1.1.1",
+  "version": "1.1.2",
   "description": "The Internet-Use layer for AI Agents - MCP server providing 50x faster web interactions with 90%+ reliability",
   "main": ".smithery/index.cjs",
   "module": "./src/index.ts",
@@ -39,11 +39,11 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/lekt9/unbrowse-mcp.git"
+    "url": "git+https://github.com/getfoundry/unbrowse-mcp.git"
   },
   "homepage": "https://unbrowse.ai",
   "bugs": {
-    "url": "https://github.com/lekt9/unbrowse-mcp/issues"
+    "url": "https://github.com/getfoundry/unbrowse-mcp/issues"
   },
   "engines": {
     "node": ">=18"

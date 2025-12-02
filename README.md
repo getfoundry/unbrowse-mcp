@@ -48,7 +48,7 @@ Add to your Claude Desktop config (`~/Library/Application Support/Claude/claude_
       "command": "npx",
       "args": ["unbrowse-mcp"],
       "env": {
-        "UNBROWSE_API_KEY": "re_your_api_key_here"
+        "SOLANA_PRIVATE_KEY": "your_base58_encoded_private_key"
       }
     }
   }
@@ -59,25 +59,9 @@ Add to your Claude Desktop config (`~/Library/Application Support/Claude/claude_
 
 Choose one of three authentication methods:
 
-### Option 1: API Key (Recommended)
+### Option 1: x402 Payment Mode (Recommended)
 
-Get your API key from [unbrowse.ai](https://unbrowse.ai):
-
-```bash
-export UNBROWSE_API_KEY="re_xxxxxxxxxxxxx"
-```
-
-### Option 2: Session Token
-
-Use a session token from browser cookies:
-
-```bash
-export UNBROWSE_SESSION_TOKEN="cm4xxxxxxxxxxxxx"
-```
-
-### Option 3: x402 Payment Mode (Pay-Per-Request)
-
-Use a Solana wallet with USDC - no account required:
+Use a Solana wallet with USDC - no account or API key required. Just fund your wallet and go:
 
 ```bash
 export SOLANA_PRIVATE_KEY="your_base58_encoded_private_key"
@@ -85,6 +69,22 @@ export SOLANA_RPC_URL="https://api.mainnet-beta.solana.com"  # optional
 ```
 
 **Pricing:** 0.1 cents per search, 0.5 cents per execution
+
+### Option 2: API Key
+
+Get your API key from [unbrowse.ai](https://unbrowse.ai):
+
+```bash
+export UNBROWSE_API_KEY="re_xxxxxxxxxxxxx"
+```
+
+### Option 3: Session Token
+
+Use a session token from browser cookies:
+
+```bash
+export UNBROWSE_SESSION_TOKEN="cm4xxxxxxxxxxxxx"
+```
 
 ## x402 API Endpoints
 
@@ -209,16 +209,15 @@ async function searchWithPayment(query, privateKey) {
 
 ```bash
 # Authentication (choose ONE)
-UNBROWSE_API_KEY=re_xxxxxxxxxxxxx
-UNBROWSE_SESSION_TOKEN=cm4xxxxxxxxxxxxx
-SOLANA_PRIVATE_KEY=your_base58_key
+SOLANA_PRIVATE_KEY=your_base58_key  # x402 pay-per-request (recommended)
+UNBROWSE_API_KEY=re_xxxxxxxxxxxxx   # API key auth
+UNBROWSE_SESSION_TOKEN=cm4xxxxxxx   # Session token auth
 
 # Optional
+SOLANA_RPC_URL=https://api.mainnet-beta.solana.com  # Custom RPC for x402
 UNBROWSE_PASSWORD=your_encryption_password  # For credential decryption
-SOLANA_RPC_URL=https://api.mainnet-beta.solana.com
 DEV_MODE=true  # Show API usage docs in search results
 ENABLE_INDEX_TOOL=true  # Enable API indexing tool
-SENTRY_DSN=your_sentry_dsn  # Error tracking (optional)
 ```
 
 ## Use Cases
@@ -235,7 +234,7 @@ See the [documentation](https://getfoundry.gitbook.io/unbrowse/) for detailed us
 
 ```bash
 # Clone the repository
-git clone https://github.com/lekt9/unbrowse-mcp.git
+git clone https://github.com/getfoundry/unbrowse-mcp.git
 cd unbrowse-mcp
 
 # Install dependencies
@@ -261,4 +260,5 @@ Contributions are welcome! Please feel free to submit a Pull Request.
 - [Documentation](https://getfoundry.gitbook.io/unbrowse/)
 - [NPM Package](https://www.npmjs.com/package/unbrowse-mcp)
 - [Smithery](https://smithery.ai/server/@lekt9/unbrowse-mcp)
-- [GitHub Issues](https://github.com/lekt9/unbrowse-mcp/issues)
+- [GitHub](https://github.com/getfoundry/unbrowse-mcp)
+- [Issues](https://github.com/getfoundry/unbrowse-mcp/issues)
