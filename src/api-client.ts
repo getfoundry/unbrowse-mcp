@@ -744,6 +744,22 @@ export class UnbrowseX402Client {
     }
 
     console.error(`[x402] Payment required: ${requirement.amountFormatted}`);
+    console.error(`[x402] Chain: ${requirement.chain}, Mint: ${requirement.mint}`);
+
+    // Check balance before attempting payment
+    try {
+      const balance = await this.x402Client.getUsdcBalance(requirement.chain, requirement.mint);
+      const requiredAmount = BigInt(requirement.amount);
+      console.error(`[x402] Wallet USDC balance: ${balance} lamports (required: ${requiredAmount})`);
+      if (balance < requiredAmount) {
+        throw new Error(`Insufficient USDC balance. Have: ${balance}, need: ${requiredAmount}. Please fund your wallet: ${this.x402Client.getPublicKey()}`);
+      }
+    } catch (balanceError: any) {
+      if (balanceError.message?.includes('Insufficient')) {
+        throw balanceError;
+      }
+      console.error(`[x402] Could not check balance: ${balanceError.message}`);
+    }
 
     // Process payment
     const paymentResult = await this.x402Client.processPaymentRequired(requirement);
@@ -762,6 +778,17 @@ export class UnbrowseX402Client {
         'X-Payment': paymentResult.paymentHeader!,
       },
     });
+
+    // Log if payment was rejected
+    if (!retryResponse.ok) {
+      const errorClone = retryResponse.clone();
+      try {
+        const errorData = await errorClone.json();
+        console.error(`[x402] Payment rejected by server:`, JSON.stringify(errorData, null, 2));
+      } catch {
+        console.error(`[x402] Payment rejected with status: ${retryResponse.status} ${retryResponse.statusText}`);
+      }
+    }
 
     return retryResponse;
   }
