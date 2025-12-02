@@ -80,7 +80,7 @@ export class X402SolanaClient {
     try {
       const secretKey = bs58.decode(config.privateKey);
       this.keypair = Keypair.fromSecretKey(secretKey);
-      console.log(
+      console.error(
         `[x402] Wallet initialized: ${this.keypair.publicKey.toBase58()}`
       );
     } catch (error) {
@@ -224,14 +224,14 @@ export class X402SolanaClient {
     requirement: PaymentRequirement
   ): Promise<X402PaymentResult> {
     try {
-      console.log(
+      console.error(
         `[x402] Processing payment: ${requirement.amountFormatted} to ${requirement.recipient}`
       );
 
       if (requirement.splits) {
-        console.log(`[x402] Payment splits:`);
+        console.error(`[x402] Payment splits:`);
         for (const split of requirement.splits) {
-          console.log(
+          console.error(
             `  - ${split.label}: ${split.percentage}% to ${split.recipient}`
           );
         }
@@ -243,7 +243,7 @@ export class X402SolanaClient {
       // Create payment header
       const paymentHeader = this.createPaymentHeader(tx);
 
-      console.log(`[x402] Payment transaction created and signed`);
+      console.error(`[x402] Payment transaction created and signed`);
 
       return {
         success: true,

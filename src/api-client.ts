@@ -145,7 +145,7 @@ export class UnbrowseApiClient {
     this.baseUrl = UNBROWSE_API_BASE_URL;
     this.timeout = config.timeout || 300000; // 10 second default timeout
 
-    console.log(`[API Client] Initialized with auth type: ${this.authType}`);
+    console.error(`[API Client] Initialized with auth type: ${this.authType}`);
   }
 
   /**
@@ -241,7 +241,7 @@ export class UnbrowseApiClient {
 
     const url = `${this.baseUrl}/abilities/search?${params}`;
     const response = await this.fetchWithTimeout(url);
-    console.log({response})
+    console.error({response})
 
     if (!response.ok) {
       if (response.status === 402) {
@@ -253,7 +253,7 @@ export class UnbrowseApiClient {
 
     const data = await response.json();
 
-    console.log({data})
+    console.error({data})
 
     // Transform camelCase API response to snake_case
     return {
@@ -554,7 +554,7 @@ export class UnbrowseApiClient {
   }> {
     const url = `${this.baseUrl}/my/abilities/${encodeURIComponent(abilityId)}/execute`;
 
-    console.log(`[INFO] Executing ability at URL: ${url}`);
+    console.error(`[INFO] Executing ability at URL: ${url}`);
 
     const headers: Record<string, string> = {
       'Content-Type': 'application/json',
@@ -564,9 +564,9 @@ export class UnbrowseApiClient {
     // Add X-Credential-Key header if provided (required for abilities that need credentials)
     if (options.credentialKey) {
       headers['X-Credential-Key'] = options.credentialKey;
-      console.log(`[INFO] X-Credential-Key header added: ${options.credentialKey.substring(0, 4)}...`);
+      console.error(`[INFO] X-Credential-Key header added: ${options.credentialKey.substring(0, 4)}...`);
     } else {
-      console.log(`[WARN] No credentialKey provided in options`);
+      console.error(`[WARN] No credentialKey provided in options`);
     }
 
     const requestBody = {
@@ -574,8 +574,8 @@ export class UnbrowseApiClient {
       transformCode: options.transformCode,
     };
 
-    console.log(`[INFO] Request body:`, JSON.stringify(requestBody));
-    console.log(`[INFO] Request headers:`, JSON.stringify(headers, null, 2));
+    console.error(`[INFO] Request body:`, JSON.stringify(requestBody));
+    console.error(`[INFO] Request headers:`, JSON.stringify(headers, null, 2));
 
     const response = await this.fetchWithTimeout(url, {
       method: 'POST',
@@ -583,11 +583,11 @@ export class UnbrowseApiClient {
       body: JSON.stringify(requestBody),
     });
 
-    console.log(`[INFO] Response status: ${response.status} ${response.statusText}`);
-    console.log(`[INFO] Response headers:`, JSON.stringify(Object.fromEntries(response.headers.entries()), null, 2));
+    console.error(`[INFO] Response status: ${response.status} ${response.statusText}`);
+    console.error(`[INFO] Response headers:`, JSON.stringify(Object.fromEntries(response.headers.entries()), null, 2));
 
     const responseText = await response.text();
-    console.log(`[INFO] Response body (first 500 chars):`, responseText.substring(0, 500));
+    console.error(`[INFO] Response body (first 500 chars):`, responseText.substring(0, 500));
 
     let data;
     try {
@@ -684,7 +684,7 @@ export class UnbrowseX402Client {
     this.baseUrl = UNBROWSE_API_BASE_URL;
     this.timeout = config.timeout || 300000;
 
-    console.log(`[x402 Client] Initialized with wallet: ${this.x402Client.getPublicKey()}`);
+    console.error(`[x402 Client] Initialized with wallet: ${this.x402Client.getPublicKey()}`);
   }
 
   /**
@@ -734,7 +734,7 @@ export class UnbrowseX402Client {
     }
 
     // Handle 402 Payment Required
-    console.log(`[x402] Received 402 Payment Required for ${url}`);
+    console.error(`[x402] Received 402 Payment Required for ${url}`);
 
     const responseBody = await response.json();
     const requirement = parsePaymentRequirement(responseBody);
@@ -743,7 +743,7 @@ export class UnbrowseX402Client {
       throw new Error('Server returned 402 but payment requirement could not be parsed');
     }
 
-    console.log(`[x402] Payment required: ${requirement.amountFormatted}`);
+    console.error(`[x402] Payment required: ${requirement.amountFormatted}`);
 
     // Process payment
     const paymentResult = await this.x402Client.processPaymentRequired(requirement);
@@ -752,7 +752,7 @@ export class UnbrowseX402Client {
       throw new Error(`Payment failed: ${paymentResult.error}`);
     }
 
-    console.log(`[x402] Payment transaction created, retrying request with X-Payment header`);
+    console.error(`[x402] Payment transaction created, retrying request with X-Payment header`);
 
     // Retry with payment header
     const retryResponse = await this.fetchWithTimeout(url, {
@@ -789,7 +789,7 @@ export class UnbrowseX402Client {
     });
 
     const url = `${this.baseUrl}/x402/abilities?${params}`;
-    console.log(`[x402] Searching abilities: "${query}"`);
+    console.error(`[x402] Searching abilities: "${query}"`);
 
     try {
       const response = await this.fetchWithPayment(url);
@@ -889,7 +889,7 @@ export class UnbrowseX402Client {
   }> {
     const url = `${this.baseUrl}/x402/abilities/${encodeURIComponent(abilityId)}/execute`;
 
-    console.log(`[x402] Executing ability: ${abilityId}`);
+    console.error(`[x402] Executing ability: ${abilityId}`);
 
     const requestBody = {
       params,
@@ -1050,7 +1050,7 @@ export class UnbrowseX402Client {
       this.paymentHistory = this.paymentHistory.slice(-1000);
     }
 
-    console.log(`[x402] Payment recorded: ${record.type} - ${record.amountFormatted} - ${record.verified ? 'verified' : 'pending'}`);
+    console.error(`[x402] Payment recorded: ${record.type} - ${record.amountFormatted} - ${record.verified ? 'verified' : 'pending'}`);
 
     return fullRecord;
   }
@@ -1100,7 +1100,7 @@ export class UnbrowseX402Client {
    */
   clearPaymentHistory(): void {
     this.paymentHistory = [];
-    console.log('[x402] Payment history cleared');
+    console.error('[x402] Payment history cleared');
   }
 }
 

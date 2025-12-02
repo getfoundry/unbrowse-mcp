@@ -78,7 +78,7 @@ function createFetchOverride(
   const proxyAgent = proxyUrl ? new ProxyAgent(proxyUrl) : undefined;
 
   if (proxyAgent) {
-    console.log(`[INFO] Using proxy: ${proxyUrl.replace(/:[^:@]+@/, ':****@')}`);
+    console.error(`[INFO] Using proxy: ${proxyUrl.replace(/:[^:@]+@/, ':****@')}`);
   }
 
   return async function overriddenFetch(
@@ -185,7 +185,7 @@ export async function executeWrapper(
 
     // Use provided wrapper data if available (from cache), otherwise fetch from API
     if (providedWrapperData) {
-      console.log(`[TRACE] Using provided wrapper data for: ${abilityId}`);
+      console.error(`[TRACE] Using provided wrapper data for: ${abilityId}`);
       wrapperData = providedWrapperData;
     } else {
       if (!apiClient) {
@@ -196,14 +196,14 @@ export async function executeWrapper(
         };
       }
 
-      console.log(`[TRACE] Fetching wrapper data from API for: ${abilityId}`);
+      console.error(`[TRACE] Fetching wrapper data from API for: ${abilityId}`);
 
       // Fetch wrapper data from API instead of local storage
       const apiResponse = await apiClient.getAbility(abilityId);
 
-      console.log(`[TRACE] ========== FULL API RESPONSE ==========`);
-      console.log(JSON.stringify(apiResponse, null, 2));
-      console.log(`[TRACE] ==========================================`);
+      console.error(`[TRACE] ========== FULL API RESPONSE ==========`);
+      console.error(JSON.stringify(apiResponse, null, 2));
+      console.error(`[TRACE] ==========================================`);
 
       if (!apiResponse.success || !apiResponse.wrapper) {
         return {
@@ -216,9 +216,9 @@ export async function executeWrapper(
       wrapperData = apiResponse.wrapper;
     }
 
-    console.log(`[TRACE] ========== WRAPPER DATA STRUCTURE ==========`);
-    console.log(JSON.stringify(wrapperData, null, 2));
-    console.log(`[TRACE] ===============================================`);
+    console.error(`[TRACE] ========== WRAPPER DATA STRUCTURE ==========`);
+    console.error(JSON.stringify(wrapperData, null, 2));
+    console.error(`[TRACE] ===============================================`);
 
     const {
       service_name,
@@ -228,7 +228,7 @@ export async function executeWrapper(
       dependency_order,
     } = wrapperData.input;
 
-    console.log(`[TRACE] Extracted wrapper code starts with:`, wrapper_code.substring(0, 100));
+    console.error(`[TRACE] Extracted wrapper code starts with:`, wrapper_code.substring(0, 100));
 
     // Check for missing dependencies
     if (
@@ -290,7 +290,7 @@ export async function executeWrapper(
       })()
     `;
 
-    console.log(`[TRACE] Executing wrapper code (exports stripped)`);
+    console.error(`[TRACE] Executing wrapper code (exports stripped)`);
 
     // Execute wrapper code
     const script = new vm.Script(moduleWrapper);

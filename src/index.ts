@@ -53,7 +53,7 @@ export default function createServer({
 }: {
   config: z.infer<typeof configSchema>; // Define your config in smithery.yaml
 }) {
-  console.log("[INFO] createServer called - starting initialization");
+  console.error("[INFO] createServer called - starting initialization");
 
   // Apply environment variable fallbacks
   const apiKey = config.apiKey || process.env.UNBROWSE_API_KEY;
@@ -84,10 +84,10 @@ export default function createServer({
   } else {
     authType = "session_token";
   }
-  console.log(`[INFO] Authentication type: ${authType}`);
+  console.error(`[INFO] Authentication type: ${authType}`);
 
   if (devMode) {
-    console.log(`[INFO] Dev mode enabled: Search results will include API usage documentation`);
+    console.error(`[INFO] Dev mode enabled: Search results will include API usage documentation`);
   }
 
   // Create the appropriate API client based on auth mode
@@ -96,16 +96,16 @@ export default function createServer({
 
   if (useX402Mode) {
     // x402 mode - pay-per-request with Solana USDC
-    console.log(`[INFO] Using x402 payment mode with Solana USDC`);
+    console.error(`[INFO] Using x402 payment mode with Solana USDC`);
     x402Client = createX402ApiClient(solanaPrivateKey!, solanaRpcUrl);
     // Create a wrapper that matches UnbrowseApiClient interface for backward compatibility
     // The x402Client will be used directly for search and execute operations
     apiClient = createApiClient("x402_placeholder"); // Placeholder - won't be used for authed requests
-    console.log(`[INFO] x402 client created with wallet: ${x402Client.getWalletAddress()}`);
+    console.error(`[INFO] x402 client created with wallet: ${x402Client.getWalletAddress()}`);
   } else {
     // Traditional API key/session token mode
     apiClient = createApiClient(authToken!);
-    console.log(`[INFO] API client created with base URL: ${UNBROWSE_API_BASE_URL}`);
+    console.error(`[INFO] API client created with base URL: ${UNBROWSE_API_BASE_URL}`);
   }
 
   const mcpServer = new McpServer({
@@ -121,7 +121,7 @@ export default function createServer({
   // Only wrap with Sentry if it's initialized
   const server = sentryDsn ? Sentry.wrapMcpServerWithSentry(mcpServer) : mcpServer;
 
-  console.log("[INFO] McpServer instance created");
+  console.error("[INFO] McpServer instance created");
 
   const accessibleAbilities: IndexedAbility[] = [];
   const availableCredentialKeys = new Set<string>();
@@ -382,12 +382,12 @@ export default function createServer({
 
         try {
           // Execute ability on the server using abilityId
-          console.log(`[DEBUG] Executing ability - ID: ${ability.ability_id}, Name: ${ability.ability_name}`);
+          console.error(`[DEBUG] Executing ability - ID: ${ability.ability_id}, Name: ${ability.ability_name}`);
 
           // Use x402 client if in x402 mode, otherwise use traditional API client
           let result;
           if (useX402Mode && x402Client) {
-            console.log(`[x402] Using x402 client for registered tool: ${ability.ability_name}`);
+            console.error(`[x402] Using x402 client for registered tool: ${ability.ability_name}`);
             result = await x402Client.executeAbility(ability.ability_id, payload, {});
           } else {
             result = await apiClient.executeAbility(ability.ability_id, payload, {
@@ -447,7 +447,7 @@ export default function createServer({
       },
     );
 
-    console.log(`[INFO] Registered favorite ability as tool: ${toolName}`);
+    console.error(`[INFO] Registered favorite ability as tool: ${toolName}`);
   };
 
   const candidateVariantsFromDomain = (domain: string): string[] => {
@@ -495,7 +495,7 @@ export default function createServer({
       credentialCache.set(candidate, decryptedCredentials);
 
       if (config.debug) {
-        console.log(
+        console.error(
           `[DEBUG] Credential lookup for ${candidate}: FOUND (${Object.keys(decryptedCredentials).length} keys)`,
         );
       }
@@ -545,7 +545,7 @@ export default function createServer({
 
       if (!keySatisfied) {
         if (config.debug) {
-          console.log(
+          console.error(
             `[DEBUG] Skipping ability ${ability.ability_id}: missing credential for ${key}`,
           );
         }
@@ -566,10 +566,10 @@ export default function createServer({
     // initializationPromise = (async () => {
     //   // Step 1: Load favorites and register them as tools
     //   try {
-    //     console.log('[INFO] Loading favorited abilities...');
+    //     console.error('[INFO] Loading favorited abilities...');
     //     const favoritesResult = await apiClient.listAbilities({ favorites: true });
     //     const favoriteAbilities = favoritesResult.abilities || [];
-    //     console.log(`[INFO] Found ${favoriteAbilities.length} favorited abilities`);
+    //     console.error(`[INFO] Found ${favoriteAbilities.length} favorited abilities`);
 
     //     const registeredAbilityIds = new Set<string>();
     //     let registeredCount = 0;
@@ -577,7 +577,7 @@ export default function createServer({
     //     for (const ability of favoriteAbilities) {
     //       // Skip duplicates
     //       if (registeredAbilityIds.has(ability.ability_id)) {
-    //         console.log(`[DEBUG] Skipping duplicate favorite: ${ability.ability_id}`);
+    //         console.error(`[DEBUG] Skipping duplicate favorite: ${ability.ability_id}`);
     //         continue;
     //       }
 
@@ -597,7 +597,7 @@ export default function createServer({
     //       }
     //     }
 
-    //     console.log(`[INFO] Registered ${registeredCount} favorite abilities as tools`);
+    //     console.error(`[INFO] Registered ${registeredCount} favorite abilities as tools`);
 
     //     // Notify MCP client that tools have been added
     //     // We need to wait for the client to connect before sending the notification
@@ -618,7 +618,7 @@ export default function createServer({
 
     //         // Client is now connected, send notification
     //         server.sendToolListChanged();
-    //         console.log('[INFO] Client connected, sent tools/list_changed notification');
+    //         console.error('[INFO] Client connected, sent tools/list_changed notification');
     //       };
 
     //       // Don't await - let this run in background
@@ -635,7 +635,7 @@ export default function createServer({
     //   try {
     //     const result = await apiClient.listAbilities();
     //     const candidateAbilities = result.abilities || [];
-    //     console.log(
+    //     console.error(
     //       `[INFO] Loaded ${candidateAbilities.length} abilities from API (available for search)`,
     //     );
 
@@ -653,14 +653,14 @@ export default function createServer({
     //       }
     //     }
 
-    //     console.log(
+    //     console.error(
     //       `[INFO] ${accessibleAbilities.length} abilities available with credential coverage`,
     //     );
-    //     console.log(
+    //     console.error(
     //       `[INFO] Pre-cached ${abilityCache.size} abilities for immediate execution`,
     //     );
     //     if (availableCredentialKeys.size > 0) {
-    //       console.log(
+    //       console.error(
     //         `[INFO] Detected ${availableCredentialKeys.size} credential key(s) from decrypted cookie jar entries`,
     //       );
     //     }
@@ -738,14 +738,14 @@ export default function createServer({
 //       try {
 //         // await ensureInitialized();
 
-//         console.log(`[TRACE] execute_ability tool called with ability_id: ${ability_id}`);
-//         console.log(`[TRACE] Executing ability ${ability_id} on server...`);
+//         console.error(`[TRACE] execute_ability tool called with ability_id: ${ability_id}`);
+//         console.error(`[TRACE] Executing ability ${ability_id} on server...`);
 
 //         // Parse params to object (handle both string and object input)
 //         const payload: Record<string, any> = params
 //           ? (typeof params === 'string' ? JSON.parse(params) : params)
 //           : {};
-//         console.log(`[TRACE] Params:`, payload);
+//         console.error(`[TRACE] Params:`, payload);
 
 //         // Execute ability on the server with credential key from config
 //         // According to MCP_EXECUTION_GUIDE.md, password is the credential key
@@ -755,7 +755,7 @@ export default function createServer({
 //         });
 
 //         if (config.debug) {
-//           console.log(
+//           console.error(
 //             `[DEBUG] Execution result: ${result.success ? "SUCCESS" : "FAILED"}`,
 //           );
 //         }
@@ -818,7 +818,7 @@ export default function createServer({
 //           responseData.responseBody = truncatedBody + `\n\n[... Response truncated. Original length: ${responseText.length} characters, showing first ${MAX_RESPONSE_LENGTH} characters]`;
 //           responseText = JSON.stringify(responseData, null, 2);
 
-//           console.log(`[WARN] Response truncated from ${responseText.length} to ${MAX_RESPONSE_LENGTH} characters`);
+//           console.error(`[WARN] Response truncated from ${responseText.length} to ${MAX_RESPONSE_LENGTH} characters`);
 //         }
 
 //         return {
@@ -908,7 +908,7 @@ Common use cases:
     },
     async ({ abilities, aggregate_results }) => {
       try {
-        console.log(`[TRACE] execute_abilities tool called with ${abilities.length} abilities`);
+        console.error(`[TRACE] execute_abilities tool called with ${abilities.length} abilities`);
 
         // Execute all abilities in parallel using Promise.allSettled
         const startTime = Date.now();
@@ -919,13 +919,13 @@ Common use cases:
               ? (typeof params === 'string' ? JSON.parse(params) : params)
               : {};
 
-            console.log(`[TRACE] Executing ${ability_id} with params:`, payload);
+            console.error(`[TRACE] Executing ${ability_id} with params:`, payload);
 
             // Execute ability on the server using appropriate client
             let result;
             if (useX402Mode && x402Client) {
               // x402 mode: paid execution (no credential key needed - payment handles auth)
-              console.log(`[x402] Using x402 client for execution: ${ability_id}`);
+              console.error(`[x402] Using x402 client for execution: ${ability_id}`);
               result = await x402Client.executeAbility(ability_id, payload, {
                 transformCode: transform_code,
               });
@@ -975,7 +975,7 @@ Common use cases:
           })
           .filter(Boolean);
 
-        console.log(
+        console.error(
           `[INFO] Parallel execution completed: ${successful.length} succeeded, ${failed.length} failed, ${totalTime}ms total`
         );
 
@@ -1051,7 +1051,7 @@ Common use cases:
         response.results = response.results.map((r: any) => {
           const bodyStr = JSON.stringify(r.responseBody);
           if (bodyStr.length > MAX_INDIVIDUAL_RESULT_LENGTH) {
-            console.log(`[WARN] Truncating result for ${r.abilityId} from ${bodyStr.length} to ${MAX_INDIVIDUAL_RESULT_LENGTH} chars`);
+            console.error(`[WARN] Truncating result for ${r.abilityId} from ${bodyStr.length} to ${MAX_INDIVIDUAL_RESULT_LENGTH} chars`);
             anyTruncated = true;
             return {
               ...r,
@@ -1157,11 +1157,11 @@ Common use cases:
 //     },
 //     async ({ chain, stop_on_error, transform_code }) => {
 //       try {
-//         console.log(`[TRACE] execute_ability_chain tool called`);
+//         console.error(`[TRACE] execute_ability_chain tool called`);
 
 //         // Parse chain string to array
 //         const chainArray = JSON.parse(chain);
-//         console.log(`[TRACE] Chain length: ${chainArray.length} steps`);
+//         console.error(`[TRACE] Chain length: ${chainArray.length} steps`);
 
 //         // Execute chain on the server
 //         const response = await fetch(`${UNBROWSE_API_BASE_URL}/my/abilities/chain/execute`, {
@@ -1181,8 +1181,8 @@ Common use cases:
 //         const result = await response.json();
 
 //         if (config.debug) {
-//           console.log(`[DEBUG] Chain execution result: ${result.success ? "SUCCESS" : "FAILED"}`);
-//           console.log(`[DEBUG] Steps completed: ${result.stepsCompleted}/${result.stepsTotal}`);
+//           console.error(`[DEBUG] Chain execution result: ${result.success ? "SUCCESS" : "FAILED"}`);
+//           console.error(`[DEBUG] Steps completed: ${result.stepsCompleted}/${result.stepsTotal}`);
 //         }
 
 //         // Format response
@@ -1256,7 +1256,7 @@ Common use cases:
 
   // Tool: Ingest API Endpoint (conditionally registered based on config)
   if (config.enableIndexTool) {
-    console.log("[INFO] Index tool enabled via config.enableIndexTool");
+    console.error("[INFO] Index tool enabled via config.enableIndexTool");
     server.registerTool(
       "ingest_api_endpoint",
       {
@@ -1282,7 +1282,7 @@ Common use cases:
       },
       async ({ input, service_name, ability_name, description }) => {
       try {
-        console.log(`[TRACE] Ingesting API endpoint: ${input}`);
+        console.error(`[TRACE] Ingesting API endpoint: ${input}`);
 
         // Call the ingest API endpoint with authentication
         const response = await fetch(`${UNBROWSE_API_BASE_URL}/ingest/api`, {
@@ -1320,7 +1320,7 @@ Common use cases:
 
         const result = await response.json();
 
-        console.log(`[INFO] Successfully ingested API endpoint: ${result.ability_id}`);
+        console.error(`[INFO] Successfully ingested API endpoint: ${result.ability_id}`);
 
         // Add the newly ingested ability to the cache and permanent storage
         if (result.success && result.ability_id) {
@@ -1341,8 +1341,8 @@ Common use cases:
                 accessibleAbilities[existingIndex] = ability;
               }
 
-              console.log(`[INFO] Cached newly ingested ability: ${ability.ability_id}`);
-              console.log(`[INFO] Total accessible abilities: ${accessibleAbilities.length}`);
+              console.error(`[INFO] Cached newly ingested ability: ${ability.ability_id}`);
+              console.error(`[INFO] Total accessible abilities: ${accessibleAbilities.length}`);
             }
           } catch (error: any) {
             console.warn(`[WARN] Failed to cache ingested ability: ${error.message}`);
@@ -1390,7 +1390,7 @@ Common use cases:
     },
     );
   } else {
-    console.log("[INFO] Index tool disabled (set enableIndexTool=true in smithery.yaml to enable)");
+    console.error("[INFO] Index tool disabled (set enableIndexTool=true in smithery.yaml to enable)");
   }
 
   const generateUsageDocs = (ability: IndexedAbility): any => {
@@ -1493,13 +1493,13 @@ Example:
     },
     async ({ searches, result_limit_per_search }) => {
       try {
-        console.log(`[TRACE] search_abilities_parallel called with ${searches.length} searches`);
+        console.error(`[TRACE] search_abilities_parallel called with ${searches.length} searches`);
 
         // Execute all searches in parallel using Promise.allSettled
         const startTime = Date.now();
         const results = await Promise.allSettled(
           searches.map(async ({ query, domains }) => {
-            console.log(`[TRACE] Searching for: "${query}"${domains ? ` in domains: ${domains.join(', ')}` : ''}`);
+            console.error(`[TRACE] Searching for: "${query}"${domains ? ` in domains: ${domains.join(', ')}` : ''}`);
 
             // Use x402 client if in x402 mode, otherwise use traditional API client
             let result;
@@ -1578,10 +1578,10 @@ Example:
           }
         }
 
-        console.log(
+        console.error(
           `[INFO] Parallel search completed: ${successful.length}/${searches.length} succeeded, found ${allAbilities.size} unique abilities, ${totalTime}ms total`
         );
-        console.log(`[INFO] Total accessible abilities: ${accessibleAbilities.length}`);
+        console.error(`[INFO] Total accessible abilities: ${accessibleAbilities.length}`);
 
         // Get available domains
         const domainCandidates = new Set<string>(
@@ -1695,7 +1695,7 @@ For simpler searches, you can use shorter queries like 'create trade', 'fetch to
       let result;
       if (useX402Mode && x402Client) {
         // x402 mode: Use paid search endpoint (no domain filtering in x402)
-        console.log(`[x402] Using x402 client for search: "${query}"`);
+        console.error(`[x402] Using x402 client for search: "${query}"`);
         result = await x402Client.searchAbilities(query, resultLimit);
       } else {
         // Traditional mode: Use API key-based search with optional domain filtering
@@ -1713,7 +1713,7 @@ For simpler searches, you can use shorter queries like 'create trade', 'fetch to
       const availableDomains = Array.from(domainCandidates);
 
       if (config.debug) {
-        console.log(
+        console.error(
           `[DEBUG] Search "${query}" returned ${matches.length} abilities (limit ${resultLimit}), available domains: ${availableDomains.length}`,
         );
       }
@@ -1733,8 +1733,8 @@ For simpler searches, you can use shorter queries like 'create trade', 'fetch to
           accessibleAbilities[existingIndex] = ability;
         }
       }
-      console.log(`[INFO] Cached ${matches.length} abilities from search results`);
-      console.log(`[INFO] Total accessible abilities: ${accessibleAbilities.length}`);
+      console.error(`[INFO] Cached ${matches.length} abilities from search results`);
+      console.error(`[INFO] Total accessible abilities: ${accessibleAbilities.length}`);
 
       return {
         content: [
@@ -1801,7 +1801,7 @@ For simpler searches, you can use shorter queries like 'create trade', 'fetch to
       },
       async ({ limit, type, include_summary }) => {
         try {
-          console.log(`[x402] Getting payment history (limit: ${limit}, type: ${type || 'all'})`);
+          console.error(`[x402] Getting payment history (limit: ${limit}, type: ${type || 'all'})`);
 
           const history = x402Client!.getPaymentHistory(Math.min(limit || 20, 100), type);
 
@@ -1846,7 +1846,7 @@ For simpler searches, you can use shorter queries like 'create trade', 'fetch to
             };
           }
 
-          console.log(`[x402] Returned ${history.length} payment records`);
+          console.error(`[x402] Returned ${history.length} payment records`);
 
           return {
             content: [
@@ -1877,7 +1877,7 @@ For simpler searches, you can use shorter queries like 'create trade', 'fetch to
       }
     );
 
-    console.log("[INFO] Registered get_payment_history tool (x402 mode)");
+    console.error("[INFO] Registered get_payment_history tool (x402 mode)");
   }
 
   // Start background initialization - loads abilities for search/execute

@@ -17,6 +17,11 @@
  *   DEV_MODE - Enable developer mode for detailed API docs
  */
 
+// CRITICAL: Redirect console.log to stderr BEFORE loading any modules
+// MCP protocol uses stdout for JSON-RPC, so ALL logging must go to stderr
+const originalLog = console.log;
+console.log = (...args) => console.error(...args);
+
 // Validate that at least one auth method is provided before starting
 const apiKey = process.env.UNBROWSE_API_KEY;
 const sessionToken = process.env.UNBROWSE_SESSION_TOKEN;
