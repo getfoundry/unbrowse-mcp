@@ -3,6 +3,7 @@
   "version": "1.0.0",
   "description": "MCP server for accessing indexed web API abilities with secure credential management",
   "main": ".smithery/index.cjs",
+  "module": "./src/index.ts",
   "type": "commonjs",
   "bin": {
     "unbrowse-mcp": "bin/cli.js"
