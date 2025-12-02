@@ -22,6 +22,12 @@
 const originalLog = console.log;
 console.log = (...args) => console.error(...args);
 
+// Set PORT to 0 to use a random available port for the HTTP server
+// This avoids EADDRINUSE conflicts when multiple instances run
+if (!process.env.PORT) {
+  process.env.PORT = "0";
+}
+
 // Validate that at least one auth method is provided before starting
 const apiKey = process.env.UNBROWSE_API_KEY;
 const sessionToken = process.env.UNBROWSE_SESSION_TOKEN;
