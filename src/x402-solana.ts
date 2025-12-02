@@ -166,11 +166,20 @@ export class X402SolanaClient {
         transfer.recipient
       );
 
+      console.error(`[x402] Creating transfer:`);
+      console.error(`[x402]   - Mint: ${mint.toBase58()}`);
+      console.error(`[x402]   - Recipient wallet: ${transfer.recipient.toBase58()}`);
+      console.error(`[x402]   - Recipient ATA: ${recipientAta.toBase58()}`);
+      console.error(`[x402]   - Amount: ${transfer.amount}`);
+      console.error(`[x402]   - Source ATA (payer): ${payerAta.toBase58()}`);
+
       // Check if recipient ATA exists, if not add create instruction
       try {
         await getAccount(connection, recipientAta);
+        console.error(`[x402]   - Recipient ATA exists`);
       } catch {
         // ATA doesn't exist, add create instruction
+        console.error(`[x402]   - Recipient ATA doesn't exist, adding create instruction`);
         tx.add(
           createAssociatedTokenAccountInstruction(
             payer, // payer
