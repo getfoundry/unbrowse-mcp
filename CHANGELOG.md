@@ -3,7 +3,7 @@
 ## [Unreleased]
 
 ### Removed
-- Configuration option for the Unbrowse API base URL; requests now always target `https://agent.unbrowse.ai`.
+- Configuration option for the Unbrowse API base URL; requests now always target `https://index.unbrowse.ai`.
 
 ### Changed
 - `createApiClient` now accepts only the API key and handles the base URL internally.
@@ -125,7 +125,7 @@ To upgrade from v1.x to v2.0.0:
 2. **Update configuration**:
    - Add `apiKey: "re_xxxxxxxxxxxx"` to your config
    - Add `password: "your-encryption-password"` (explicitly)
-   - Base URL is fixed to `https://agent.unbrowse.ai`
+   - Base URL is fixed to `https://index.unbrowse.ai`
 
 3. **Rebuild**:
    ```bash

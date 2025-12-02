@@ -48,7 +48,7 @@ This MCP server connects to the Unbrowse API ([API Documentation](./docs/API_COM
 │                           │                                 │
 ├───────────────────────────┼─────────────────────────────────┤
 │                           ▼                                 │
-│         Unbrowse API (https://agent.unbrowse.ai)            │
+│         Unbrowse API (https://index.unbrowse.ai)            │
 │                  • GET /my/abilities                        │
 │                  • GET /my/credentials/:domain              │
 │                  • POST /ingest/api                         │
@@ -58,7 +58,7 @@ This MCP server connects to the Unbrowse API ([API Documentation](./docs/API_COM
 
 ### Authentication Flow
 
-The MCP server uses a **flexible authentication** model with two options:
+The MCP server uses a **flexible authentication** model with three options:
 
 #### Option 1: API Key Authentication (Recommended)
    - All API requests include `Authorization: Bearer <apiKey>` header
@@ -72,6 +72,14 @@ The MCP server uses a **flexible authentication** model with two options:
    - Session tokens expire based on your auth configuration
    - Useful for development or testing
    - Can be obtained from browser cookies
+
+#### Option 3: x402 Payment Authentication (Pay-Per-Request)
+   - Use a Solana wallet with USDC for pay-per-request access
+   - No API key or account required - just fund your wallet
+   - **Pricing**: 0.1 cents per search, 0.5 cents per execution
+   - Revenue split: 20% platform, 80% ability owner
+   - Requires Base58-encoded Solana private key
+   - Wallet must have USDC balance on Solana mainnet
 
 #### Password-Based Decryption (Optional)
    - **Only required if your abilities need credential decryption**
@@ -100,8 +108,9 @@ The MCP server uses a **flexible authentication** model with two options:
 
 - Node.js 18+
 - pnpm (or npm)
-- An Unbrowse account
-- **Authentication**: Either an API key OR session token (choose one)
+- **Authentication** (choose ONE):
+  - An Unbrowse API key (recommended) OR session token
+  - OR a Solana wallet with USDC for x402 pay-per-request mode
 - **Password** (optional): Only needed if your abilities require credential decryption
 
 ### Getting Your API Key
@@ -110,7 +119,7 @@ Follow the complete authentication workflow from the [API Complete Guide](./docs
 
 1. **Register an account** (if you don't have one):
 ```bash
-curl -X POST https://agent.unbrowse.ai/auth/register \
+curl -X POST https://index.unbrowse.ai/auth/register \
   -H "Content-Type: application/json" \
   -d '{
     "email": "your@email.com",
@@ -121,7 +130,7 @@ curl -X POST https://agent.unbrowse.ai/auth/register \
 
 2. **Login to get a JWT token**:
 ```bash
-curl -X POST https://agent.unbrowse.ai/auth/login \
+curl -X POST https://index.unbrowse.ai/auth/login \
   -H "Content-Type: application/json" \
   -d '{
     "email": "your@email.com",
@@ -132,7 +141,7 @@ Save the returned `token` value from the response.
 
 3. **Create an API key** using your JWT token:
 ```bash
-curl -X POST https://agent.unbrowse.ai/my/api-keys \
+curl -X POST https://index.unbrowse.ai/my/api-keys \
   -H "Authorization: Bearer YOUR_JWT_TOKEN" \
   -H "Content-Type: application/json" \
   -d '{
@@ -180,14 +189,20 @@ Configure your authentication via environment variables or MCP settings:
 **Authentication (choose ONE method):**
    - `apiKey`: Your Unbrowse API key (from step 3 above, format: `re_xxxxx`)
    - OR `sessionToken`: Session token from browser cookies after logging in
-   - Can also use environment variables: `UNBROWSE_API_KEY` or `UNBROWSE_SESSION_TOKEN`
+   - OR `solanaPrivateKey`: Base58-encoded Solana private key for x402 pay-per-request mode
+   - Can also use environment variables: `UNBROWSE_API_KEY`, `UNBROWSE_SESSION_TOKEN`, or `SOLANA_PRIVATE_KEY`
+
+**x402 Payment Mode (optional):**
+   - `solanaPrivateKey`: Your Solana wallet private key (Base58 encoded)
+   - `solanaRpcUrl`: Custom Solana RPC URL (optional, defaults to mainnet)
+   - Wallet must have USDC balance for payments
 
 **Credential Decryption (optional):**
    - `password`: Your encryption password for credential decryption
    - Only required if your abilities need to decrypt stored credentials
    - Can also use environment variable: `UNBROWSE_PASSWORD`
 
-The Unbrowse API base URL is fixed to `https://agent.unbrowse.ai`
+The Unbrowse API base URL is fixed to `https://index.unbrowse.ai`
 
 ### Installing via Smithery
 
@@ -233,6 +248,23 @@ Or with additional options:
 }
 ```
 
+Or using x402 payment mode (no API key required):
+
+```json
+{
+  "mcpServers": {
+    "unbrowse": {
+      "command": "npx",
+      "args": ["unbrowse-mcp"],
+      "env": {
+        "SOLANA_PRIVATE_KEY": "your_base58_encoded_private_key",
+        "SOLANA_RPC_URL": "https://api.mainnet-beta.solana.com"
+      }
+    }
+  }
+}
+```
+
 ### Environment Variable Configuration
 
 All configuration options can be set via environment variables instead of `smithery.yaml`:
@@ -242,6 +274,9 @@ All configuration options can be set via environment variables instead of `smith
 export UNBROWSE_API_KEY="re_xxxxxxxxxxxxx"
 # OR
 export UNBROWSE_SESSION_TOKEN="cm4xxxxxxxxxxxxx"
+# OR (x402 payment mode)
+export SOLANA_PRIVATE_KEY="your_base58_encoded_private_key"
+export SOLANA_RPC_URL="https://api.mainnet-beta.solana.com"  # optional
 
 # Credential decryption (optional - only if abilities need it)
 export UNBROWSE_PASSWORD="your-encryption-password"
@@ -283,7 +318,7 @@ When enabled, `search_abilities` results include a `usage` field:
 {
   "usage": {
     "fetchSnippet": "const execute_ability = async (params) => { ... }",
-    "endpoint": "https://agent.unbrowse.ai/my/abilities/...",
+    "endpoint": "https://index.unbrowse.ai/my/abilities/...",
     "bodySchema": { ... }
   }
 }
@@ -429,6 +464,49 @@ Index new API endpoints for future use. Requires `enableIndexTool: true` in conf
 }
 ```
 
+#### 4. `get_payment_history` (x402 Mode Only)
+
+View your x402 payment history and spending summary. Only available when using Solana wallet authentication.
+
+**Input:**
+```json
+{
+  "limit": 20,
+  "type": "execute",
+  "include_summary": true
+}
+```
+
+**Output:**
+```json
+{
+  "success": true,
+  "paymentMode": "x402_solana",
+  "walletAddress": "YourSolanaWalletAddress...",
+  "paymentsReturned": 5,
+  "payments": [
+    {
+      "id": "pay_123",
+      "timestamp": "2025-01-15T10:30:00.000Z",
+      "type": "execute",
+      "abilityId": "github-get-user",
+      "amount": "$0.005",
+      "amountCents": 0.5,
+      "verified": true,
+      "success": true
+    }
+  ],
+  "summary": {
+    "totalPayments": 100,
+    "totalSpent": "$0.35",
+    "breakdown": {
+      "searches": { "count": 50, "spentCents": 5, "costPerSearch": "0.1 cents" },
+      "executions": { "count": 60, "spentCents": 30, "costPerExecution": "0.5 cents" }
+    }
+  }
+}
+```
+
 ### Credential Management
 
 Credentials are managed through the Unbrowse API and decrypted locally in the MCP server.
@@ -441,7 +519,7 @@ Use the Unbrowse API to store encrypted credentials (see [Credentials Storage Gu
 # Client-side: Encrypt credentials before uploading
 # (See API documentation for encryption implementation)
 
-curl -X POST https://agent.unbrowse.ai/my/credentials/stream \
+curl -X POST https://index.unbrowse.ai/my/credentials/stream \
   -H "Authorization: Bearer YOUR_API_KEY" \
   -H "Content-Type: application/json" \
   -d '{
@@ -459,7 +537,7 @@ curl -X POST https://agent.unbrowse.ai/my/credentials/stream \
 #### Listing Credentials
 
 ```bash
-curl -X GET https://agent.unbrowse.ai/my/credentials?grouped=true \
+curl -X GET https://index.unbrowse.ai/my/credentials?grouped=true \
   -H "Authorization: Bearer YOUR_API_KEY"
 ```
 
@@ -736,7 +814,7 @@ unbrowse/
 First, verify your API key works:
 
 ```bash
-curl -X GET https://agent.unbrowse.ai/my/abilities \
+curl -X GET https://index.unbrowse.ai/my/abilities \
   -H "Authorization: Bearer YOUR_API_KEY"
 ```
 

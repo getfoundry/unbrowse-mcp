@@ -110,7 +110,7 @@ config:
   enableIndexTool: false
 ```
 
-> **Note:** The Unbrowse API base URL is now fixed to `https://agent.unbrowse.ai` and does not require configuration.
+> **Note:** The Unbrowse API base URL is now fixed to `https://index.unbrowse.ai` and does not require configuration.
 
 ### Step 3: Migrate Your Credentials (If Needed)
 
