@@ -1887,5 +1887,6 @@ For simpler searches, you can use shorter queries like 'create trade', 'fetch to
   //   console.error('[ERROR] Background initialization failed:', error);
   // });
 
-  return server.server;
+  // Return the McpServer instance (not server.server) so that connect() works properly
+  return server;
 }
