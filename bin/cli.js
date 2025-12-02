@@ -17,38 +17,9 @@
  *   DEV_MODE - Enable developer mode for detailed API docs
  */
 
-// CRITICAL: Redirect console.log to stderr BEFORE loading any modules
-// MCP protocol uses stdout for JSON-RPC, so ALL logging must go to stderr
-const originalLog = console.log;
-console.log = (...args) => console.error(...args);
-
-// Set PORT to 0 to use a random available port for the HTTP server
-// This avoids EADDRINUSE conflicts when multiple instances run
-if (!process.env.PORT) {
-  process.env.PORT = "0";
-}
-
-// Validate that at least one auth method is provided before starting
-const apiKey = process.env.UNBROWSE_API_KEY;
-const sessionToken = process.env.UNBROWSE_SESSION_TOKEN;
-const solanaPrivateKey = process.env.SOLANA_PRIVATE_KEY || process.env.UNBROWSE_SOLANA_KEY;
-
-if (!apiKey && !sessionToken && !solanaPrivateKey) {
-  console.error("Configuration error: Authentication required");
-  console.error("\nRequired environment variables (one of):");
-  console.error("  SOLANA_PRIVATE_KEY - Solana private key for x402 mode (recommended)");
-  console.error("  UNBROWSE_API_KEY - Your Unbrowse API key (starts with re_)");
-  console.error("  UNBROWSE_SESSION_TOKEN - Your session token");
-  console.error("\nOptional environment variables:");
-  console.error("  UNBROWSE_PASSWORD - Password for credential decryption");
-  console.error("  DEV_MODE - Set to 'true' to enable developer mode");
-  console.error("  ENABLE_INDEX_TOOL - Set to 'true' to enable the ingest_api_endpoint tool");
-  process.exit(1);
-}
-
-// Load the Smithery-bundled server - this auto-starts the MCP server
+// Load the stdio transport server - this handles all MCP communication
 try {
-  require("../.smithery/index.cjs");
+  require("../dist/stdio-server.cjs");
 } catch (error) {
   console.error("[ERROR] Failed to start Unbrowse MCP server:", error);
   process.exit(1);
