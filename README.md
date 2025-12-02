@@ -86,6 +86,115 @@ export SOLANA_RPC_URL="https://api.mainnet-beta.solana.com"  # optional
 
 **Pricing:** 0.1 cents per search, 0.5 cents per execution
 
+## x402 API Endpoints
+
+The x402 protocol enables pay-per-request API access using Solana USDC. No API key required - just a funded wallet.
+
+**Base URL:** `https://index.unbrowse.ai`
+
+### Search Abilities
+
+```
+GET /x402/abilities?q={query}&limit={limit}
+```
+
+**Cost:** 0.1 cents (1000 USDC lamports)
+
+**Parameters:**
+- `q` - Search query (required)
+- `limit` - Max results (default: 12, max: 45)
+
+### Execute Ability
+
+```
+POST /x402/abilities/{abilityId}/execute
+```
+
+**Cost:** 0.5 cents (5000 USDC lamports) - Split: 20% platform, 80% ability owner
+
+**Body:**
+```json
+{
+  "params": { "key": "value" },
+  "transformCode": "(data) => data.results"  // optional
+}
+```
+
+### Protocol Flow
+
+1. **Request** - Client makes request to x402 endpoint
+2. **402 Response** - Server responds with payment requirements:
+   ```json
+   {
+     "error": "Payment required",
+     "payment": {
+       "type": "usdc",
+       "network": "solana",
+       "chain": "mainnet-beta",
+       "recipient": "PLATFORM_WALLET",
+       "amount": "1000",
+       "mint": "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
+       "splits": [
+         { "recipient": "PLATFORM", "amount": "200", "percentage": 20 },
+         { "recipient": "OWNER", "amount": "800", "percentage": 80 }
+       ]
+     }
+   }
+   ```
+3. **Payment** - Client constructs and signs USDC transfer transaction
+4. **Retry** - Client retries with `X-Payment` header:
+   ```
+   X-Payment: base64({ "transaction": "<base64_signed_tx>" })
+   ```
+5. **Process** - Server verifies payment, submits transaction, returns result
+
+### Example Integration (Node.js)
+
+```javascript
+import { Connection, Keypair, Transaction } from "@solana/web3.js";
+import { createTransferInstruction, getAssociatedTokenAddress } from "@solana/spl-token";
+import bs58 from "bs58";
+
+const USDC_MINT = "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v";
+
+async function searchWithPayment(query, privateKey) {
+  const keypair = Keypair.fromSecretKey(bs58.decode(privateKey));
+
+  // 1. Make initial request
+  let response = await fetch(`https://index.unbrowse.ai/x402/abilities?q=${query}`);
+
+  if (response.status !== 402) return response.json();
+
+  // 2. Parse payment requirement
+  const { payment } = await response.json();
+
+  // 3. Build USDC transfer transaction
+  const connection = new Connection("https://api.mainnet-beta.solana.com");
+  const tx = new Transaction();
+
+  for (const split of payment.splits) {
+    const fromAta = await getAssociatedTokenAddress(new PublicKey(USDC_MINT), keypair.publicKey);
+    const toAta = await getAssociatedTokenAddress(new PublicKey(USDC_MINT), new PublicKey(split.recipient));
+    tx.add(createTransferInstruction(fromAta, toAta, keypair.publicKey, BigInt(split.amount)));
+  }
+
+  tx.recentBlockhash = (await connection.getLatestBlockhash()).blockhash;
+  tx.feePayer = keypair.publicKey;
+  tx.sign(keypair);
+
+  // 4. Retry with payment header
+  const paymentHeader = Buffer.from(JSON.stringify({
+    transaction: tx.serialize().toString("base64")
+  })).toString("base64");
+
+  response = await fetch(`https://index.unbrowse.ai/x402/abilities?q=${query}`, {
+    headers: { "X-Payment": paymentHeader }
+  });
+
+  return response.json();
+}
+```
+
 ## Available Tools
 
 | Tool | Description |
