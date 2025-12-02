@@ -1,7 +1,7 @@
 {
   "name": "unbrowse-mcp",
-  "version": "1.0.1",
-  "description": "MCP server for accessing indexed web API abilities with secure credential management",
+  "version": "1.1.0",
+  "description": "The Internet-Use layer for AI Agents - MCP server providing 50x faster web interactions with 90%+ reliability",
   "main": ".smithery/index.cjs",
   "module": "./src/index.ts",
   "type": "commonjs",
@@ -11,7 +11,8 @@
   "files": [
     ".smithery/index.cjs",
     "bin",
-    "README.md"
+    "README.md",
+    "LICENSE"
   ],
   "scripts": {
     "dev": "npx smithery dev",
@@ -26,7 +27,13 @@
     "unbrowse",
     "llm",
     "claude",
-    "anthropic"
+    "anthropic",
+    "ai-agents",
+    "web-automation",
+    "solana",
+    "x402",
+    "usdc",
+    "pay-per-request"
   ],
   "author": "Unbrowse",
   "license": "MIT",

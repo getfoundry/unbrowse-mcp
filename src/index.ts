@@ -21,12 +21,15 @@ import {
 import { decryptCredentials } from "./crypto-utils.js";
 import * as Sentry from "@sentry/node"
 
-Sentry.init({
-  dsn: "https://SENTRY_DSN_REDACTED",
-  // Tracing must be enabled for MCP monitoring to work
-  tracesSampleRate: 1.0,
-  sendDefaultPii: true,
-});
+// Initialize Sentry for error tracking (optional - set SENTRY_DSN env var to enable)
+const sentryDsn = process.env.SENTRY_DSN;
+if (sentryDsn) {
+  Sentry.init({
+    dsn: sentryDsn,
+    tracesSampleRate: 1.0,
+    sendDefaultPii: false,
+  });
+}
 // User-level config from smithery.yaml
 export const configSchema = z.object({
   // Traditional API key/session token authentication

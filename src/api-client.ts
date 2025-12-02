@@ -1,8 +1,8 @@
 /**
  * Unbrowse API Client
  *
- * Client for interacting with the Unbrowse API at http://localhost:4111
- * Handles fetching abilities and credentials from the real API endpoints.
+ * Client for interacting with the Unbrowse API.
+ * Handles fetching abilities and credentials from the API endpoints.
  *
  * Supports two authentication modes:
  * 1. API Key / Session Token - Traditional bearer token authentication
@@ -80,7 +80,6 @@ export interface ApiClientConfig {
 }
 
 export const UNBROWSE_API_BASE_URL = process.env.UNBROWSE_API_BASE_URL ?? "https://index.unbrowse.ai";
-// export const UNBROWSE_API_BASE_URL = "http://localhost:4111";
 
 /**
  * Transform camelCase API response to snake_case IndexedAbility
