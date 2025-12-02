@@ -1,23 +1,40 @@
 runtime: typescript
 
 # Environment configuration
-# Note: Either apiKey OR sessionToken must be provided (not both)
-# Password is only required if your abilities need credential decryption
+# Authentication: Choose ONE of apiKey, sessionToken, or solanaPrivateKey
 config:
+  # x402 Payment Mode (Recommended) - No account required
+  solanaPrivateKey:
+    type: string
+    description: "Base58 encoded Solana private key for x402 pay-per-request mode. No account required - just fund wallet with USDC. Can also be set via SOLANA_PRIVATE_KEY env var."
+    required: false
+  solanaRpcUrl:
+    type: string
+    description: "Custom Solana RPC URL (defaults to mainnet). Can also be set via SOLANA_RPC_URL env var."
+    required: false
+
+  # Traditional API Key Authentication
   apiKey:
     type: string
-    description: "Your Unbrowse API key (starts with re_). Alternative to sessionToken. Can also be set via UNBROWSE_API_KEY env var."
-    required: true
+    description: "Your Unbrowse API key (starts with re_). Alternative to solanaPrivateKey. Can also be set via UNBROWSE_API_KEY env var."
+    required: false
   sessionToken:
     type: string
     description: "Your session token (alternative to apiKey). Can also be set via UNBROWSE_SESSION_TOKEN env var."
     required: false
+
+  # Optional Settings
   password:
     type: string
     description: "Your encryption password for credential decryption. Only required if abilities need credentials. Can also be set via UNBROWSE_PASSWORD env var."
-    required: true
+    required: false
   devMode:
     type: boolean
-    description: "Enable developer mode to see detailed API usage documentation in search results (RAG mode). Can also be set via DEV_MODE env var."
+    description: "Enable developer mode to see detailed API usage documentation in search results. Can also be set via DEV_MODE env var."
+    required: false
+    default: false
+  enableIndexTool:
+    type: boolean
+    description: "Enable the ingest_api_endpoint tool for indexing new APIs. Can also be set via ENABLE_INDEX_TOOL env var."
     required: false
     default: false

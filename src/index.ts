@@ -31,27 +31,22 @@ if (sentryDsn) {
   });
 }
 // User-level config from smithery.yaml
+// Note: Auth validation happens at runtime to support env var fallbacks
 export const configSchema = z.object({
-  // Traditional API key/session token authentication
-  apiKey: z.string().optional().describe("Your Unbrowse API key from the dashboard (starts with re_). Alternative to sessionToken or solanaPrivateKey."),
-  sessionToken: z.string().optional().describe("Your session token (alternative to apiKey or solanaPrivateKey)."),
+  // x402 Payment authentication (pay-per-request with Solana USDC) - Recommended
+  solanaPrivateKey: z.string().optional().describe("Base58 encoded Solana private key for x402 payment-based authentication. No account required - just fund wallet with USDC."),
+  solanaRpcUrl: z.string().optional().describe("Custom Solana RPC URL (defaults to mainnet)."),
 
-  // x402 Payment authentication (pay-per-request with Solana USDC)
-  solanaPrivateKey: z.string().optional().describe("Base58 encoded Solana private key for x402 payment-based authentication. Alternative to apiKey/sessionToken. Wallet must have USDC balance for payments."),
-  solanaRpcUrl: z.string().optional().describe("Custom Solana RPC URL (defaults to devnet or mainnet based on server response)."),
+  // Traditional API key/session token authentication
+  apiKey: z.string().optional().describe("Your Unbrowse API key from the dashboard (starts with re_). Alternative to solanaPrivateKey."),
+  sessionToken: z.string().optional().describe("Your session token (alternative to apiKey or solanaPrivateKey)."),
 
   // Common options
   password: z.string().optional().describe("Your encryption password for credential decryption. Only required if abilities need credentials."),
   debug: z.boolean().default(false).describe("Enable debug logging"),
   enableIndexTool: z.boolean().default(false).describe("Enable the ingest_api_endpoint tool for indexing new APIs"),
   devMode: z.boolean().default(false).describe("Enable developer mode to see detailed API usage documentation in search results (RAG mode)"),
-}).refine(
-  (data) => data.apiKey || data.sessionToken || data.solanaPrivateKey,
-  {
-    message: "Either apiKey, sessionToken, or solanaPrivateKey must be provided",
-    path: ["apiKey", "sessionToken", "solanaPrivateKey"],
-  }
-);
+});
 
 export default function createServer({
   config,
@@ -113,7 +108,7 @@ export default function createServer({
     console.log(`[INFO] API client created with base URL: ${UNBROWSE_API_BASE_URL}`);
   }
 
-  const server = Sentry.wrapMcpServerWithSentry(new McpServer({
+  const mcpServer = new McpServer({
     name: "Unbrowse MCP",
     version: "1.0.0",
     capabilities: {
@@ -121,7 +116,10 @@ export default function createServer({
         listChanged: true, // Enable dynamic tool registration
       },
     },
-  }));
+  });
+
+  // Only wrap with Sentry if it's initialized
+  const server = sentryDsn ? Sentry.wrapMcpServerWithSentry(mcpServer) : mcpServer;
 
   console.log("[INFO] McpServer instance created");
 
