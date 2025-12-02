@@ -1,0 +1,1611 @@
+/**
+ * Unbrowse MCP Server
+ *
+ * Provides access to indexed abilities from wrapper-storage and secure credential management.
+ * Implements the private registry capabilities described in master.md:
+ * - /list endpoint: Lists indexed tools/abilities filtered by user credentials
+ * - /cookiejar endpoint: Manages encrypted credentials with SECRET-based decryption
+ */
+import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import { z } from "zod";
+import { createApiClient, createX402ApiClient, formatAbilityDescription, UNBROWSE_API_BASE_URL, } from "./api-client.js";
+import { decryptCredentials } from "./crypto-utils.js";
+import * as Sentry from "@sentry/node";
+Sentry.init({
+    dsn: "https://SENTRY_DSN_REDACTED",
+    // Tracing must be enabled for MCP monitoring to work
+    tracesSampleRate: 1.0,
+    sendDefaultPii: true,
+});
+// User-level config from smithery.yaml
+export const configSchema = z.object({
+    // Traditional API key/session token authentication
+    apiKey: z.string().optional().describe("Your Unbrowse API key from the dashboard (starts with re_). Alternative to sessionToken or solanaPrivateKey."),
+    sessionToken: z.string().optional().describe("Your session token (alternative to apiKey or solanaPrivateKey)."),
+    // x402 Payment authentication (pay-per-request with Solana USDC)
+    solanaPrivateKey: z.string().optional().describe("Base58 encoded Solana private key for x402 payment-based authentication. Alternative to apiKey/sessionToken. Wallet must have USDC balance for payments."),
+    solanaRpcUrl: z.string().optional().describe("Custom Solana RPC URL (defaults to devnet or mainnet based on server response)."),
+    // Common options
+    password: z.string().optional().describe("Your encryption password for credential decryption. Only required if abilities need credentials."),
+    debug: z.boolean().default(false).describe("Enable debug logging"),
+    enableIndexTool: z.boolean().default(false).describe("Enable the ingest_api_endpoint tool for indexing new APIs"),
+    devMode: z.boolean().default(false).describe("Enable developer mode to see detailed API usage documentation in search results (RAG mode)"),
+}).refine((data) => data.apiKey || data.sessionToken || data.solanaPrivateKey, {
+    message: "Either apiKey, sessionToken, or solanaPrivateKey must be provided",
+    path: ["apiKey", "sessionToken", "solanaPrivateKey"],
+});
+export default function createServer({ config, }) {
+    console.log("[INFO] createServer called - starting initialization");
+    // Apply environment variable fallbacks
+    const apiKey = config.apiKey || process.env.UNBROWSE_API_KEY;
+    const sessionToken = config.sessionToken || process.env.UNBROWSE_SESSION_TOKEN;
+    const solanaPrivateKey = config.solanaPrivateKey || process.env.SOLANA_PRIVATE_KEY || process.env.UNBROWSE_SOLANA_KEY;
+    const solanaRpcUrl = config.solanaRpcUrl || process.env.SOLANA_RPC_URL;
+    const password = config.password || process.env.UNBROWSE_PASSWORD || process.env.UNBROWSE_CREDENTIAL_KEY;
+    const devMode = config.devMode || process.env.DEV_MODE === 'true' || process.env.UNBROWSE_DEV_MODE === 'true';
+    // Determine authentication mode: x402 (Solana payment) or traditional (API key/session token)
+    const useX402Mode = !!solanaPrivateKey && !apiKey && !sessionToken;
+    const authToken = apiKey || sessionToken;
+    // Validate that at least one auth method is provided
+    if (!authToken && !solanaPrivateKey) {
+        throw new Error("Authentication required: Provide either apiKey, sessionToken, or solanaPrivateKey via config or environment variables " +
+            "(UNBROWSE_API_KEY, UNBROWSE_SESSION_TOKEN, or SOLANA_PRIVATE_KEY)");
+    }
+    // Detect auth type
+    let authType;
+    if (useX402Mode) {
+        authType = "x402_solana";
+    }
+    else if (apiKey && apiKey.startsWith("re_")) {
+        authType = "api_key";
+    }
+    else {
+        authType = "session_token";
+    }
+    console.log(`[INFO] Authentication type: ${authType}`);
+    if (devMode) {
+        console.log(`[INFO] Dev mode enabled: Search results will include API usage documentation`);
+    }
+    // Create the appropriate API client based on auth mode
+    let apiClient;
+    let x402Client = null;
+    if (useX402Mode) {
+        // x402 mode - pay-per-request with Solana USDC
+        console.log(`[INFO] Using x402 payment mode with Solana USDC`);
+        x402Client = createX402ApiClient(solanaPrivateKey, solanaRpcUrl);
+        // Create a wrapper that matches UnbrowseApiClient interface for backward compatibility
+        // The x402Client will be used directly for search and execute operations
+        apiClient = createApiClient("x402_placeholder"); // Placeholder - won't be used for authed requests
+        console.log(`[INFO] x402 client created with wallet: ${x402Client.getWalletAddress()}`);
+    }
+    else {
+        // Traditional API key/session token mode
+        apiClient = createApiClient(authToken);
+        console.log(`[INFO] API client created with base URL: ${UNBROWSE_API_BASE_URL}`);
+    }
+    const server = Sentry.wrapMcpServerWithSentry(new McpServer({
+        name: "Unbrowse MCP",
+        version: "1.0.0",
+        capabilities: {
+            tools: {
+                listChanged: true, // Enable dynamic tool registration
+            },
+        },
+    }));
+    console.log("[INFO] McpServer instance created");
+    const accessibleAbilities = [];
+    const availableCredentialKeys = new Set();
+    const credentialCache = new Map();
+    // Ability cache - populated by search_abilities, used by execute_ability
+    // Keys are abilityId (used for execution), values are full ability objects
+    const abilityCache = new Map();
+    const sanitizeEnvSegment = (value) => value
+        .trim()
+        .replace(/[^a-zA-Z0-9]/g, "_")
+        .replace(/_+/g, "_")
+        .replace(/^_|_$/g, "")
+        .toUpperCase();
+    const envCredentialOverrides = (() => {
+        const mapping = new Map();
+        const candidateVarNames = [
+            "UNBROWSE_TOOL_HEADERS",
+            "UNBROWSE_DYNAMIC_HEADERS",
+            "TOOL_DYNAMIC_HEADERS",
+            "MCP_TOOL_HEADERS",
+        ];
+        for (const varName of candidateVarNames) {
+            const raw = process.env[varName];
+            if (!raw)
+                continue;
+            try {
+                const parsed = JSON.parse(raw);
+                if (parsed && typeof parsed === "object") {
+                    for (const [rawKey, rawValue] of Object.entries(parsed)) {
+                        if (typeof rawKey === "string" && typeof rawValue === "string") {
+                            mapping.set(rawKey, rawValue);
+                        }
+                    }
+                }
+            }
+            catch (error) {
+                console.warn(`[WARN] Failed to parse ${varName} as JSON:`, error);
+            }
+        }
+        return mapping;
+    })();
+    const getEnvCandidatesForKey = (key) => {
+        const [rawDomain = "", rawHeader = ""] = key.split("::");
+        const domainSegment = sanitizeEnvSegment(rawDomain);
+        const headerSegment = sanitizeEnvSegment(rawHeader);
+        const combinedSegment = sanitizeEnvSegment(key.replace(/::/g, "__"));
+        const domainNoWww = domainSegment.replace(/^WWW_/, "");
+        const baseCandidates = new Set();
+        if (combinedSegment) {
+            baseCandidates.add(combinedSegment);
+        }
+        if (domainSegment && headerSegment) {
+            baseCandidates.add(`${domainSegment}__${headerSegment}`);
+            baseCandidates.add(`${domainSegment}_${headerSegment}`);
+            baseCandidates.add(`${domainSegment}${headerSegment ? `__${headerSegment}` : ""}`);
+            baseCandidates.add(`${domainSegment}${headerSegment ? `_${headerSegment}` : ""}`);
+        }
+        if (domainNoWww && headerSegment) {
+            baseCandidates.add(`${domainNoWww}__${headerSegment}`);
+            baseCandidates.add(`${domainNoWww}_${headerSegment}`);
+        }
+        if (headerSegment) {
+            baseCandidates.add(headerSegment);
+        }
+        const expanded = new Set();
+        const prefixes = ["UNBROWSE", "ABILITY", "TOOL", "MCP"];
+        for (const candidate of baseCandidates) {
+            expanded.add(candidate);
+            for (const prefix of prefixes) {
+                if (candidate && prefix) {
+                    expanded.add(`${prefix}_${candidate}`);
+                }
+            }
+        }
+        return Array.from(expanded);
+    };
+    const envCredentialCache = new Map();
+    const getEnvCredentialForKey = (key) => {
+        if (envCredentialCache.has(key)) {
+            const cached = envCredentialCache.get(key);
+            return cached === null ? undefined : cached;
+        }
+        let value;
+        if (envCredentialOverrides.has(key)) {
+            value = envCredentialOverrides.get(key);
+        }
+        else {
+            for (const candidate of getEnvCandidatesForKey(key)) {
+                const envValue = process.env[candidate];
+                if (envValue !== undefined) {
+                    value = envValue;
+                    break;
+                }
+            }
+            if (!value) {
+                const [rawDomain = "", rawHeader = ""] = key.split("::");
+                const domainSegment = sanitizeEnvSegment(rawDomain);
+                const headerSegment = sanitizeEnvSegment(rawHeader);
+                if (headerSegment === "X_API_KEY" || headerSegment === "API_KEY") {
+                    const apiKeyCandidates = new Set();
+                    if (domainSegment) {
+                        apiKeyCandidates.add(`${domainSegment}_API_KEY`);
+                        apiKeyCandidates.add(`${domainSegment}__API_KEY`);
+                        apiKeyCandidates.add(`${domainSegment}_KEY`);
+                        apiKeyCandidates.add(`${domainSegment}__KEY`);
+                    }
+                    const domainNoWww = domainSegment.replace(/^WWW_/, "");
+                    if (domainNoWww) {
+                        apiKeyCandidates.add(`${domainNoWww}_API_KEY`);
+                        apiKeyCandidates.add(`${domainNoWww}__API_KEY`);
+                    }
+                    apiKeyCandidates.add("UNBROWSE_API_KEY");
+                    apiKeyCandidates.add("API_KEY");
+                    for (const candidate of apiKeyCandidates) {
+                        const envValue = process.env[candidate];
+                        if (envValue !== undefined) {
+                            value = envValue;
+                            break;
+                        }
+                    }
+                }
+            }
+        }
+        if (typeof value === "string") {
+            const trimmed = value.trim();
+            if (trimmed.length > 0) {
+                envCredentialCache.set(key, trimmed);
+                return trimmed;
+            }
+        }
+        envCredentialCache.set(key, null);
+        return undefined;
+    };
+    const getEnvCredentialsForAbility = (ability) => {
+        const credentials = {};
+        if (!ability.dynamic_header_keys || ability.dynamic_header_keys.length === 0) {
+            return credentials;
+        }
+        for (const key of ability.dynamic_header_keys) {
+            const value = getEnvCredentialForKey(key);
+            if (value !== undefined) {
+                credentials[key] = value;
+            }
+        }
+        return credentials;
+    };
+    const applyEnvCredentialsToCache = (domain, credentials) => {
+        const variants = new Set([domain, ...candidateVariantsFromDomain(domain)]);
+        for (const candidate of variants) {
+            const existing = credentialCache.get(candidate) || undefined;
+            credentialCache.set(candidate, { ...(existing || {}), ...credentials });
+        }
+    };
+    const groupEnvCredentialsByDomain = (ability) => {
+        const map = new Map();
+        if (!ability.dynamic_header_keys)
+            return map;
+        for (const key of ability.dynamic_header_keys) {
+            const value = getEnvCredentialForKey(key);
+            if (value === undefined)
+                continue;
+            const [domainPart] = key.split("::");
+            if (!domainPart)
+                continue;
+            if (!map.has(domainPart)) {
+                map.set(domainPart, {});
+            }
+            map.get(domainPart)[key] = value;
+        }
+        return map;
+    };
+    // Lazy initialization state
+    let initializationPromise = null;
+    let isInitialized = false;
+    // Helper function to register an ability as an MCP tool (simplified version)
+    const registerAbilityAsTool = (ability) => {
+        const toolName = ability.ability_name;
+        // Build description with dependency information
+        const toolDescription = formatAbilityDescription(ability);
+        // Parse input schema to create zod schema
+        const inputSchemaProps = {};
+        if (ability.input_schema?.properties) {
+            for (const [key, prop] of Object.entries(ability.input_schema.properties)) {
+                let zodType;
+                switch (prop.type) {
+                    case 'string':
+                        zodType = z.string();
+                        break;
+                    case 'number':
+                        zodType = z.number();
+                        break;
+                    case 'integer':
+                        zodType = z.number().int();
+                        break;
+                    case 'boolean':
+                        zodType = z.boolean();
+                        break;
+                    case 'array':
+                        zodType = z.array(z.any());
+                        break;
+                    case 'object':
+                        zodType = z.record(z.any());
+                        break;
+                    default: zodType = z.any();
+                }
+                if (!ability.input_schema.required?.includes(key)) {
+                    zodType = zodType.optional();
+                }
+                if (prop.description) {
+                    zodType = zodType.describe(prop.description);
+                }
+                inputSchemaProps[key] = zodType;
+            }
+        }
+        // Register the tool - execution will use execute_ability internally
+        server.registerTool(toolName, {
+            title: ability.ability_name.replace(/_/g, " ").replace(/\b\w/g, (l) => l.toUpperCase()),
+            description: toolDescription,
+            inputSchema: Object.keys(inputSchemaProps).length > 0 ? inputSchemaProps : { _placeholder: z.any().optional().describe("No parameters required") },
+        }, async (params) => {
+            // Forward to server-side execute_ability
+            const payload = { ...params };
+            delete payload._placeholder;
+            try {
+                // Execute ability on the server using abilityId
+                console.log(`[DEBUG] Executing ability - ID: ${ability.ability_id}, Name: ${ability.ability_name}`);
+                // Use x402 client if in x402 mode, otherwise use traditional API client
+                let result;
+                if (useX402Mode && x402Client) {
+                    console.log(`[x402] Using x402 client for registered tool: ${ability.ability_name}`);
+                    result = await x402Client.executeAbility(ability.ability_id, payload, {});
+                }
+                else {
+                    result = await apiClient.executeAbility(ability.ability_id, payload, {
+                        credentialKey: password,
+                    });
+                }
+                // Handle error responses
+                if (!result.success) {
+                    let errorMessage = result.error || 'Execution failed';
+                    if (result.credentialsExpired) {
+                        errorMessage += '\n\nCredentials have expired. Please re-authenticate.';
+                    }
+                    if (result.defunct) {
+                        errorMessage += `\n\nAbility is defunct (health: ${result.healthScore}). Search for alternative.`;
+                    }
+                    return {
+                        content: [{
+                                type: "text",
+                                text: JSON.stringify({
+                                    success: false,
+                                    error: errorMessage,
+                                    credentialsExpired: result.credentialsExpired,
+                                    defunct: result.defunct,
+                                    executedAt: result.result?.executedAt || new Date().toISOString(),
+                                }, null, 2),
+                            }],
+                    };
+                }
+                return {
+                    content: [{
+                            type: "text",
+                            text: JSON.stringify({
+                                success: result.success,
+                                statusCode: result.result?.statusCode,
+                                responseBody: result.result?.body,
+                                executedAt: result.result?.executedAt,
+                                executionTimeMs: result.result?.executionTimeMs,
+                                health: result.health,
+                            }, null, 2),
+                        }],
+                };
+            }
+            catch (error) {
+                return {
+                    content: [{
+                            type: "text",
+                            text: JSON.stringify({
+                                success: false,
+                                error: error.message || String(error),
+                                executedAt: new Date().toISOString(),
+                            }, null, 2),
+                        }],
+                };
+            }
+        });
+        console.log(`[INFO] Registered favorite ability as tool: ${toolName}`);
+    };
+    const candidateVariantsFromDomain = (domain) => {
+        const trimmed = domain.trim();
+        if (!trimmed)
+            return [];
+        const hyphenated = trimmed.replace(/\./g, "-");
+        const underscored = trimmed.replace(/\./g, "_");
+        return [trimmed, hyphenated, underscored];
+    };
+    const deriveCandidatesForKey = (ability, key) => {
+        const domain = key.split("::")[0];
+        const variants = new Set([ability.service_name]);
+        candidateVariantsFromDomain(domain).forEach((candidate) => variants.add(candidate));
+        return Array.from(variants).filter(Boolean);
+    };
+    const fetchCredentialsForCandidate = async (candidate) => {
+        if (credentialCache.has(candidate)) {
+            return credentialCache.get(candidate) || null;
+        }
+        try {
+            const encryptedCredentials = await apiClient.getCookieJar(candidate);
+            if (!encryptedCredentials) {
+                credentialCache.set(candidate, null);
+                return null;
+            }
+            // Decrypt credentials using the password
+            if (!password) {
+                console.warn(`[WARN] Cannot decrypt credentials for ${candidate}: no password provided`);
+                credentialCache.set(candidate, null);
+                return null;
+            }
+            const decryptedCredentials = decryptCredentials(encryptedCredentials, password);
+            credentialCache.set(candidate, decryptedCredentials);
+            if (config.debug) {
+                console.log(`[DEBUG] Credential lookup for ${candidate}: FOUND (${Object.keys(decryptedCredentials).length} keys)`);
+            }
+            return decryptedCredentials;
+        }
+        catch (error) {
+            if (config.debug) {
+                console.warn(`[DEBUG] Failed to read/decrypt credentials for ${candidate}: ${error.message || error}`);
+            }
+            credentialCache.set(candidate, null);
+            return null;
+        }
+    };
+    const abilityHasCredentialCoverage = async (ability) => {
+        if (!ability.requires_dynamic_headers) {
+            return true;
+        }
+        if (!ability.dynamic_header_keys || ability.dynamic_header_keys.length === 0) {
+            return true;
+        }
+        const envCredentialsByDomain = groupEnvCredentialsByDomain(ability);
+        for (const [domain, creds] of envCredentialsByDomain.entries()) {
+            applyEnvCredentialsToCache(domain, creds);
+        }
+        for (const key of ability.dynamic_header_keys) {
+            let keySatisfied = false;
+            if (getEnvCredentialForKey(key) !== undefined) {
+                keySatisfied = true;
+            }
+            if (!keySatisfied) {
+                for (const candidate of deriveCandidatesForKey(ability, key)) {
+                    if (!candidate)
+                        continue;
+                    const credentials = await fetchCredentialsForCandidate(candidate);
+                    if (credentials && credentials[key] !== undefined) {
+                        keySatisfied = true;
+                        break;
+                    }
+                }
+            }
+            if (!keySatisfied) {
+                if (config.debug) {
+                    console.log(`[DEBUG] Skipping ability ${ability.ability_id}: missing credential for ${key}`);
+                }
+                return false;
+            }
+        }
+        ability.dynamic_header_keys.forEach((key) => availableCredentialKeys.add(key));
+        return true;
+    };
+    // Async initialization function
+    const ensureInitialized = async () => {
+        if (isInitialized)
+            return;
+        if (initializationPromise)
+            return initializationPromise;
+        return;
+        // initializationPromise = (async () => {
+        //   // Step 1: Load favorites and register them as tools
+        //   try {
+        //     console.log('[INFO] Loading favorited abilities...');
+        //     const favoritesResult = await apiClient.listAbilities({ favorites: true });
+        //     const favoriteAbilities = favoritesResult.abilities || [];
+        //     console.log(`[INFO] Found ${favoriteAbilities.length} favorited abilities`);
+        //     const registeredAbilityIds = new Set<string>();
+        //     let registeredCount = 0;
+        //     for (const ability of favoriteAbilities) {
+        //       // Skip duplicates
+        //       if (registeredAbilityIds.has(ability.ability_id)) {
+        //         console.log(`[DEBUG] Skipping duplicate favorite: ${ability.ability_id}`);
+        //         continue;
+        //       }
+        //       if (await abilityHasCredentialCoverage(ability)) {
+        //         accessibleAbilities.push(ability);
+        //         // Cache by abilityId for execution
+        //         abilityCache.set(ability.ability_id, ability);
+        //         // Register as individual MCP tool
+        //         try {
+        //           registerAbilityAsTool(ability);
+        //           registeredAbilityIds.add(ability.ability_id);
+        //           registeredCount++;
+        //         } catch (error: any) {
+        //           console.error(`[ERROR] Failed to register ${ability.ability_id}:`, error.message);
+        //         }
+        //       }
+        //     }
+        //     console.log(`[INFO] Registered ${registeredCount} favorite abilities as tools`);
+        //     // Notify MCP client that tools have been added
+        //     // We need to wait for the client to connect before sending the notification
+        //     if (registeredCount > 0) {
+        //       // Poll until client is connected, then send notification
+        //       const waitForConnection = async () => {
+        //         const maxWaitTime = 30000; // 30 seconds max
+        //         const pollInterval = 100; // Check every 100ms
+        //         const startTime = Date.now();
+        //         while (!server.isConnected()) {
+        //           if (Date.now() - startTime > maxWaitTime) {
+        //             console.warn('[WARN] Client did not connect within 30 seconds, notification not sent');
+        //             return;
+        //           }
+        //           await new Promise(resolve => setTimeout(resolve, pollInterval));
+        //         }
+        //         // Client is now connected, send notification
+        //         server.sendToolListChanged();
+        //         console.log('[INFO] Client connected, sent tools/list_changed notification');
+        //       };
+        //       // Don't await - let this run in background
+        //       waitForConnection().catch(error => {
+        //         console.error('[ERROR] Failed to send tool list changed notification:', error);
+        //       });
+        //     }
+        //   } catch (error: any) {
+        //     console.error(`[ERROR] Failed to load favorites:`, error.message);
+        //   }
+        //   // Step 2: Fetch all abilities from the API to populate the accessible abilities list
+        //   // Pre-populate the cache with all abilities that have credential coverage
+        //   try {
+        //     const result = await apiClient.listAbilities();
+        //     const candidateAbilities = result.abilities || [];
+        //     console.log(
+        //       `[INFO] Loaded ${candidateAbilities.length} abilities from API (available for search)`,
+        //     );
+        //     // Store them for credential coverage checking AND cache them
+        //     // Skip abilities already added from favorites
+        //     for (const ability of candidateAbilities) {
+        //       // Skip if already cached (from favorites)
+        //       if (abilityCache.has(ability.ability_id)) {
+        //         continue;
+        //       }
+        //       if (await abilityHasCredentialCoverage(ability)) {
+        //         accessibleAbilities.push(ability);
+        //         abilityCache.set(ability.ability_id, ability);
+        //       }
+        //     }
+        //     console.log(
+        //       `[INFO] ${accessibleAbilities.length} abilities available with credential coverage`,
+        //     );
+        //     console.log(
+        //       `[INFO] Pre-cached ${abilityCache.size} abilities for immediate execution`,
+        //     );
+        //     if (availableCredentialKeys.size > 0) {
+        //       console.log(
+        //         `[INFO] Detected ${availableCredentialKeys.size} credential key(s) from decrypted cookie jar entries`,
+        //       );
+        //     }
+        //   } catch (error: any) {
+        //     console.error(`[ERROR] Failed to load abilities from API:`, error.message);
+        //     console.error(`[ERROR] Make sure the Unbrowse API is accessible at ${UNBROWSE_API_BASE_URL}`);
+        //     console.error(`[ERROR] Verify your API key is valid and not expired`);
+        //   }
+        //   isInitialized = true;
+        // })();
+        // return initializationPromise;
+    };
+    //   // Tool: Execute Ability
+    //   server.registerTool(
+    //     "execute_ability",
+    //     {
+    //       title: "Execute Ability",
+    //       description:
+    //         "Executes a specific ability by abilityId with the provided parameters. This is always using a stringified json input for params.",
+    //       inputSchema: {
+    //         ability_id: z
+    //           .string()
+    //           .describe("The abilityId to execute (from search results or list_abilities)."),
+    //         params: z
+    //           .union([z.string(), z.record(z.any())])
+    //           .optional()
+    //           .describe("Parameters to pass to the ability (based on its input schema). Prefers to be a JSON string not an object. Example string: '{\"token_symbol\": \"$fdry\", \"limit\": 10}' or object: {\"token_symbol\": \"$fdry\", \"limit\": 10}."),
+    //         transform_code: z
+    //           .string()
+    //           .optional()
+    //           .describe(`Optional JavaScript code to transform/process the API response body.
+    // CRITICAL: The data parameter is ALREADY A PARSED JAVASCRIPT OBJECT. Do NOT use JSON.parse() - it will fail!
+    // The transform function receives ONLY the parsed response body from the API (the 'responseBody' field), NOT the entire execution result wrapper.
+    // For example, if the execution returns:
+    // {
+    //   "success": true,
+    //   "statusCode": 200,
+    //   "responseBody": { "results": [...], "total": 100 },
+    //   ...
+    // }
+    // Your transform function receives the ALREADY-PARSED object: { "results": [...], "total": 100 }
+    // CORRECT transform examples:
+    // 1. Extract array from nested results:
+    // (data) => data.results
+    // 2. Filter and map array items:
+    // (data) => data.results.map(item => ({ name: item.user_name, image: item.profile_image_url }))
+    // 3. Aggregate/summarize data:
+    // (data) => ({ total: data.results.length, avgPrice: data.results.reduce((sum, item) => sum + item.price, 0) / data.results.length })
+    // 4. Search/filter results:
+    // (data) => data.results.filter(item => item.status === 'active' && item.price > 100)
+    // 5. Extract nested fields:
+    // (data) => data.results.map(r => r.metadata.id)
+    // INCORRECT examples (DO NOT DO THIS):
+    // ❌ (data) => JSON.parse(data).results  // WRONG - data is already an object, not a string!
+    // ❌ (data) => JSON.parse(data)  // WRONG - will throw "[object Object] is not valid JSON"
+    // The code is executed in a safe sandbox and must be a valid arrow function or function expression.`),
+    //       },
+    //     },
+    //     async ({ ability_id, params, transform_code }) => {
+    //       try {
+    //         // await ensureInitialized();
+    //         console.log(`[TRACE] execute_ability tool called with ability_id: ${ability_id}`);
+    //         console.log(`[TRACE] Executing ability ${ability_id} on server...`);
+    //         // Parse params to object (handle both string and object input)
+    //         const payload: Record<string, any> = params
+    //           ? (typeof params === 'string' ? JSON.parse(params) : params)
+    //           : {};
+    //         console.log(`[TRACE] Params:`, payload);
+    //         // Execute ability on the server with credential key from config
+    //         // According to MCP_EXECUTION_GUIDE.md, password is the credential key
+    //         const result = await apiClient.executeAbility(ability_id, payload, {
+    //           transformCode: transform_code,
+    //           credentialKey: password,
+    //         });
+    //         if (config.debug) {
+    //           console.log(
+    //             `[DEBUG] Execution result: ${result.success ? "SUCCESS" : "FAILED"}`,
+    //           );
+    //         }
+    //         // Handle error responses
+    //         if (!result.success) {
+    //           let errorMessage = result.error || 'Execution failed';
+    //           if (result.credentialsExpired) {
+    //             errorMessage += '\n\nCredentials have expired. Please re-authenticate with the service.';
+    //           }
+    //           if (result.defunct) {
+    //             errorMessage += `\n\nThis ability has been marked as defunct (health score: ${result.healthScore}). Please search for an alternative.`;
+    //           }
+    //           return {
+    //             content: [
+    //               {
+    //                 type: "text",
+    //                 text: JSON.stringify(
+    //                   {
+    //                     success: false,
+    //                     error: errorMessage,
+    //                     credentialsExpired: result.credentialsExpired,
+    //                     defunct: result.defunct,
+    //                     healthScore: result.healthScore,
+    //                     executedAt: result.result?.executedAt || new Date().toISOString(),
+    //                   },
+    //                   null,
+    //                   2
+    //                 ),
+    //               },
+    //             ],
+    //           };
+    //         }
+    //         // Prepare success response with health information
+    //         const responseData = {
+    //           // success: result.success,
+    //           // statusCode: result.result?.statusCode,
+    //           abilityName: result.result?.abilityName,
+    //           domain: result.result?.domain,
+    //           responseBody: result.result?.body,
+    //           // executedAt: result.result?.executedAt,
+    //           // executionTimeMs: result.result?.executionTimeMs,
+    //           transformed: transform_code ? true : false,
+    //           // health: result.health,
+    //         };
+    //         let responseText = JSON.stringify(responseData, null, 2);
+    //         // Truncate response if it exceeds 30k characters
+    //         const MAX_RESPONSE_LENGTH = 30000;
+    //         if (responseText.length > MAX_RESPONSE_LENGTH) {
+    //           const truncatedBody = typeof result.result?.body === 'string'
+    //             ? result.result.body.substring(0, MAX_RESPONSE_LENGTH - 1000)
+    //             : JSON.stringify(result.result?.body).substring(0, MAX_RESPONSE_LENGTH - 1000);
+    //           responseData.responseBody = truncatedBody + `\n\n[... Response truncated. Original length: ${responseText.length} characters, showing first ${MAX_RESPONSE_LENGTH} characters]`;
+    //           responseText = JSON.stringify(responseData, null, 2);
+    //           console.log(`[WARN] Response truncated from ${responseText.length} to ${MAX_RESPONSE_LENGTH} characters`);
+    //         }
+    //         return {
+    //           content: [
+    //             {
+    //               type: "text",
+    //               text: responseText,
+    //             },
+    //           ],
+    //         };
+    //       } catch (error: any) {
+    //         return {
+    //           content: [
+    //             {
+    //               type: "text",
+    //               text: JSON.stringify(
+    //                 {
+    //                   success: false,
+    //                   error: error.message || String(error),
+    //                   executedAt: new Date().toISOString(),
+    //                 },
+    //                 null,
+    //                 2,
+    //               ),
+    //             },
+    //           ],
+    //         };
+    //       }
+    //     },
+    //   );
+    // Tool: Execute Multiple Abilities in Parallel
+    server.registerTool("execute_abilities", {
+        title: "Execute Multiple Abilities in Parallel",
+        description: `Executes multiple abilities simultaneously in parallel using Promise.all. Useful for batch operations like fetching multiple pages of a paginated API, or fetching data from multiple different APIs at once. Unlike execute_ability_chain (which runs sequentially with output piping), this runs all abilities independently and concurrently.\n\n⚠️ IMPORTANT: If responses are truncated (indicated by 'truncated: true' in results), use the 'transform_code' parameter to extract only the specific data you need. Transform code runs server-side BEFORE truncation, allowing you to get complete filtered data instead of cut-off responses.${useX402Mode ? "\n\n[x402 Mode: Each execution costs 0.5 cents in USDC - 20% platform, 80% ability owner]" : ""}`,
+        inputSchema: {
+            abilities: z
+                .array(z.object({
+                ability_id: z.string().describe("The abilityId to execute"),
+                params: z
+                    .union([z.string(), z.record(z.any())])
+                    .optional()
+                    .describe("Parameters to pass to this ability. Can be JSON string or object."),
+                transform_code: z
+                    .string()
+                    .optional()
+                    .describe("Optional JavaScript transform code for this ability's response"),
+            }))
+                .min(1)
+                .describe(`Array of abilities to execute in parallel. Each executes independently with no data sharing.
+
+Common use cases:
+
+1. **Pagination**: Fetch multiple pages of an API simultaneously
+   Example:
+   [
+     { "ability_id": "github_search", "params": { "query": "react", "page": 1 } },
+     { "ability_id": "github_search", "params": { "query": "react", "page": 2 } },
+     { "ability_id": "github_search", "params": { "query": "react", "page": 3 } }
+   ]
+
+2. **Multiple APIs**: Fetch from different services at once
+   Example:
+   [
+     { "ability_id": "github_user_profile", "params": { "username": "octocat" } },
+     { "ability_id": "twitter_user_profile", "params": { "username": "octocat" } }
+   ]
+
+3. **Batch Operations**: Execute same ability with different inputs
+   Example:
+   [
+     { "ability_id": "stock_price", "params": { "symbol": "AAPL" } },
+     { "ability_id": "stock_price", "params": { "symbol": "GOOGL" } },
+     { "ability_id": "stock_price", "params": { "symbol": "MSFT" } }
+   ]`),
+            aggregate_results: z
+                .boolean()
+                .optional()
+                .default(false)
+                .describe("If true, attempts to merge all successful results into a single array. Useful for pagination where each response has the same structure."),
+        },
+    }, async ({ abilities, aggregate_results }) => {
+        try {
+            console.log(`[TRACE] execute_abilities tool called with ${abilities.length} abilities`);
+            // Execute all abilities in parallel using Promise.allSettled
+            const startTime = Date.now();
+            const results = await Promise.allSettled(abilities.map(async ({ ability_id, params, transform_code }) => {
+                // Parse params to object (handle both string and object input)
+                const payload = params
+                    ? (typeof params === 'string' ? JSON.parse(params) : params)
+                    : {};
+                console.log(`[TRACE] Executing ${ability_id} with params:`, payload);
+                // Execute ability on the server using appropriate client
+                let result;
+                if (useX402Mode && x402Client) {
+                    // x402 mode: paid execution (no credential key needed - payment handles auth)
+                    console.log(`[x402] Using x402 client for execution: ${ability_id}`);
+                    result = await x402Client.executeAbility(ability_id, payload, {
+                        transformCode: transform_code,
+                    });
+                }
+                else {
+                    // Traditional mode: use API key with credential key for encrypted credentials
+                    result = await apiClient.executeAbility(ability_id, payload, {
+                        transformCode: transform_code,
+                        credentialKey: password,
+                    });
+                }
+                return {
+                    ability_id,
+                    params: payload,
+                    result,
+                };
+            }));
+            const totalTime = Date.now() - startTime;
+            // Separate successful and failed executions
+            const successful = results
+                .filter((r) => r.status === 'fulfilled' && r.value.result.success)
+                .map((r) => r.value);
+            const failed = results
+                .map((r, idx) => {
+                if (r.status === 'rejected') {
+                    return {
+                        ability_id: abilities[idx].ability_id,
+                        params: abilities[idx].params,
+                        error: r.reason?.message || String(r.reason),
+                        type: 'exception',
+                    };
+                }
+                if (r.status === 'fulfilled' && !r.value.result.success) {
+                    return {
+                        ability_id: r.value.ability_id,
+                        params: r.value.params,
+                        error: r.value.result.error || 'Execution failed',
+                        credentialsExpired: r.value.result.credentialsExpired,
+                        defunct: r.value.result.defunct,
+                        type: 'failed',
+                    };
+                }
+                return null;
+            })
+                .filter(Boolean);
+            console.log(`[INFO] Parallel execution completed: ${successful.length} succeeded, ${failed.length} failed, ${totalTime}ms total`);
+            // Prepare response
+            const response = {
+                success: failed.length === 0,
+                total: abilities.length,
+                successful: successful.length,
+                failed: failed.length,
+                totalExecutionTimeMs: totalTime,
+            };
+            // Handle aggregation if requested
+            if (aggregate_results && successful.length > 0) {
+                try {
+                    // Attempt to merge all responseBody arrays
+                    const aggregated = [];
+                    let aggregationSucceeded = true;
+                    for (const exec of successful) {
+                        const body = exec.result.result?.body;
+                        // Check if body is an array
+                        if (Array.isArray(body)) {
+                            aggregated.push(...body);
+                        }
+                        else if (body && typeof body === 'object') {
+                            // Try to find an array property (common patterns: results, data, items, etc.)
+                            const arrayProp = Object.keys(body).find(key => Array.isArray(body[key]));
+                            if (arrayProp) {
+                                aggregated.push(...body[arrayProp]);
+                            }
+                            else {
+                                // Can't aggregate non-array responses
+                                aggregationSucceeded = false;
+                                break;
+                            }
+                        }
+                        else {
+                            aggregationSucceeded = false;
+                            break;
+                        }
+                    }
+                    if (aggregationSucceeded) {
+                        response.aggregatedResults = aggregated;
+                        response.aggregatedCount = aggregated.length;
+                        response.note = `Successfully aggregated ${aggregated.length} items from ${successful.length} abilities`;
+                    }
+                    else {
+                        response.note = 'Aggregation requested but responses are not compatible (not all arrays)';
+                    }
+                }
+                catch (error) {
+                    console.warn(`[WARN] Aggregation failed: ${error.message}`);
+                    response.note = `Aggregation failed: ${error.message}`;
+                }
+            }
+            // Include individual results
+            response.results = successful.map((exec) => ({
+                abilityId: exec.ability_id,
+                abilityName: exec.result.result?.abilityName,
+                domain: exec.result.result?.domain,
+                statusCode: exec.result.result?.statusCode,
+                responseBody: exec.result.result?.body,
+                executionTimeMs: exec.result.result?.executionTimeMs,
+            }));
+            // Include failures if any
+            if (failed.length > 0) {
+                response.failures = failed;
+            }
+            // Truncate individual result bodies if they're too large (independently of total size)
+            const MAX_INDIVIDUAL_RESULT_LENGTH = 20000; // 12k per result
+            let anyTruncated = false;
+            response.results = response.results.map((r) => {
+                const bodyStr = JSON.stringify(r.responseBody);
+                if (bodyStr.length > MAX_INDIVIDUAL_RESULT_LENGTH) {
+                    console.log(`[WARN] Truncating result for ${r.abilityId} from ${bodyStr.length} to ${MAX_INDIVIDUAL_RESULT_LENGTH} chars`);
+                    anyTruncated = true;
+                    return {
+                        ...r,
+                        responseBody: `${bodyStr.slice(0, MAX_INDIVIDUAL_RESULT_LENGTH)}...`,
+                        truncated: true,
+                        truncatedOriginalLength: bodyStr.length,
+                    };
+                }
+                return r;
+            });
+            // Add hint about transform_code if any results were truncated
+            if (anyTruncated) {
+                response.truncationWarning = "⚠️ One or more responses were truncated due to size. To get complete data, re-run this request with a 'transform_code' parameter to extract only the fields you need. Example: (data) => data.results.map(item => ({ id: item.id, name: item.name }))";
+            }
+            let responseText = JSON.stringify(response, null, 2);
+            return {
+                content: [
+                    {
+                        type: "text",
+                        text: responseText,
+                    },
+                ],
+            };
+        }
+        catch (error) {
+            console.error(`[ERROR] Parallel execution failed:`, error);
+            return {
+                content: [
+                    {
+                        type: "text",
+                        text: JSON.stringify({
+                            success: false,
+                            error: error.message || String(error),
+                            executedAt: new Date().toISOString(),
+                        }, null, 2),
+                    },
+                ],
+            };
+        }
+    });
+    //   // Tool: Execute Ability Chain (Workflow)
+    //   server.registerTool(
+    //     "execute_ability_chain",
+    //     {
+    //       title: "Execute Ability Chain",
+    //       description:
+    //         "Executes multiple abilities in sequence (pipeline/chain), where the output of one ability becomes the input to the next. Successful chains automatically create reusable workflow abilities.",
+    //       inputSchema: {
+    //         chain: z
+    //           .string()
+    //           .describe(`JSON array defining the chain of abilities to execute in sequence.
+    // Structure:
+    // [
+    //   {
+    //     "abilityId": "ability-1",
+    //     "params": { /* parameters for first ability */ },
+    //     "outputMapping": { "output.field": "input.field" }  // Optional: map output to next input
+    //   },
+    //   {
+    //     "abilityId": "ability-2",
+    //     "params": { /* base parameters */ }
+    //   }
+    // ]
+    // Features:
+    // - Output of ability N is passed as input to ability N+1
+    // - Use outputMapping to map specific fields (dot notation supported)
+    // - Without outputMapping, entire output is merged with next step's params
+    // - Maximum 10 abilities per chain
+    // - Successful chains auto-create reusable workflow abilities
+    // Example:
+    // [
+    //   {
+    //     "abilityId": "twitter-search",
+    //     "params": { "query": "AI agents", "count": 5 },
+    //     "outputMapping": { "tweets.0.id": "tweetId" }
+    //   },
+    //   {
+    //     "abilityId": "twitter-get-details",
+    //     "params": {}
+    //   }
+    // ]`),
+    //         stop_on_error: z
+    //           .boolean()
+    //           .optional()
+    //           .default(true)
+    //           .describe("Stop chain execution if any step fails. Default: true. Set to false to execute all steps and get partial results."),
+    //         transform_code: z
+    //           .string()
+    //           .optional()
+    //           .describe("Optional JavaScript code to transform the final output (applied to last successful step's result)."),
+    //       },
+    //     },
+    //     async ({ chain, stop_on_error, transform_code }) => {
+    //       try {
+    //         console.log(`[TRACE] execute_ability_chain tool called`);
+    //         // Parse chain string to array
+    //         const chainArray = JSON.parse(chain);
+    //         console.log(`[TRACE] Chain length: ${chainArray.length} steps`);
+    //         // Execute chain on the server
+    //         const response = await fetch(`${UNBROWSE_API_BASE_URL}/my/abilities/chain/execute`, {
+    //           method: 'POST',
+    //           headers: {
+    //             'Authorization': `Bearer ${authToken}`,
+    //             'X-Credential-Key': password || '',
+    //             'Content-Type': 'application/json',
+    //           },
+    //           body: JSON.stringify({
+    //             chain: chainArray,
+    //             stopOnError: stop_on_error,
+    //             transformCode: transform_code,
+    //           }),
+    //         });
+    //         const result = await response.json();
+    //         if (config.debug) {
+    //           console.log(`[DEBUG] Chain execution result: ${result.success ? "SUCCESS" : "FAILED"}`);
+    //           console.log(`[DEBUG] Steps completed: ${result.stepsCompleted}/${result.stepsTotal}`);
+    //         }
+    //         // Format response
+    //         if (!result.success) {
+    //           const failedSteps = result.results?.filter((r: any) => !r.success) || [];
+    //           const errorDetails = failedSteps.map((step: any) =>
+    //             `- Step ${step.abilityId}: ${step.error || 'Unknown error'}`
+    //           ).join('\n');
+    //           return {
+    //             content: [
+    //               {
+    //                 type: "text",
+    //                 text: `Chain execution failed:\n\n${errorDetails}\n\nCompleted: ${result.stepsCompleted}/${result.stepsTotal} steps\nTotal time: ${result.totalExecutionTimeMs}ms`,
+    //               },
+    //             ],
+    //             isError: true,
+    //           };
+    //         }
+    //         // Success
+    //         let responseText = `✅ Chain executed successfully!\n\n`;
+    //         responseText += `📊 Results:\n`;
+    //         responseText += `- Steps completed: ${result.stepsCompleted}/${result.stepsTotal}\n`;
+    //         responseText += `- Total execution time: ${result.totalExecutionTimeMs}ms\n`;
+    //         if (result.workflowAbilityId) {
+    //           responseText += `\n🎉 Workflow ability auto-created!\n`;
+    //           responseText += `- Workflow ID: ${result.workflowAbilityId}\n`;
+    //           responseText += `- This chain is now reusable as a single ability\n`;
+    //           responseText += `- Execute it with: execute_ability(ability_id="${result.workflowAbilityId}")\n`;
+    //         }
+    //         responseText += `\n📦 Final Output:\n${JSON.stringify(result.finalOutput, null, 2)}`;
+    //         // Include step-by-step results if debugging
+    //         if (config.debug && result.results) {
+    //           responseText += `\n\n🔍 Step Details:\n`;
+    //           result.results.forEach((step: any, idx: number) => {
+    //             responseText += `\nStep ${idx + 1} (${step.abilityId}):\n`;
+    //             responseText += `  Status: ${step.success ? '✅ Success' : '❌ Failed'}\n`;
+    //             responseText += `  Time: ${step.executionTimeMs}ms\n`;
+    //             if (!step.success && step.error) {
+    //               responseText += `  Error: ${step.error}\n`;
+    //             }
+    //           });
+    //         }
+    //         return {
+    //           content: [
+    //             {
+    //               type: "text",
+    //               text: responseText,
+    //             },
+    //           ],
+    //         };
+    //       } catch (error: any) {
+    //         console.error(`[ERROR] Chain execution failed:`, error);
+    //         return {
+    //           content: [
+    //             {
+    //               type: "text",
+    //               text: `Failed to execute chain: ${error.message}`,
+    //             },
+    //           ],
+    //           isError: true,
+    //         };
+    //       }
+    //     },
+    //   );
+    // Tool: Ingest API Endpoint (conditionally registered based on config)
+    if (config.enableIndexTool) {
+        console.log("[INFO] Index tool enabled via config.enableIndexTool");
+        server.registerTool("ingest_api_endpoint", {
+            title: "Index API",
+            description: "Index any url or cURL request for future usage.",
+            inputSchema: {
+                input: z
+                    .string()
+                    .describe("API URL or complete curl command. Examples:\n- 'https://api.github.com/users/octocat'\n- 'curl -X POST https://api.example.com/users -H \"Content-Type: application/json\" -d {\"name\":\"John\"}'"),
+                service_name: z
+                    .string()
+                    .describe("Service name for grouping (e.g., 'github', 'stripe', 'openai')"),
+                ability_name: z
+                    .string()
+                    .optional()
+                    .describe("Custom ability name (auto-generated from URL if not provided)"),
+                description: z
+                    .string()
+                    .optional()
+                    .describe("Description of what this endpoint does (auto-generated if not provided)"),
+            },
+        }, async ({ input, service_name, ability_name, description }) => {
+            try {
+                console.log(`[TRACE] Ingesting API endpoint: ${input}`);
+                // Call the ingest API endpoint with authentication
+                const response = await fetch(`${UNBROWSE_API_BASE_URL}/ingest/api`, {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${config.apiKey}`,
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        input,
+                        service_name,
+                        ability_name,
+                        description,
+                    }),
+                });
+                if (!response.ok) {
+                    const errorData = await response.json().catch(() => ({ error: response.statusText }));
+                    return {
+                        content: [
+                            {
+                                type: "text",
+                                text: JSON.stringify({
+                                    success: false,
+                                    error: errorData.error || `API ingestion failed: ${response.status} ${response.statusText}`,
+                                }, null, 2),
+                            },
+                        ],
+                    };
+                }
+                const result = await response.json();
+                console.log(`[INFO] Successfully ingested API endpoint: ${result.ability_id}`);
+                // Add the newly ingested ability to the cache and permanent storage
+                if (result.success && result.ability_id) {
+                    // Fetch the full ability data and add to cache
+                    try {
+                        const abilityResponse = await apiClient.getAbility(result.ability_id);
+                        if (abilityResponse.success && abilityResponse.ability) {
+                            const ability = abilityResponse.ability;
+                            abilityCache.set(ability.ability_id, ability);
+                            // Also add to accessibleAbilities array (permanent storage)
+                            const existingIndex = accessibleAbilities.findIndex((a) => a.ability_id === ability.ability_id);
+                            if (existingIndex === -1) {
+                                accessibleAbilities.push(ability);
+                            }
+                            else {
+                                accessibleAbilities[existingIndex] = ability;
+                            }
+                            console.log(`[INFO] Cached newly ingested ability: ${ability.ability_id}`);
+                            console.log(`[INFO] Total accessible abilities: ${accessibleAbilities.length}`);
+                        }
+                    }
+                    catch (error) {
+                        console.warn(`[WARN] Failed to cache ingested ability: ${error.message}`);
+                    }
+                }
+                return {
+                    content: [
+                        {
+                            type: "text",
+                            text: JSON.stringify({
+                                success: result.success,
+                                message: result.message,
+                                ability_id: result.ability_id,
+                                ability_name: result.ability_name,
+                                input_schema: result.input_schema,
+                                output_schema: result.output_schema,
+                                note: "This ability is now available for execution via execute_ability tool",
+                            }, null, 2),
+                        },
+                    ],
+                };
+            }
+            catch (error) {
+                console.error(`[ERROR] API ingestion failed:`, error);
+                return {
+                    content: [
+                        {
+                            type: "text",
+                            text: JSON.stringify({
+                                success: false,
+                                error: error.message || String(error),
+                            }, null, 2),
+                        },
+                    ],
+                };
+            }
+        });
+    }
+    else {
+        console.log("[INFO] Index tool disabled (set enableIndexTool=true in smithery.yaml to enable)");
+    }
+    const generateUsageDocs = (ability) => {
+        const baseUrl = UNBROWSE_API_BASE_URL;
+        const endpoint = `${baseUrl}/my/abilities/${ability.ability_id}/execute`;
+        // Generate example params
+        const exampleParams = {};
+        if (ability.input_schema?.properties) {
+            for (const [key, prop] of Object.entries(ability.input_schema.properties)) {
+                if (prop.example !== undefined) {
+                    exampleParams[key] = prop.example;
+                }
+                else {
+                    // Infer basic defaults
+                    if (prop.type === 'string')
+                        exampleParams[key] = "string_value";
+                    else if (prop.type === 'number')
+                        exampleParams[key] = 0;
+                    else if (prop.type === 'boolean')
+                        exampleParams[key] = true;
+                    else if (prop.type === 'object')
+                        exampleParams[key] = {};
+                    else if (prop.type === 'array')
+                        exampleParams[key] = [];
+                }
+            }
+        }
+        const safeAbilityName = ability.ability_name.replace(/[^a-zA-Z0-9]/g, '_');
+        const fetchCode = `
+/**
+ * Usage Example for ${ability.ability_name}
+ * Executes: ${ability.description}
+ */
+const execute_${safeAbilityName} = async (params) => {
+  const response = await fetch("${endpoint}", {
+    method: "POST",
+    headers: {
+      "Authorization": "Bearer " + process.env.UNBROWSE_API_KEY,
+      "Content-Type": "application/json",
+      // "X-Credential-Key": process.env.UNBROWSE_PASSWORD // Required if ability needs credential decryption
+    },
+    body: JSON.stringify({
+      params: params
+    })
+  });
+  return await response.json();
+};
+
+// Example Call
+// const result = await execute_${safeAbilityName}(${JSON.stringify(exampleParams, null, 2)});
+`;
+        return {
+            endpoint,
+            method: "POST",
+            headers: {
+                "Authorization": "Bearer <YOUR_API_KEY>",
+                "Content-Type": "application/json"
+            },
+            input_schema: {
+                params: ability.input_schema
+            },
+            output_schema: ability.output_schema,
+            fetchSnippet: fetchCode.trim()
+        };
+    };
+    // Tool: Search Multiple Abilities in Parallel
+    server.registerTool("search_abilities_parallel", {
+        title: "Search Multiple Abilities in Parallel",
+        description: `Executes multiple ability searches simultaneously in parallel. Useful when you need to search for different capabilities at once (e.g., searching for 'create user' and 'send email' and 'upload file' all at the same time).${useX402Mode ? " [x402 Mode: Each search costs 0.1 cents in USDC]" : ""}`,
+        inputSchema: {
+            searches: z
+                .array(z.object({
+                query: z
+                    .string()
+                    .min(1)
+                    .describe("Natural language description of the capability needed"),
+                domains: z
+                    .array(z.string())
+                    .optional()
+                    .describe("Optional array of domains to filter results for this specific search - Only use this after you discover what domains there are."),
+            }))
+                .min(1)
+                .describe(`Array of searches to execute in parallel. Each search runs independently.
+
+Example:
+[
+  { "query": "create github repository", "domains": ["api.github.com"] },
+  { "query": "send email notification", "domains": ["api.sendgrid.com"] },
+  { "query": "upload file to s3" }
+]`),
+            result_limit_per_search: z
+                .number()
+                .optional()
+                .default(3)
+                .describe("Maximum number of results to return per search query. Default: 3"),
+        },
+    }, async ({ searches, result_limit_per_search }) => {
+        try {
+            console.log(`[TRACE] search_abilities_parallel called with ${searches.length} searches`);
+            // Execute all searches in parallel using Promise.allSettled
+            const startTime = Date.now();
+            const results = await Promise.allSettled(searches.map(async ({ query, domains }) => {
+                console.log(`[TRACE] Searching for: "${query}"${domains ? ` in domains: ${domains.join(', ')}` : ''}`);
+                // Use x402 client if in x402 mode, otherwise use traditional API client
+                let result;
+                if (useX402Mode && x402Client) {
+                    // x402 mode: paid search (no domain filtering in x402)
+                    result = await x402Client.searchAbilities(query, result_limit_per_search || 20);
+                }
+                else {
+                    result = await apiClient.searchAbilities(query, result_limit_per_search || 20, domains);
+                }
+                return {
+                    query,
+                    domains,
+                    abilities: result.abilities.slice(0, result_limit_per_search),
+                };
+            }));
+            const totalTime = Date.now() - startTime;
+            // Separate successful and failed searches
+            const successful = results
+                .filter((r) => r.status === 'fulfilled')
+                .map((r) => r.value);
+            const failed = results
+                .map((r, idx) => {
+                if (r.status === 'rejected') {
+                    return {
+                        query: searches[idx].query,
+                        domains: searches[idx].domains,
+                        error: r.reason?.message || String(r.reason),
+                    };
+                }
+                return null;
+            })
+                .filter(Boolean);
+            // Collect all abilities from successful searches and cache them
+            const allAbilities = new Set(); // Track by ability_id to avoid duplicates
+            const abilityResults = [];
+            for (const search of successful) {
+                for (const ability of search.abilities) {
+                    if (!allAbilities.has(ability.ability_id)) {
+                        allAbilities.add(ability.ability_id);
+                        // Cache the ability
+                        abilityCache.set(ability.ability_id, ability);
+                        // Also add to accessibleAbilities array if not already present
+                        const existingIndex = accessibleAbilities.findIndex((a) => a.ability_id === ability.ability_id);
+                        if (existingIndex === -1) {
+                            accessibleAbilities.push(ability);
+                        }
+                        else {
+                            accessibleAbilities[existingIndex] = ability;
+                        }
+                        abilityResults.push({
+                            abilityId: ability.ability_id,
+                            abilityName: ability.ability_name,
+                            serviceName: ability.service_name,
+                            domain: ability.domain,
+                            description: formatAbilityDescription(ability),
+                            inputSchema: ability.input_schema,
+                            outputSchema: ability.output_schema,
+                            dynamicHeadersRequired: ability.requires_dynamic_headers,
+                            dynamicHeaderKeys: ability.dynamic_header_keys,
+                            healthScore: ability.health_score,
+                            dependencyOrder: ability.dependency_order,
+                            matchedQuery: search.query, // Track which query matched this ability
+                            ...(devMode ? { usage: generateUsageDocs(ability) } : {}),
+                        });
+                    }
+                }
+            }
+            console.log(`[INFO] Parallel search completed: ${successful.length}/${searches.length} succeeded, found ${allAbilities.size} unique abilities, ${totalTime}ms total`);
+            console.log(`[INFO] Total accessible abilities: ${accessibleAbilities.length}`);
+            // Get available domains
+            const domainCandidates = new Set(Array.from(availableCredentialKeys).map((key) => key.split("::")[0]));
+            if (domainCandidates.size === 0) {
+                accessibleAbilities.forEach((ability) => domainCandidates.add(ability.service_name));
+            }
+            const availableDomains = Array.from(domainCandidates);
+            // Prepare response
+            const response = {
+                success: failed.length === 0,
+                totalSearches: searches.length,
+                successfulSearches: successful.length,
+                failedSearches: failed.length,
+                totalAbilitiesFound: allAbilities.size,
+                totalExecutionTimeMs: totalTime,
+                message: `Found ${allAbilities.size} unique abilities across ${successful.length} searches. All are cached and ready to execute.`,
+                availableDomains,
+                results: abilityResults,
+            };
+            // Include per-search breakdown
+            response.searchBreakdown = successful.map((search) => ({
+                query: search.query,
+                domains: search.domains,
+                count: search.abilities.length,
+            }));
+            // Include failures if any
+            if (failed.length > 0) {
+                response.failures = failed;
+            }
+            return {
+                content: [
+                    {
+                        type: "text",
+                        text: JSON.stringify(response, null, 2),
+                    },
+                ],
+            };
+        }
+        catch (error) {
+            console.error(`[ERROR] Parallel search failed:`, error);
+            return {
+                content: [
+                    {
+                        type: "text",
+                        text: JSON.stringify({
+                            success: false,
+                            error: error.message || String(error),
+                        }, null, 2),
+                    },
+                ],
+            };
+        }
+    });
+    // Tool: Search Abilities (Credential-aware)
+    const searchInputSchema = {
+        query: z
+            .string()
+            .min(1)
+            .describe(`Detailed natural language description of the capability or action needed. Format your query with comprehensive context including: purpose, use cases, parameters (with types and defaults), concrete examples with parameter values, and related queries it can fulfill. Be explicit about what data is returned and how it relates to other abilities.
+
+Examples of well-formatted queries:
+
+"Retrieves a paginated list of processed invoices from Zeemart's invoice management service, sorted by invoice date in descending order."
+
+"Retrieves detailed information for a specific Statement of Account (SOA) by its ID for a given company from Zeemart's payment management service."
+
+For simpler searches, you can use shorter queries like 'create trade', 'fetch token prices', or 'send email notification', but detailed queries following the format above will yield better-matched abilities with clearer usage instructions.`),
+        domains: z
+            .array(z.string())
+            .optional()
+            .describe(`Optional array of domains to filter results. Only abilities from these domains will be returned. This filtering happens at the Infraxa vector database level for optimal performance. Examples: ["api.github.com", "github.com"], ["api.stripe.com"], ["twitter.com", "x.com"] Only use this after you discover what abilities are available.`),
+    };
+    if (!devMode) {
+        searchInputSchema.rag_mode = z.boolean().optional().describe("Force developer mode (RAG mode) to see detailed API usage documentation and code generation instructions, normally only available in dev mode.");
+    }
+    server.registerTool("search_abilities", {
+        title: "Search Abilities",
+        description: `Searches for abilities across both your personal abilities and the global published index. Use this when user requests for something that you do not have capabilities of doing.${useX402Mode ? " [x402 Mode: This search costs 0.1 cents in USDC per request]" : ""}`,
+        inputSchema: searchInputSchema,
+    }, async ({ query, domains, rag_mode }) => {
+        // Ensure abilities are loaded
+        // await ensureInitialized();
+        const resultLimit = 20;
+        const showUsage = devMode || rag_mode;
+        // Search abilities using appropriate client (x402 or traditional)
+        let result;
+        if (useX402Mode && x402Client) {
+            // x402 mode: Use paid search endpoint (no domain filtering in x402)
+            console.log(`[x402] Using x402 client for search: "${query}"`);
+            result = await x402Client.searchAbilities(query, resultLimit);
+        }
+        else {
+            // Traditional mode: Use API key-based search with optional domain filtering
+            result = await apiClient.searchAbilities(query, resultLimit, domains);
+        }
+        const matches = result.abilities;
+        const domainCandidates = new Set(Array.from(availableCredentialKeys).map((key) => key.split("::")[0]));
+        if (domainCandidates.size === 0) {
+            accessibleAbilities.forEach((ability) => domainCandidates.add(ability.service_name));
+        }
+        const availableDomains = Array.from(domainCandidates);
+        if (config.debug) {
+            console.log(`[DEBUG] Search "${query}" returned ${matches.length} abilities (limit ${resultLimit}), available domains: ${availableDomains.length}`);
+        }
+        // Populate the ability cache with search results using abilityId
+        for (const ability of matches) {
+            abilityCache.set(ability.ability_id, ability);
+            // Also add to accessibleAbilities array if not already present (permanent storage)
+            const existingIndex = accessibleAbilities.findIndex((a) => a.ability_id === ability.ability_id);
+            if (existingIndex === -1) {
+                accessibleAbilities.push(ability);
+            }
+            else {
+                // Update existing ability with latest data
+                accessibleAbilities[existingIndex] = ability;
+            }
+        }
+        console.log(`[INFO] Cached ${matches.length} abilities from search results`);
+        console.log(`[INFO] Total accessible abilities: ${accessibleAbilities.length}`);
+        return {
+            content: [
+                {
+                    type: "text",
+                    text: JSON.stringify({
+                        success: true,
+                        query,
+                        count: matches.length,
+                        message: `Found ${matches.length} matching abilities. These are now cached and ready to execute. Use execute_ability with the abilityId and params.${showUsage ? " RAG mode enabled: Use the provided usage documentation to generate code." : ""}`,
+                        availableDomains,
+                        results: matches.map((a) => ({
+                            abilityId: a.ability_id,
+                            abilityName: a.ability_name,
+                            serviceName: a.service_name,
+                            domain: a.domain,
+                            description: formatAbilityDescription(a),
+                            inputSchema: a.input_schema,
+                            outputSchema: a.output_schema,
+                            input_schema: a.input_schema,
+                            output_schema: a.output_schema,
+                            dynamicHeadersRequired: a.requires_dynamic_headers,
+                            dynamicHeaderKeys: a.dynamic_header_keys,
+                            healthScore: a.health_score,
+                            dependencyOrder: a.dependency_order,
+                            ...(showUsage ? { usage: generateUsageDocs(a) } : {}),
+                        })),
+                    }, null, 2),
+                },
+            ],
+        };
+    });
+    // Tool: Get Payment History (x402 mode only)
+    // This tool is only available when using x402 payment mode
+    if (useX402Mode && x402Client) {
+        server.registerTool("get_payment_history", {
+            title: "Get Payment History",
+            description: "View your x402 payment history and spending summary. Only available in x402 payment mode. Shows recent payments, total spending, and breakdown by search vs execute operations.",
+            inputSchema: {
+                limit: z
+                    .number()
+                    .optional()
+                    .default(20)
+                    .describe("Maximum number of recent payments to return. Default: 20, Max: 100"),
+                type: z
+                    .enum(["search", "execute"])
+                    .optional()
+                    .describe("Filter by payment type: 'search' (0.1 cents each) or 'execute' (0.5 cents each). Leave empty for all types."),
+                include_summary: z
+                    .boolean()
+                    .optional()
+                    .default(true)
+                    .describe("Include spending summary with totals. Default: true"),
+            },
+        }, async ({ limit, type, include_summary }) => {
+            try {
+                console.log(`[x402] Getting payment history (limit: ${limit}, type: ${type || 'all'})`);
+                const history = x402Client.getPaymentHistory(Math.min(limit || 20, 100), type);
+                const response = {
+                    success: true,
+                    paymentMode: "x402_solana",
+                    walletAddress: x402Client.getWalletAddress(),
+                    paymentsReturned: history.length,
+                    payments: history.map(p => ({
+                        id: p.id,
+                        timestamp: new Date(p.timestamp).toISOString(),
+                        type: p.type,
+                        abilityId: p.abilityId,
+                        abilityName: p.abilityName,
+                        amount: p.amountFormatted,
+                        amountCents: p.amountCents,
+                        signature: p.signature,
+                        verified: p.verified,
+                        success: p.success,
+                        error: p.error,
+                    })),
+                };
+                if (include_summary) {
+                    const summary = x402Client.getPaymentSummary();
+                    response.summary = {
+                        totalPayments: summary.totalPayments,
+                        totalSpent: summary.totalSpentFormatted,
+                        totalSpentCents: summary.totalSpentCents,
+                        breakdown: {
+                            searches: {
+                                count: summary.searchCount,
+                                spentCents: summary.searchSpentCents,
+                                costPerSearch: "0.1 cents",
+                            },
+                            executions: {
+                                count: summary.executeCount,
+                                spentCents: summary.executeSpentCents,
+                                costPerExecution: "0.5 cents",
+                            },
+                        },
+                    };
+                }
+                console.log(`[x402] Returned ${history.length} payment records`);
+                return {
+                    content: [
+                        {
+                            type: "text",
+                            text: JSON.stringify(response, null, 2),
+                        },
+                    ],
+                };
+            }
+            catch (error) {
+                console.error(`[ERROR] Failed to get payment history:`, error);
+                return {
+                    content: [
+                        {
+                            type: "text",
+                            text: JSON.stringify({
+                                success: false,
+                                error: error.message || String(error),
+                            }, null, 2),
+                        },
+                    ],
+                };
+            }
+        });
+        console.log("[INFO] Registered get_payment_history tool (x402 mode)");
+    }
+    // Start background initialization - loads abilities for search/execute
+    // Note: autoRegisterFavorites is deprecated and removed since we can't block synchronously
+    // Users should use search_abilities to discover abilities, then execute_ability to run them
+    // ensureInitialized().catch((error) => {
+    //   console.error('[ERROR] Background initialization failed:', error);
+    // });
+    return server.server;
+}

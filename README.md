@@ -1,5 +1,6 @@
 # Unbrowse MCP Server
 
+[![npm version](https://badge.fury.io/js/unbrowse-mcp.svg)](https://www.npmjs.com/package/unbrowse-mcp)
 [![smithery badge](https://smithery.ai/badge/@lekt9/unbrowse-mcp)](https://smithery.ai/server/@lekt9/unbrowse-mcp)
 
 A Model Context Protocol (MCP) server that provides access to indexed web abilities from wrapper-storage with secure credential management and automatic header injection.
@@ -145,6 +146,19 @@ The API key format is `re_xxxxxxxxxxxx` (managed by Unkey integration).
 
 ### Installation
 
+#### Option 1: Install via npm (Recommended)
+
+```bash
+# Run directly with npx
+npx unbrowse-mcp
+
+# Or install globally
+npm install -g unbrowse-mcp
+unbrowse-mcp
+```
+
+#### Option 2: Clone and build from source
+
 1. Clone the repository
 2. Install dependencies:
 
@@ -152,7 +166,16 @@ The API key format is `re_xxxxxxxxxxxx` (managed by Unkey integration).
 pnpm install
 ```
 
-3. Configure your authentication in `smithery.yaml`, MCP settings, or environment variables:
+3. Build and run:
+
+```bash
+pnpm build
+node bin/cli.js
+```
+
+### Configuration
+
+Configure your authentication via environment variables or MCP settings:
 
 **Authentication (choose ONE method):**
    - `apiKey`: Your Unbrowse API key (from step 3 above, format: `re_xxxxx`)
@@ -172,6 +195,42 @@ To install Unbrowse automatically via [Smithery](https://smithery.ai/server/@lek
 
 ```bash
 npx -y @smithery/cli install @lekt9/unbrowse-mcp
+```
+
+### Claude Desktop Configuration
+
+Add to your Claude Desktop config file (`~/Library/Application Support/Claude/claude_desktop_config.json` on macOS):
+
+```json
+{
+  "mcpServers": {
+    "unbrowse": {
+      "command": "npx",
+      "args": ["unbrowse-mcp"],
+      "env": {
+        "UNBROWSE_API_KEY": "re_your_api_key_here"
+      }
+    }
+  }
+}
+```
+
+Or with additional options:
+
+```json
+{
+  "mcpServers": {
+    "unbrowse": {
+      "command": "npx",
+      "args": ["unbrowse-mcp"],
+      "env": {
+        "UNBROWSE_API_KEY": "re_your_api_key_here",
+        "UNBROWSE_PASSWORD": "your_encryption_password",
+        "DEV_MODE": "true"
+      }
+    }
+  }
+}
 ```
 
 ### Environment Variable Configuration
