@@ -880,7 +880,7 @@ export class UnbrowseX402Client {
 
   /**
    * Execute an ability using x402 paid endpoint
-   * POST /x402/abilities/:abilityId/execute
+   * POST /x402/abilities/execute
    *
    * Cost: 0.5 cents per execution in USDC on Solana
    * Payment is split: 20% platform, 80% ability owner
@@ -914,11 +914,12 @@ export class UnbrowseX402Client {
       type: string;
     };
   }> {
-    const url = `${this.baseUrl}/x402/abilities/${encodeURIComponent(abilityId)}/execute`;
+    const url = `${this.baseUrl}/x402/abilities/execute`;
 
     console.error(`[x402] Executing ability: ${abilityId}`);
 
     const requestBody = {
+      abilityId,
       params,
       transformCode: options.transformCode,
     };
